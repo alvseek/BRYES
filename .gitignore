@@ -2,6 +2,9 @@
 shot_*.png
 desktop.png
 
+# Secrets — never commit. Only .env.example (no real values) is tracked.
+.env
+
 # Python
 __pycache__/
 *.pyc
