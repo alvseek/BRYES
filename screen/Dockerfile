@@ -18,6 +18,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       scrot \
       x11-apps \
       xterm \
+      gnome-calculator \
+      dbus-x11 \
       x11vnc \
       novnc \
       websockify \

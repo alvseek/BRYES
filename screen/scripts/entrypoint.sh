@@ -24,10 +24,14 @@ printf 'session.screen0.rootCommand: xsetroot -solid #2e3440\n' > /root/.fluxbox
 echo "[entrypoint] window manager (fluxbox)"
 fluxbox >/tmp/fluxbox.log 2>&1 &
 
-echo "[entrypoint] test apps: xcalc + xterm"
-xcalc -geometry +60+60 >/tmp/xcalc.log 2>&1 &
+echo "[entrypoint] dbus session bus (gnome-calculator needs it)"
+eval "$(dbus-launch --sh-syntax)"
+export DBUS_SESSION_BUS_ADDRESS DBUS_SESSION_BUS_PID
+
+echo "[entrypoint] test apps: gnome-calculator + xterm"
+gnome-calculator >/tmp/calc.log 2>&1 &
 # cursorBlink off so a static desktop stays byte-stable between screenshots
-xterm -geometry 80x24+520+60 -xrm 'XTerm*cursorBlink:false' >/tmp/xterm.log 2>&1 &
+xterm -geometry 80x24+760+60 -xrm 'XTerm*cursorBlink:false' >/tmp/xterm.log 2>&1 &
 
 echo "[entrypoint] live view: x11vnc + noVNC on :6080"
 x11vnc -display "$DISPLAY" -forever -shared -nopw -rfbport 5900 -quiet -bg >/tmp/x11vnc.log 2>&1 || true
