@@ -87,8 +87,12 @@ def decide(goal, observation, history=None, *, model=MODEL, timeout=60):
         "temperature": 0,
         # v4 is a reasoning model; picking one next action needs no extended thinking.
         # Disable it so reasoning tokens can't run away and truncate the JSON reply.
+        # (To enable planning-grade reasoning, swap to {"effort": "high"} — the 4096
+        #  ceiling below then leaves room for the reasoning trace + the JSON.)
         "reasoning": {"enabled": False},
-        "max_tokens": 1024,
+        # A ceiling, not a target — the model stops when its reply is done. Generous
+        # headroom so a Think-High trace + JSON never truncates.
+        "max_tokens": 4096,
         "response_format": {"type": "json_object"},
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
