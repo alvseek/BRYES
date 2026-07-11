@@ -1,6 +1,7 @@
-# Phase 1 proof artifacts (regenerate with screen/test_phase1.py)
+# Proof artifacts (regenerate with the phase test scripts)
 shot_*.png
 desktop.png
+eyes_*.png
 
 # Secrets — never commit. Only .env.example (no real values) is tracked.
 .env
