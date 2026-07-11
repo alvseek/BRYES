@@ -1,13 +1,12 @@
-"""BRYES Phase 2 — The Eyes.
+"""BRYES Phase 2 — The Eyes (UI-TARS-1.5-7B via OpenRouter).
 
-A grounding client: screenshot + a target description in, pixel coordinate out.
-Uses UI-TARS-1.5-7B (a GUI-grounding model) via OpenRouter.
+Two capabilities, both from screenshots:
+  describe(image)              -> text report of what's on screen (for the Brain)
+  locate(image, instruction)   -> pixel (x, y) of one described element (for the Hands)
 
-Key detail — the coordinate convention:
-  UI-TARS-1.5 is Qwen2.5-VL based. It "sees" the image after a `smart_resize`
-  (each side rounded to a multiple of 28, area clamped between MIN/MAX pixels)
-  and returns coordinates in THAT resized space. We convert back to real pixels:
-      actual = model_coord * original_dim / resized_dim
+Coordinate convention: UI-TARS-1.5 is Qwen2.5-VL based. It sees the image after a
+`smart_resize` (sides rounded to multiples of 28, area clamped) and returns coords in
+that space. We convert back with: actual = model_coord * original_dim / resized_dim.
 """
 import base64
 import io
@@ -24,10 +23,9 @@ from PIL import Image
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 MODEL = "bytedance/ui-tars-1.5-7b"
 
-# Qwen2.5-VL smart_resize parameters (UI-TARS defaults).
 IMAGE_FACTOR = 28
-MIN_PIXELS = 3136          # 56*56
-MAX_PIXELS = 2_116_800     # ~1920x1102; our 1280x800 stays untouched (just 28-rounded)
+MIN_PIXELS = 3136
+MAX_PIXELS = 2_116_800
 
 GROUND_PROMPT = (
     "You are a precise GUI grounding model. Look at the screenshot and locate the "
@@ -37,9 +35,19 @@ GROUND_PROMPT = (
     "Element to locate: {instruction}"
 )
 
+DESCRIBE_PROMPT = (
+    "You are the eyes of a computer-use agent, reporting to a decision-maker who "
+    "cannot see the screen. Describe the current screen concisely and factually:\n"
+    "- the main window(s) and which app they are\n"
+    "- the interactive elements available to act on (buttons, input fields, menus) "
+    "- list them by their visible labels\n"
+    "- the current state: window titles, and what any display or text field shows "
+    "right now\n"
+    "Do NOT suggest actions and do NOT give coordinates. Only report what is there."
+)
+
 
 def _load_key():
-    """Read OPENROUTER_API_KEY from BRYES/.env (never logged)."""
     env = Path(__file__).resolve().parent.parent / ".env"
     if env.exists():
         for line in env.read_text().splitlines():
@@ -65,24 +73,20 @@ def smart_resize(height, width, factor=IMAGE_FACTOR,
     return h_bar, w_bar
 
 
-def locate(image_bytes, instruction, *, timeout=60):
-    """Locate a UI element. Returns dict with pixel x/y plus diagnostics."""
+def _ask(prompt, image_bytes, *, max_tokens, timeout):
+    """Send one image+text chat turn to UI-TARS, return the text reply."""
     key = _load_key()
     if not key:
         raise RuntimeError("OPENROUTER_API_KEY not found (check BRYES/.env)")
-
-    width, height = Image.open(io.BytesIO(image_bytes)).size
-    rh, rw = smart_resize(height, width)
     b64 = base64.b64encode(image_bytes).decode()
-
     body = {
         "model": MODEL,
         "temperature": 0,
-        "max_tokens": 128,
+        "max_tokens": max_tokens,
         "messages": [{
             "role": "user",
             "content": [
-                {"type": "text", "text": GROUND_PROMPT.format(instruction=instruction)},
+                {"type": "text", "text": prompt},
                 {"type": "image_url",
                  "image_url": {"url": f"data:image/png;base64,{b64}"}},
             ],
@@ -103,8 +107,21 @@ def locate(image_bytes, instruction, *, timeout=60):
         data = json.loads(urllib.request.urlopen(req, timeout=timeout).read())
     except urllib.error.HTTPError as e:
         raise RuntimeError(f"OpenRouter HTTP {e.code}: {e.read().decode()[:400]}")
+    return data["choices"][0]["message"]["content"].strip()
 
-    content = data["choices"][0]["message"]["content"]
+
+def describe(image_bytes, *, timeout=60):
+    """Return a text report of what is on screen, for the Brain to reason over."""
+    return _ask(DESCRIBE_PROMPT, image_bytes, max_tokens=512, timeout=timeout)
+
+
+def locate(image_bytes, instruction, *, timeout=60):
+    """Locate a UI element. Returns dict with pixel x/y plus diagnostics."""
+    width, height = Image.open(io.BytesIO(image_bytes)).size
+    rh, rw = smart_resize(height, width)
+    content = _ask(GROUND_PROMPT.format(instruction=instruction),
+                   image_bytes, max_tokens=128, timeout=timeout)
+
     nums = [int(n) for n in re.findall(r"-?\d+", content)]
     if len(nums) < 2:
         raise RuntimeError(f"could not parse a coordinate from: {content!r}")
@@ -120,6 +137,5 @@ def locate(image_bytes, instruction, *, timeout=60):
         "raw_model_coord": [mx, my],
         "resized_dims_wh": [rw, rh],
         "original_dims_wh": [width, height],
-        "content": content.strip(),
-        "usage": data.get("usage"),
+        "content": content,
     }

@@ -28,8 +28,11 @@ currently on screen (OBSERVATION), and the HISTORY of actions already taken, dec
 the SINGLE next action.
 
 Rules:
-- Refer to elements by description (e.g. "the Submit button", "the + button").
+- Refer to elements by description (e.g. "the Submit button").
   NEVER output pixel coordinates - the Eyes handle pixels.
+- When a button's label is a symbol, name it with the WORD, e.g. "the equals (=)
+  button", "the plus (+) button", "the minus (-) button". A bare symbol like "="
+  is hard for the Eyes to locate; the word makes it reliable.
 - Choose exactly ONE next action that makes real progress toward the goal.
 - If the OBSERVATION shows the goal is already satisfied, use action "done".
 - If you are truly stuck or the goal is impossible, use action "fail".
@@ -82,7 +85,10 @@ def decide(goal, observation, history=None, *, model=MODEL, timeout=60):
     body = {
         "model": model,
         "temperature": 0,
-        "max_tokens": 300,
+        # v4 is a reasoning model; picking one next action needs no extended thinking.
+        # Disable it so reasoning tokens can't run away and truncate the JSON reply.
+        "reasoning": {"enabled": False},
+        "max_tokens": 1024,
         "response_format": {"type": "json_object"},
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
@@ -105,7 +111,12 @@ def decide(goal, observation, history=None, *, model=MODEL, timeout=60):
     except urllib.error.HTTPError as e:
         raise RuntimeError(f"OpenRouter HTTP {e.code}: {e.read().decode()[:400]}")
 
-    content = data["choices"][0]["message"]["content"]
+    choice = data["choices"][0]
+    content = choice["message"].get("content")
+    if not content:
+        raise RuntimeError(
+            f"Brain returned empty content (finish_reason={choice.get('finish_reason')}); "
+            f"likely truncated — raise max_tokens.")
     action = _extract_json(content)
     if action.get("action") not in VALID_ACTIONS:
         raise RuntimeError(f"Brain returned invalid action: {content!r}")

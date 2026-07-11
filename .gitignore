@@ -2,6 +2,8 @@
 shot_*.png
 desktop.png
 eyes_*.png
+agent_*.png
+ground_*.png
 
 # Secrets — never commit. Only .env.example (no real values) is tracked.
 .env
