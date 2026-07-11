@@ -1,0 +1,8 @@
+# Phase 1 proof artifacts (regenerate with screen/test_phase1.py)
+shot_*.png
+desktop.png
+
+# Python
+__pycache__/
+*.pyc
+.venv/

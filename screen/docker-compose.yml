@@ -1,0 +1,10 @@
+services:
+  screen:
+    build: .
+    image: bryes-screen:phase1
+    container_name: bryes-screen
+    ports:
+      - "8000:8000"   # control API: GET /screenshot, POST /action
+      - "6080:6080"   # noVNC live desktop -> http://localhost:6080/vnc.html
+    shm_size: "512m"
+    restart: unless-stopped

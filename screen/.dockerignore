@@ -1,0 +1,5 @@
+shot_before.png
+shot_after.png
+*.png
+__pycache__/
+.git
