@@ -34,7 +34,7 @@ Two transports, two homes:
 | **Screen** | local Docker container | HTTP `:8000` | `GET /screenshot` |
 | **Hands** | *same* container (not a separate service) | HTTP `:8000` | `POST /action` (runs `xdotool`) |
 | **Eyes** | rented, OpenRouter — Qwen2.5-VL-72B (`describe`) + UI-TARS-1.5-7B (`locate`) | HTTPS | `describe()`, `locate()` |
-| **Brain** | rented, OpenRouter (DeepSeek V4) | HTTPS | `decide()` |
+| **Brain** | rented, OpenRouter (`qwen3.6-flash`, swappable) | HTTPS | `decide()` |
 
 ```mermaid
 graph TD
@@ -47,7 +47,7 @@ graph TD
 
     subgraph openrouter["OpenRouter (HTTPS)"]
         Eyes["Eyes<br/>describe(png): Qwen2.5-VL-72B<br/>locate(png, target): UI-TARS-1.5-7B"]
-        Brain["Brain — DeepSeek V4<br/>decide(goal, obs, history)"]
+        Brain["Brain — qwen3.6-flash<br/>decide(goal, obs, history)"]
     end
 
     Loop -->|"GET /screenshot"| Screen
@@ -103,7 +103,7 @@ sequenceDiagram
     participant L as Loop
     participant S as Screen/Hands (:8000)
     participant E as Eyes (UI-TARS)
-    participant B as Brain (DeepSeek)
+    participant B as Brain (qwen3.6-flash)
 
     L->>S: GET /screenshot
     S-->>L: PNG
@@ -247,7 +247,17 @@ heuristic onto a mechanical decider.
 `128+47=175`, `512−137=375`, `7÷8=0.875`, and `12+34+56=102` **on a cluttered calculator**
 (a `7÷8` result in history) — the exact scenario that clear-looped before.
 
-**Still open:** an *explicit* post-action re-check/recover step — the loop still infers
-progress implicitly rather than a deliberate "did it land?" branch; and the **Brain likely
-moves to `deepseek-v4-pro`** for harder multi-step reasoning (re-benchmark flash on the
-now-clean describe first, since much of its earlier flakiness was describe garbage-in).
+**Update (2026-07-13, later same day):**
+- **History → actions-only.** The observation+action pairing above was made obsolete by the
+  accurate-but-verbose VLM describe (it *blurred* the context). History now carries only the
+  `did` actions; the Brain judges from the current observation.
+- **`type` is atomic.** `type` no longer clicks first — the click deselected the Brain's
+  Ctrl+A → append (broke browser URL-bar entry). `type` just types into the focused field;
+  the Brain focuses via an explicit `click`. Primitives stay dumb; composition belongs above.
+- **Generalized to a browser + Brain chosen by bake-off.** The stack drove Google Chrome to
+  search "who am I". A 5-model bake-off picked **`qwen/qwen3.6-flash`** as the default Brain
+  (beat v4-pro and minimax-m3 on cost AND capability once the harness was fixed).
+
+**Still open** (see [backlog.md](backlog.md)): the *explicit* post-action re-check/recover
+step (Phase 5 — deferred until base capability ≥80%); auditing all hands primitives for
+atomicity; a combo/macro action; validating qwen3.6-flash on the calculator suite.

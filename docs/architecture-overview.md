@@ -20,7 +20,7 @@ GitHub: **github.com/alvseek/BRYES** (remote named `alvseek`, commit identity
 | **Screen** | disposable Ubuntu desktop (Xvfb + fluxbox), screenshots + input | local Docker container, `screen/` |
 | **Hands** | `xdotool` click/type/key inside that container | same container |
 | **Eyes** | two models: **Qwen2.5-VL-72B** *describes* the screen (text for the Brain), **UI-TARS-1.5-7B** *locates* elements (grounding → coordinates) | rented, OpenRouter, `eyes/` |
-| **Brain** | DeepSeek V4 — state → next action (reasoning) | rented, OpenRouter, `brain/` |
+| **Brain** | `qwen3.6-flash` (default, swappable) — state → next action (reasoning) | rented, OpenRouter, `brain/` |
 
 **Two rules from the roadmap:** rent everything until it hurts (local GPU 3060 Ti 8GB
 is a last resort, Phase 6); prove ONE real task end-to-end before generalizing.
@@ -44,10 +44,13 @@ is a last resort, Phase 6); prove ONE real task end-to-end before generalizing.
   OpenRouter. $0.10/M in, $0.20/M out, images free. UI-TARS is Qwen2.5-VL-7B tuned for
   grounding: great at pointing, but the fine-tune degraded description — which is why
   describe moved to a general VLM (above).
-- **Brain / reasoning:** `deepseek/deepseek-v4-flash` (default, $0.077/$0.15 per M, 1M ctx,
-  **text-only**) or `-pro` ($0.35/$0.70, stronger — the likely upgrade for harder
-  multi-step reasoning). Both text-only → Brain cannot see; it needs a text observation.
-  Avoid legacy `deepseek-chat`/`deepseek-reasoner` (retire 2026-07-24).
+- **Brain / reasoning:** `qwen/qwen3.6-flash` (default, ~$0.19/$1.13 per M, 1M ctx,
+  text-only) — won a 5-model browser-search bake-off (4 steps, clean, cheap). `brain_model`
+  is swappable per `run()`; fallbacks `tencent/hy3` (256k ctx) or `deepseek/deepseek-v4-flash`
+  (cheapest). Text-only → the Brain can't see; it reasons over the VLM `describe` text.
+  `deepseek-v4-pro` and `minimax/minimax-m3` LOST the bake-off (pricier, no better — M3 also
+  failed to recognize completion on a generic goal). Avoid legacy `deepseek-chat`/
+  `deepseek-reasoner` (retire 2026-07-24).
 
 ## Load-bearing technical facts (costly to re-discover)
 
@@ -63,6 +66,14 @@ is a last resort, Phase 6); prove ONE real task end-to-end before generalizing.
   *describe*, it confabulates results and flattens a history/log into the current state
   (caused clear-loops + false "done"). So `describe` runs on a general VLM
   (Qwen2.5-VL-72B) that separates the live entry from history; `locate` stays on UI-TARS.
+- **Hands primitives are atomic:** `type` just sends text to the FOCUSED field — it does
+  NOT click first (a click deselects a Ctrl+A selection → text appends instead of replaces,
+  which broke browser URL-bar entry). The Brain focuses via an explicit `click`, then
+  optionally `key` ctrl+a, then `type`. Composition (macros) belongs ABOVE the primitives.
+- **Real browser = Google Chrome from the .deb:** apt `chromium`/`chromium-browser` on
+  Ubuntu 24.04 is a *snap transitional* that won't run in a container. Chrome is installed
+  from the official `.deb` (in the Dockerfile), launched `--no-sandbox` (root). Test apps
+  in the container: gnome-calculator, xterm, Google Chrome.
 - **DeepSeek V4 is a reasoning model:** hidden reasoning tokens count against `max_tokens`
   and truncate the JSON (`content: null`) if the cap is too low. Current config enables
   **Think High** (`reasoning:{effort:"high"}`) + `max_tokens: 8192` (headroom for trace +
@@ -78,6 +89,6 @@ is a last resort, Phase 6); prove ONE real task end-to-end before generalizing.
 ## Phase status (roadmap)
 
 0 key ✅ · 1 Screen ✅ · 2 Eyes ✅ · 3 Brain ✅ · 4 Closed loop ✅ · 5 Verify-and-recover ◐
-(seeds in — observation-grounded loop, VLM describe, run transcripts; computes varied
-calcs cleanly: 1550×3÷4, 128+47, 512−137, 7÷8, 12+34+56. Explicit post-action
-re-check/recover still to come) · 6 Hosting ⬜ (only if forced).
+(seeds in — VLM describe, atomic `type`, run transcripts; computes varied calcs cleanly
+AND searches "who am I" in Chrome; explicit post-action re-check/recover still to come) ·
+6 Hosting ⬜ (only if forced). **Brain default: `qwen3.6-flash`** (bake-off winner).
