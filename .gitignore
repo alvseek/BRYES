@@ -1,9 +1,7 @@
-# Proof artifacts (regenerate with the phase test scripts)
-shot_*.png
-desktop.png
-eyes_*.png
-agent_*.png
-ground_*.png
+# Runtime image artifacts — screenshots & visual proofs (regenerate via phase tests).
+# Ignored wholesale so no screenshot slips through prefix-matching. Written via paths.py.
+/artifacts/*
+!/artifacts/.gitkeep
 
 # Secrets — never commit. Only .env.example (no real values) is tracked.
 .env

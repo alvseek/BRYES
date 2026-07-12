@@ -16,7 +16,9 @@ import time
 import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from client import locate  # noqa: E402
+from paths import artifact  # noqa: E402
 from PIL import Image, ImageDraw  # noqa: E402
 
 SCREEN = "http://localhost:8000"
@@ -52,13 +54,13 @@ def main():
     d.line([(x - 22, y), (x + 22, y)], fill=(255, 0, 0), width=3)
     d.line([(x, y - 22), (x, y + 22)], fill=(255, 0, 0), width=3)
     d.ellipse([x - 15, y - 15, x + 15, y + 15], outline=(255, 0, 0), width=3)
-    im.save("eyes_located.png")
+    im.save(artifact("eyes_located.png"))
     print("saved eyes_located.png  (red crosshair = where the Eyes pointed)")
 
     # 2) behavioral proof: click it; a correct hit makes the calculator show 7
     action({"type": "click", "x": x, "y": y})
     time.sleep(0.5)
-    with open("eyes_after_click.png", "wb") as f:
+    with open(artifact("eyes_after_click.png"), "wb") as f:
         f.write(screenshot())
     print("saved eyes_after_click.png  (calculator after clicking that point)")
     return 0

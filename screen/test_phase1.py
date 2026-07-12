@@ -5,12 +5,16 @@ Verifies the roadmap's "Done when":
   2) send a click and see the screen change afterward.
 
 Usage:  python test_phase1.py
-Saves:  shot_before.png, shot_after.png  (eyeball them — that's the real proof)
+Saves:  artifacts/shot_before.png, artifacts/shot_after.png  (eyeball them — the real proof)
 """
 import json
+import os
 import sys
 import time
 import urllib.request
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from paths import artifact  # noqa: E402
 
 BASE = "http://localhost:8000"
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
@@ -55,21 +59,21 @@ def main():
 
     # 2. screenshot -> PNG
     print("1) screenshot -> PNG")
-    before = _screenshot("shot_before.png")
+    before = _screenshot(artifact("shot_before.png"))
 
     # 3. a click that reliably changes the screen: right-click the desktop
     #    root summons the fluxbox menu (layout-independent visible change).
     print("2) right-click desktop (640,750) -> screen should change")
     _post("/action", {"type": "click", "button": 3, "x": 640, "y": 750})
     time.sleep(0.6)
-    after = _screenshot("shot_after.png")
+    after = _screenshot(artifact("shot_after.png"))
     _post("/action", {"type": "key", "key": "Escape"})  # dismiss the menu
 
     if before == after:
         print("WARN: screenshots identical — the click produced no visible change.")
         return 2
 
-    print("\nPASS ✅  screenshot works and a click visibly changed the screen.")
+    print("\nPASS: screenshot works and a click visibly changed the screen.")
     print("Phase 1 proven. Open http://localhost:6080/vnc.html to watch it live.")
     return 0
 
