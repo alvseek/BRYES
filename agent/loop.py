@@ -51,7 +51,7 @@ def hands(payload):
     return res
 
 
-def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run"):
+def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=None):
     """Drive the loop until the Brain says done/fail or steps run out.
 
     Every step's prompts and raw replies (describe / decide / locate / action) plus the
@@ -76,7 +76,7 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run"):
             shot = screenshot()
             runlog.save_image(f"step-{step:02d}.png", shot)
             observation = describe(shot, focus=focus)     # Eyes: what's on screen (focused)
-            action = decide(goal, observation, history)   # Brain: decide from it
+            action = decide(goal, observation, history, model=brain_model)  # Brain decides
             action.pop("_usage", None)
             act = action.get("action")
             thought = action.get("thought", "")
@@ -102,13 +102,13 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run"):
                 hands({"type": "click", "x": loc["x"], "y": loc["y"]})  # Hands: do
                 did = f"clicked '{target}' at ({loc['x']},{loc['y']})"
             elif act == "type":
-                target = action.get("target")
-                if target:
-                    loc = locate(shot, target)
-                    hands({"type": "click", "x": loc["x"], "y": loc["y"]})
+                # type sends text to whatever is FOCUSED — it must NOT click first, or it
+                # would drop the cursor/selection the Brain just set up (e.g. a Ctrl+A
+                # select-all before a replace). The Brain focuses fields with explicit
+                # click actions; type just types.
                 text = action.get("text", "")
                 hands({"type": "type", "text": text})
-                did = f"typed '{text}'" + (f" into '{target}'" if target else "")
+                did = f"typed '{text}'"
             elif act == "key":
                 k = action.get("key", "")
                 hands({"type": "key", "key": k})
@@ -116,10 +116,11 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run"):
             else:
                 did = f"unknown action skipped: {action}"
 
-            # Record BOTH what the Eyes saw and what we did — so next step the Brain can
-            # tell whether the action changed the screen (no-progress detection). This is
-            # the "outcomes in memory" half of the Phase-5 verify layer.
-            history.append(f"saw: {observation}\n     did: {did}")
+            # History holds ONLY the actions taken. The Brain judges the current state
+            # from the CURRENT OBSERVATION (an accurate VLM describe), not from a pile of
+            # stale past descriptions — accumulating those blurs the signal, especially
+            # now that describe is verbose.
+            history.append(did)
 
             log("")
             time.sleep(settle)

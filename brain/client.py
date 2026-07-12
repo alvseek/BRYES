@@ -21,10 +21,12 @@ except ImportError:
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
-# v4-flash: cheap + 1M context, enough for single-step decisions.
-# Switch to "deepseek/deepseek-v4-pro" if the Brain makes weak calls.
-# (Do NOT use the legacy deepseek-chat / deepseek-reasoner — they retire 2026-07-24.)
-MODEL = "deepseek/deepseek-v4-flash"
+# qwen3.6-flash: best value in the 5-model browser-search bake-off (4 steps, clean done,
+# ~$0.19/$1.13 per M, 1M context). Beat v4-pro AND minimax-m3 on both cost and capability
+# once the harness was fixed (VLM describe + type-just-types + actions-only history).
+# Fallbacks if it underperforms elsewhere: tencent/hy3 (256k ctx) or deepseek-v4-flash
+# (cheapest). (Do NOT use legacy deepseek-chat / deepseek-reasoner — retire 2026-07-24.)
+MODEL = "qwen/qwen3.6-flash"
 
 SYSTEM_PROMPT = """You are the Brain of a vision-based computer-use agent.
 A separate component (the Eyes) can locate any on-screen element you name, and the
@@ -32,8 +34,8 @@ Hands can click, type, and press keys. Given the GOAL, a text description of wha
 currently on screen (OBSERVATION), and the HISTORY of prior steps, decide the SINGLE
 next action.
 
-The HISTORY shows, for each prior step, what the screen looked like (as the Eyes
-described it) and the action you took.
+The HISTORY lists the actions you have ALREADY taken (most recent last). Judge the
+current situation from the OBSERVATION — not from memory of past screens.
 
 Rules:
 - WRITE IN ENGLISH: reason and fill EVERY field of your JSON reply in English only,
@@ -62,6 +64,11 @@ Rules:
   contextual the focus, the more accurately the Eyes report the state you must act on.
   Keep the focus on the relevant area across steps, moving it only when the task moves to
   a new area.
+- TEXT ENTRY: the "type" action sends text to whatever field is currently FOCUSED — it
+  does NOT move focus. To enter text: first "click" the field to focus it, then "type".
+  To REPLACE a field's existing contents (e.g. an address bar with a URL in it): "click"
+  it, then "key" with ctrl+a to select all, then "type" — the typed text replaces the
+  selection. To append at the cursor, just "type".
 - Choose exactly ONE next action that makes real progress toward the goal.
 - If the OBSERVATION shows the goal is already satisfied, use action "done".
 - If you are truly stuck or the goal is impossible, use action "fail".
@@ -71,8 +78,8 @@ JSON schema:
 {
   "thought": "<reasoning in English, with NO quotation marks inside: what the screen shows now, progress vs the GOAL, and the next action>",
   "action": "click" | "type" | "key" | "done" | "fail",
-  "target": "<element description; required for click, optional for type>",
-  "text": "<text to type; required when action is type>",
+  "target": "<element description; required for click>",
+  "text": "<text to type into the CURRENTLY-FOCUSED field; required for type>",
   "key": "<key name like Return, Escape, Tab; required when action is key>",
   "focus": "<optional: what the Eyes should concentrate on next>"
 }"""
@@ -100,7 +107,7 @@ def _extract_json(text):
         raise
 
 
-def decide(goal, observation, history=None, *, model=MODEL, effort="high",
+def decide(goal, observation, history=None, *, model=None, effort="high",
            timeout=60, retries=2):
     """Return the next action as a dict: {thought, action, target?, text?, key?, focus?}.
 
@@ -112,6 +119,7 @@ def decide(goal, observation, history=None, *, model=MODEL, effort="high",
     invalid JSON — e.g. an unescaped quote inside a string) instead of crashing the
     whole run; the retry asks explicitly for one strict JSON object.
     """
+    model = model or MODEL
     key = _load_key()
     if not key:
         raise RuntimeError("OPENROUTER_API_KEY not found (check BRYES/.env)")
@@ -119,7 +127,7 @@ def decide(goal, observation, history=None, *, model=MODEL, effort="high",
     hist_txt = "\n".join(f"- {h}" for h in (history or [])) or "(none yet)"
     user_base = (f"GOAL:\n{goal}\n\n"
                  f"OBSERVATION (what is on screen now):\n{observation}\n\n"
-                 f"HISTORY (prior steps — what was on screen and what you did):\n{hist_txt}\n\n"
+                 f"HISTORY (actions you have already taken):\n{hist_txt}\n\n"
                  f"Decide the single next action as JSON.")
 
     last_err = None

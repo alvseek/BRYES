@@ -28,6 +28,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
+# Real browser for web tasks: Google Chrome from the official .deb. (Ubuntu's apt
+# 'chromium'/'chromium-browser' is a snap transitional that won't run in a container.)
+# Runs headful on Xvfb; launch with --no-sandbox since we are root.
+RUN apt-get update && apt-get install -y --no-install-recommends wget gnupg ca-certificates \
+    && wget -q -O /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb \
+    && apt-get install -y /tmp/chrome.deb \
+    && rm -f /tmp/chrome.deb && rm -rf /var/lib/apt/lists/*
+
 # Ubuntu 24.04 marks the system Python as externally-managed (PEP 668),
 # so install app deps into an isolated venv.
 RUN python3 -m venv /opt/venv
