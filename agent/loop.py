@@ -1,12 +1,16 @@
-"""BRYES Phase 4 — Close the Loop.
+"""BRYES Phase 4 — Close the Loop (+ first Phase-5 cut).
 
 Chains the four pieces into one autonomous cycle:
 
-    screenshot -> Eyes.describe -> Brain.decide -> Eyes.locate -> Hands act -> repeat
+    screenshot -> Eyes.describe(focus) -> Brain.decide -> Eyes.locate -> Hands act -> repeat
                                                         until "done"/"fail"/step-limit
 
-No verify-and-recover yet — that's Phase 5. The goal here is one clean success on the
-ONE task; note *how* it fails on retries, that's the input to Phase 5.
+Phase-5 seeds now in the loop:
+  - HISTORY carries BOTH what the Eyes saw and the action taken each step, so the Brain
+    can detect "my last action changed nothing" and stop repeating it (no-progress).
+  - The Brain steers the Eyes via a `focus` field, carried into the next describe() so
+    the description stays on the task-relevant area.
+Still missing (later Phase-5 work): an explicit post-action re-check/recover step.
 """
 import json
 import os
@@ -16,8 +20,9 @@ import urllib.error
 import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from eyes.client import describe, locate  # noqa: E402
-from brain.client import decide  # noqa: E402
+import runlog  # noqa: E402
+from eyes.client import describe, locate, DESCRIBE_PROMPT, GROUND_PROMPT  # noqa: E402
+from brain.client import decide, SYSTEM_PROMPT  # noqa: E402
 
 SCREEN = "http://localhost:8000"
 
@@ -41,59 +46,85 @@ def hands(payload):
     req = urllib.request.Request(
         SCREEN + "/action", data=json.dumps(payload).encode(),
         headers={"Content-Type": "application/json"}, method="POST")
-    return _open(req)
+    res = _open(req)
+    runlog.record("action", payload, "executed")
+    return res
 
 
-def run(goal, max_steps=12, settle=0.6, verbose=True):
-    """Drive the loop until the Brain says done/fail or steps run out."""
+def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run"):
+    """Drive the loop until the Brain says done/fail or steps run out.
+
+    Every step's prompts and raw replies (describe / decide / locate / action) plus the
+    screenshot are preserved to a transcript under artifacts/runs/ (see runlog); `tag`
+    names that run folder.
+    """
     def log(*a):
         if verbose:
             print(*a)
 
     log(f"GOAL: {goal}\n")
+    static = {"eyes.DESCRIBE_PROMPT": DESCRIBE_PROMPT,
+              "eyes.GROUND_PROMPT": GROUND_PROMPT,
+              "brain.SYSTEM_PROMPT": SYSTEM_PROMPT}
+    rundir = runlog.start(goal, static=static, tag=tag)
+    log(f"(transcript -> {rundir})\n")
     history = []
-    for step in range(1, max_steps + 1):
-        shot = screenshot()
-        observation = describe(shot)              # Eyes: what's available
-        action = decide(goal, observation, history)  # Brain: decide from it
-        action.pop("_usage", None)
-        act = action.get("action")
-        thought = action.get("thought", "")
+    focus = None
+    try:
+        for step in range(1, max_steps + 1):
+            runlog.set_step(step)
+            shot = screenshot()
+            runlog.save_image(f"step-{step:02d}.png", shot)
+            observation = describe(shot, focus=focus)     # Eyes: what's on screen (focused)
+            action = decide(goal, observation, history)   # Brain: decide from it
+            action.pop("_usage", None)
+            act = action.get("action")
+            thought = action.get("thought", "")
+            focus = action.get("focus") or focus          # Brain steers the Eyes next step
 
-        log(f"[step {step}] eyes: {observation[:100].strip()}...")
-        detail = action.get("target") or action.get("text") or action.get("key") or ""
-        log(f"         brain: {thought}")
-        log(f"         -> {act} {detail}".rstrip())
+            log(f"[step {step}] eyes: {observation[:100].strip()}...")
+            detail = action.get("target") or action.get("text") or action.get("key") or ""
+            log(f"         brain: {thought}")
+            log(f"         -> {act} {detail}".rstrip())
+            if focus:
+                log(f"         focus: {focus}")
 
-        if act == "done":
-            log("\n[OK] Brain reports the goal is complete.")
-            return {"status": "done", "steps": step, "history": history}
-        if act == "fail":
-            log(f"\n[FAIL] Brain gave up: {thought}")
-            return {"status": "fail", "steps": step, "history": history}
+            if act == "done":
+                log("\n[OK] Brain reports the goal is complete.")
+                return {"status": "done", "steps": step, "history": history}
+            if act == "fail":
+                log(f"\n[FAIL] Brain gave up: {thought}")
+                return {"status": "fail", "steps": step, "history": history}
 
-        if act == "click":
-            target = action.get("target", "")
-            loc = locate(shot, target)                       # Eyes: where
-            hands({"type": "click", "x": loc["x"], "y": loc["y"]})  # Hands: do
-            history.append(f"clicked '{target}' at ({loc['x']},{loc['y']})")
-        elif act == "type":
-            target = action.get("target")
-            if target:
-                loc = locate(shot, target)
-                hands({"type": "click", "x": loc["x"], "y": loc["y"]})
-            text = action.get("text", "")
-            hands({"type": "type", "text": text})
-            history.append(f"typed '{text}'" + (f" into '{target}'" if target else ""))
-        elif act == "key":
-            k = action.get("key", "")
-            hands({"type": "key", "key": k})
-            history.append(f"pressed key '{k}'")
-        else:
-            history.append(f"unknown action skipped: {action}")
+            if act == "click":
+                target = action.get("target", "")
+                loc = locate(shot, target)                       # Eyes: where
+                hands({"type": "click", "x": loc["x"], "y": loc["y"]})  # Hands: do
+                did = f"clicked '{target}' at ({loc['x']},{loc['y']})"
+            elif act == "type":
+                target = action.get("target")
+                if target:
+                    loc = locate(shot, target)
+                    hands({"type": "click", "x": loc["x"], "y": loc["y"]})
+                text = action.get("text", "")
+                hands({"type": "type", "text": text})
+                did = f"typed '{text}'" + (f" into '{target}'" if target else "")
+            elif act == "key":
+                k = action.get("key", "")
+                hands({"type": "key", "key": k})
+                did = f"pressed key '{k}'"
+            else:
+                did = f"unknown action skipped: {action}"
 
-        log("")
-        time.sleep(settle)
+            # Record BOTH what the Eyes saw and what we did — so next step the Brain can
+            # tell whether the action changed the screen (no-progress detection). This is
+            # the "outcomes in memory" half of the Phase-5 verify layer.
+            history.append(f"saw: {observation}\n     did: {did}")
 
-    log("\n[STOP] step limit reached without a done/fail.")
-    return {"status": "step_limit", "steps": max_steps, "history": history}
+            log("")
+            time.sleep(settle)
+
+        log("\n[STOP] step limit reached without a done/fail.")
+        return {"status": "step_limit", "steps": max_steps, "history": history}
+    finally:
+        runlog.stop()

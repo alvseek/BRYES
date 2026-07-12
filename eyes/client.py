@@ -20,6 +20,11 @@ from pathlib import Path
 
 from PIL import Image
 
+try:                       # optional transcript logger (no-op when a run isn't logging)
+    import runlog
+except ImportError:
+    runlog = None
+
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 MODEL = "bytedance/ui-tars-1.5-7b"
 
@@ -42,7 +47,13 @@ DESCRIBE_PROMPT = (
     "- the interactive elements available to act on (buttons, input fields, menus) "
     "- list them by their visible labels\n"
     "- the current state: window titles, and what any display or text field shows "
-    "right now\n"
+    "right now\n\n"
+    "CRITICAL — report ONLY what is literally visible as pixels on the screen. Do NOT "
+    "infer, compute, calculate, complete, or guess anything. Transcribe visible numbers "
+    "and text EXACTLY as shown, character for character. If a display shows an "
+    "expression or partial input with no result (e.g. a calculation that has not been "
+    "evaluated yet), report it exactly and state plainly that no result is shown — NEVER "
+    "fill in a value that is not on the screen.\n\n"
     "Do NOT suggest actions and do NOT give coordinates. Only report what is there."
 )
 
@@ -110,9 +121,25 @@ def _ask(prompt, image_bytes, *, max_tokens, timeout):
     return data["choices"][0]["message"]["content"].strip()
 
 
-def describe(image_bytes, *, timeout=60):
-    """Return a text report of what is on screen, for the Brain to reason over."""
-    return _ask(DESCRIBE_PROMPT, image_bytes, max_tokens=512, timeout=timeout)
+def describe(image_bytes, focus=None, *, timeout=60):
+    """Return a text report of what is on screen, for the Brain to reason over.
+
+    If `focus` is given (the Brain telling the Eyes what matters this step), the
+    description concentrates on that area — detailed there, one line for everything
+    else. Called with focus=None (e.g. the first step) it reports the whole screen.
+    """
+    prompt = DESCRIBE_PROMPT
+    if focus:
+        prompt += (
+            f"\n\nFOCUS: concentrate on {focus}. Describe it in full detail — its "
+            "current state, every visible label, and any values or text it shows right "
+            "now (distinguish a live entry/input from a log of past results). Mention "
+            "anything else on screen in at most one line."
+        )
+    result = _ask(prompt, image_bytes, max_tokens=512, timeout=timeout)
+    if runlog:
+        runlog.record("describe", f"focus: {focus or '(none)'}", result)
+    return result
 
 
 def locate(image_bytes, instruction, *, timeout=60):
@@ -132,10 +159,14 @@ def locate(image_bytes, instruction, *, timeout=60):
 
     ax = max(0, min(width - 1, round(mx * width / rw)))
     ay = max(0, min(height - 1, round(my * height / rh)))
-    return {
+    result = {
         "x": ax, "y": ay,
         "raw_model_coord": [mx, my],
         "resized_dims_wh": [rw, rh],
         "original_dims_wh": [width, height],
         "content": content,
     }
+    if runlog:
+        runlog.record("locate", f"instruction: {instruction}", content,
+                      x=ax, y=ay, raw_model_coord=[mx, my])
+    return result

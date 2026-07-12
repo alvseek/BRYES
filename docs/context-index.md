@@ -14,6 +14,7 @@ load on relevance.
 |---|---|---|
 | [architecture-overview.md](architecture-overview.md) | What BRYES is (Brain-Eyes vision computer-use agent), the 4-piece HTTP architecture (Screen/Hands/Eyes/Brain), repo layout, OpenRouter model slugs, and load-bearing technical facts (UI-TARS coordinate convention, bare-symbol grounding, DeepSeek text-only + reasoning truncation, gnome-calculator). | computer-use-agent, architecture, ui-tars, deepseek, openrouter, docker |
 | [python-conventions.md](python-conventions.md) | Python coding conventions — chiefly: no emoji in console output (Windows cp1252 → UnicodeEncodeError crashes the script); use ASCII markers (PASS:/FAIL:/WARN:). Em-dashes are fine. | python, conventions, encoding, windows, console |
+| [agent-loop-flow.md](agent-loop-flow.md) | The data-flow view of the agent loop: how Screen/Hands/Eyes/Brain connect (one orchestrator, two transports), exactly what each piece is fed and emits per step (prompts + payloads), the two lossy seams (Brain-is-blind, history-is-unverified), and the 1024 clear-loop post-mortem that motivates Phase 5. Complements architecture-overview.md (structure). | loop, data-flow, wiring, describe, decide, verify, phase-5, post-mortem |
 
 ## Quick facts
 - **Repo:** github.com/alvseek/BRYES · local `c:\Work\IM\BRYES` · remote `alvseek`, commit identity `alvseek`.
