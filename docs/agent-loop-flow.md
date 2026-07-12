@@ -1,7 +1,7 @@
 ---
 project: BRYES
 title: Agent Loop — Wiring & Data Flow
-updated: 2026-07-12
+updated: 2026-07-13
 doc_type: flow-diagram
 tags: [loop, data-flow, wiring, describe, decide, locate, verify, phase-5, post-mortem]
 ---
@@ -33,7 +33,7 @@ Two transports, two homes:
 |---|---|---|---|
 | **Screen** | local Docker container | HTTP `:8000` | `GET /screenshot` |
 | **Hands** | *same* container (not a separate service) | HTTP `:8000` | `POST /action` (runs `xdotool`) |
-| **Eyes** | rented, OpenRouter (UI-TARS-1.5-7B) | HTTPS | `describe()`, `locate()` |
+| **Eyes** | rented, OpenRouter — Qwen2.5-VL-72B (`describe`) + UI-TARS-1.5-7B (`locate`) | HTTPS | `describe()`, `locate()` |
 | **Brain** | rented, OpenRouter (DeepSeek V4) | HTTPS | `decide()` |
 
 ```mermaid
@@ -46,7 +46,7 @@ graph TD
     end
 
     subgraph openrouter["OpenRouter (HTTPS)"]
-        Eyes["Eyes — UI-TARS-1.5-7B<br/>describe(png), locate(png, target)"]
+        Eyes["Eyes<br/>describe(png): Qwen2.5-VL-72B<br/>locate(png, target): UI-TARS-1.5-7B"]
         Brain["Brain — DeepSeek V4<br/>decide(goal, obs, history)"]
     end
 
@@ -74,9 +74,9 @@ This is the "what prompt / what feed flows to each other" answer. Per step:
 | # | Call | Fed (input / prompt) | Emits | Source |
 |---|---|---|---|---|
 | 1 | `screenshot()` | — | PNG bytes | [screen/server/app.py](../screen/server/app.py) |
-| 2 | `describe(png, focus?)` | `DESCRIBE_PROMPT` + optional **focus** (from the Brain) + PNG | **text** report — concentrated on `focus` when set (<=512 tok) | [eyes/client.py](../eyes/client.py) |
+| 2 | `describe(png, focus?)` | `DESCRIBE_PROMPT` + optional **focus** + PNG → **Qwen2.5-VL-72B** | **text** report that separates the *live entry* from *history* (<=512 tok) | [eyes/client.py](../eyes/client.py) |
 | 3 | `decide(goal, obs, history)` | `SYSTEM_PROMPT` + `{goal, observation, history}` — **text only**, Think High (`reasoning.effort=high`) | JSON `{thought, action, target?, text?, key?, focus?}` | [brain/client.py](../brain/client.py) |
-| 4 | `locate(png, target)` | `GROUND_PROMPT(target)` + PNG | pixel `(x,y)` (+ diagnostics) | [eyes/client.py](../eyes/client.py) |
+| 4 | `locate(png, target)` | `GROUND_PROMPT(target)` + PNG → **UI-TARS-1.5-7B** | pixel `(x,y)` (+ diagnostics) | [eyes/client.py](../eyes/client.py) |
 | 5 | `hands(payload)` | `{type: click, x, y}` / `{type: type, text}` / `{type: key, key}` | xdotool executes; `{ok}` | [screen/server/app.py](../screen/server/app.py) |
 
 Notes that matter for Phase 5:
@@ -147,6 +147,12 @@ The Brain never receives the PNG. Its entire model of the world is `describe`'s
   no concept of "current input field" vs "log of a past result." If both are on screen,
   the Brain is handed both as equally-current facts.
 
+> **Addressed (2026-07-13):** the live-vs-history half of this seam is largely closed —
+> `describe` moved from UI-TARS (a grounding fine-tune that flattened history into the
+> current state) to a general VLM (**Qwen2.5-VL-72B**) that explicitly labels the *live
+> entry* vs *history*. The Brain is still text-only (compression remains), but it now
+> gets a faithful, structured reading. See §6.
+
 ### Seam B — history is authored, not observed (no verification)
 
 After acting, the loop appends a string describing what it *tried*
@@ -213,8 +219,7 @@ product.
 
 ## 6. First Phase-5 cut (implemented 2026-07-12) + what remains
 
-Three changes, each aimed at a seam above. **Implemented in code; not yet re-verified
-live on the 1024 task** (see "Verify" below).
+Changes aimed at the two seams above — verified live (see "Verified" below).
 
 | Change | What | Attacks |
 |---|---|---|
@@ -227,12 +232,22 @@ reasoning to act on it.** They are orthogonal — the 1024 loop happened with re
 *disabled*, so the fix is to turn reasoning on over richer memory, not to bolt a
 heuristic onto a mechanical decider.
 
-**Still missing (later Phase-5 work):** an *explicit* post-action re-check/recover step —
-the loop still infers progress implicitly from the next step's observation rather than
-deliberately screenshotting after an action and branching on "did it land?". Structured
-(non-freeform) describe output is also still open.
+**Follow-on fixes (2026-07-12/13), each from a live failure:**
+- **Disambiguate by position** — name a symbol-button with its location when the symbol
+  also appears in the display ("the equals button on the keypad"), else `locate` grabs
+  the "=" shown in the equation.
+- **English-only + `decide()` JSON retry** — flash occasionally reasoned in Chinese and
+  emitted invalid JSON; a global English rule + retry-on-bad-JSON removed both.
+- **VLM describe (the decisive Seam-A fix)** — `describe` moved from UI-TARS to
+  **Qwen2.5-VL-72B**. UI-TARS (a grounding fine-tune) confabulated results and flattened a
+  history/log into the current state; the VLM explicitly labels *live entry* vs *history*,
+  killing the recurring clear-loop that prompt-tuning couldn't.
 
-**Verify:** re-run the 1024 task (`1024 × 921 / 73` on gnome-calculator) and watch the
-Brain break out of the clear-loop — either by ignoring the stale history line or by
-recognizing clearing it does nothing. Until that run passes, this section is a design
-claim, not a proven fix.
+**Verified (2026-07-13):** varied calcs complete cleanly end-to-end — `1550×3÷4=1162.5`,
+`128+47=175`, `512−137=375`, `7÷8=0.875`, and `12+34+56=102` **on a cluttered calculator**
+(a `7÷8` result in history) — the exact scenario that clear-looped before.
+
+**Still open:** an *explicit* post-action re-check/recover step — the loop still infers
+progress implicitly rather than a deliberate "did it land?" branch; and the **Brain likely
+moves to `deepseek-v4-pro`** for harder multi-step reasoning (re-benchmark flash on the
+now-clean describe first, since much of its earlier flakiness was describe garbage-in).
