@@ -29,6 +29,7 @@ or **prove it from the command line**:
 
 ```bash
 python test_phase1.py             # saves shot_before.png + shot_after.png
+python test_hands.py              # deterministic regression check for the Hands primitives
 ```
 
 **Done when** (from the roadmap): a screenshot returns a PNG, and a click visibly
@@ -58,6 +59,7 @@ curl -s -X POST http://localhost:8000/action \
 |---|---|---|---|
 | `/health` | GET | — | `{"status":"ok","display":":99"}` |
 | `/screenshot` | GET | — | `image/png` |
+| `/pointer` | GET | — | `{"x":..,"y":..}` (current mouse position) |
 | `/action` | POST | `{"type":"click","x":..,"y":..,"button":1}` | `{"ok":true}` |
 | `/action` | POST | `{"type":"double_click","x":..,"y":..}` | `{"ok":true}` |
 | `/action` | POST | `{"type":"right_click","x":..,"y":..}` | `{"ok":true}` |

@@ -5,6 +5,8 @@ Exposes the container's two abilities over HTTP so the other pieces
 
   GET  /health      -> is the virtual display up?
   GET  /screenshot  -> current desktop as a PNG
+  GET  /pointer     -> current mouse (x, y) — a model-free way to assert a point
+                       action (hover/click/drag/...) landed where intended
   POST /action      -> click / double_click / right_click / hover / scroll /
                        drag / type / key, executed by xdotool
 
@@ -43,6 +45,21 @@ def screenshot():
     if r.returncode != 0 or not os.path.exists(path) or os.path.getsize(path) == 0:
         return jsonify({"error": "screenshot failed", "stderr": r.stderr}), 500
     return send_file(path, mimetype="image/png")
+
+
+@app.get("/pointer")
+def pointer():
+    """Where the mouse is right now, as {x, y}. Deterministic and model-free — lets a
+    test assert that hover/click/drag/... moved the pointer to the intended pixel."""
+    r = _run(["xdotool", "getmouselocation", "--shell"])
+    if r.returncode != 0:
+        return jsonify({"error": "getmouselocation failed", "stderr": r.stderr}), 500
+    vals = {}
+    for line in r.stdout.splitlines():
+        if "=" in line:
+            k, v = line.split("=", 1)
+            vals[k] = v
+    return jsonify({"x": int(vals.get("X", 0)), "y": int(vals.get("Y", 0))})
 
 
 # Actions that act at a screen coordinate all need (x, y). Each primitive stays

@@ -27,10 +27,11 @@ is a last resort, Phase 6); prove ONE real task end-to-end before generalizing.
 
 ## Repo layout
 
-- `screen/` — Dockerfile + Flask control API (`/health`, `/screenshot`, `/action`),
-  `docker-compose.yml`, `test_phase1.py`. `/action` verbs: `click`, `double_click`,
-  `right_click`, `hover`, `scroll`, `drag`, `type`, `key`.
-  Live view: noVNC at `http://localhost:6080/vnc.html`; control API on `:8000`.
+- `screen/` — Dockerfile + Flask control API (`/health`, `/screenshot`, `/pointer`,
+  `/action`), `docker-compose.yml`, `test_phase1.py`, `test_hands.py` (deterministic Hands
+  regression test). `/action` verbs: `click`, `double_click`, `right_click`, `hover`,
+  `scroll`, `drag`, `type`, `key`. `/pointer` returns the mouse `(x,y)` for model-free
+  action assertions. Live view: noVNC at `http://localhost:6080/vnc.html`; control API on `:8000`.
 - `eyes/client.py` — `describe(img)` (screen → text, via Qwen2.5-VL-72B) + `locate(img, instr)` (element → pixel x,y, via UI-TARS-1.5-7B).
 - `brain/client.py` — `decide(goal, observation, history)` → structured JSON action.
 - `agent/loop.py` — `run(goal)` chains screenshot → describe → decide → locate → act.

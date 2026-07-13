@@ -12,10 +12,11 @@ in [../roadmap.md](../roadmap.md); this is the finer-grained "what's left right 
 
 ## Next steps (do these next)
 
-- [ ] **Live-verify the new hands primitives** — `scroll` / `drag` / `double_click` /
-      `right_click` / `hover` are static-checked only (compile + cross-layer consistency),
-      never exercised on a real screen. Prove them in a container run (Chrome is the natural
-      test: `scroll` a page, `right_click` a link, `double_click` to select).
+- [ ] **Confirm app-level hands behavior on a real app** — the *movement* of every primitive
+      is now regression-tested deterministically (`screen/test_hands.py` via the new `/pointer`
+      endpoint: pointer lands on target, drag ends at destination, right_click opens the menu).
+      Still eyeball-only: that `scroll` actually scrolls a page and `double_click` selects —
+      drive these against Chrome at `:6080` to confirm.
 - [ ] **Add a combo/macro action** — a composite the Brain can issue in one shot, e.g.
       `ctrl+a → type "who am I" → Enter`. Built from the atomic primitives, sequenced above
       them (not baked into any single primitive). The atomic set to compose from is now the
@@ -30,9 +31,9 @@ in [../roadmap.md](../roadmap.md); this is the finer-grained "what's left right 
 
 ## Tech debts (known gaps / risks)
 
-- **New hands primitives not live-verified** — `scroll`/`drag`/`double_click`/`right_click`/
-  `hover` pass static checks but have never touched a real screen; behaviour under real apps
-  (esp. Chrome scroll amount, drag timing) is unconfirmed. (See next-steps live-verify item.)
+- **Hands app-behavior not yet confirmed on a real app** — movement is regression-tested
+  (`test_hands.py` + `/pointer`), but Chrome scroll *amount* feel and drag timing under a real
+  draggable surface are still unconfirmed. (See next-steps confirm item.)
 - **No explicit verify-and-recover** — the loop infers progress implicitly from the next
   observation; a missed click isn't deliberately caught. (Same as Phase 5 above.)
 - **Brain choice validated on one task only** (browser search). Not yet the calculator suite.
@@ -46,6 +47,10 @@ in [../roadmap.md](../roadmap.md); this is the finer-grained "what's left right 
 
 ## Recently resolved (for context)
 
+- **Hands regression test + `/pointer`** → added a read-only `/pointer` (mouse x,y) endpoint
+  and `screen/test_hands.py`: 5 deterministic, model-free checks (all primitives execute; bad
+  payloads 400; point actions land the pointer; drag ends at destination; right_click opens
+  the menu). The new primitives' movement is now live-verified, not just static-checked. (2026-07-13)
 - **Hands primitive audit + full natural set** → audited all primitives (`type`/`key` clean-
   atomic; `click` naturally-composite-and-safe; `move`→`hover`, now wired to the Brain); no
   second `type`-class bug found. Added the missing natural actions `double_click` /
