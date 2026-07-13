@@ -30,9 +30,9 @@ MODEL = "qwen/qwen3.6-flash"
 
 SYSTEM_PROMPT = """You are the Brain of a vision-based computer-use agent.
 A separate component (the Eyes) can locate any on-screen element you name, and the
-Hands can click, type, and press keys. Given the GOAL, a text description of what is
-currently on screen (OBSERVATION), and the HISTORY of prior steps, decide the SINGLE
-next action.
+Hands can click, double-click, right-click, hover, scroll, drag, type, and press keys.
+Given the GOAL, a text description of what is currently on screen (OBSERVATION), and the
+HISTORY of prior steps, decide the SINGLE next action.
 
 The HISTORY lists the actions you have ALREADY taken (most recent last). Judge the
 current situation from the OBSERVATION — not from memory of past screens.
@@ -69,6 +69,12 @@ Rules:
   To REPLACE a field's existing contents (e.g. an address bar with a URL in it): "click"
   it, then "key" with ctrl+a to select all, then "type" — the typed text replaces the
   selection. To append at the cursor, just "type".
+- PICK THE RIGHT ACTION. Point actions name a "target" by description (the Eyes turn it
+  into pixels): "click" (left-click), "double_click" (open/activate an item), "right_click"
+  (open a context menu), "hover" (move the pointer ONTO a target to reveal a menu/tooltip,
+  without clicking), "scroll" (wheel-scroll at a target — set "direction" to "up" or "down",
+  e.g. to bring off-screen content into view), "drag" (press on "target" and release on
+  "destination" — for sliders, moving items). Plus "type", "key", "done", "fail".
 - Choose exactly ONE next action that makes real progress toward the goal.
 - If the OBSERVATION shows the goal is already satisfied, use action "done".
 - If you are truly stuck or the goal is impossible, use action "fail".
@@ -77,14 +83,17 @@ Rules:
 JSON schema:
 {
   "thought": "<reasoning in English, with NO quotation marks inside: what the screen shows now, progress vs the GOAL, and the next action>",
-  "action": "click" | "type" | "key" | "done" | "fail",
-  "target": "<element description; required for click>",
+  "action": "click" | "double_click" | "right_click" | "hover" | "scroll" | "drag" | "type" | "key" | "done" | "fail",
+  "target": "<element description; required for click/double_click/right_click/hover/scroll, and the START point of a drag>",
+  "destination": "<element description; the drop point, required for drag>",
+  "direction": "<'up' or 'down'; required for scroll>",
   "text": "<text to type into the CURRENTLY-FOCUSED field; required for type>",
   "key": "<key name like Return, Escape, Tab; required when action is key>",
   "focus": "<optional: what the Eyes should concentrate on next>"
 }"""
 
-VALID_ACTIONS = {"click", "type", "key", "done", "fail"}
+VALID_ACTIONS = {"click", "double_click", "right_click", "hover", "scroll", "drag",
+                 "type", "key", "done", "fail"}
 
 
 def _load_key():

@@ -58,7 +58,7 @@ graph TD
     Brain -->|"JSON action"| Loop
     Loop -->|"locate: prompt + PNG + target"| Eyes
     Eyes -->|"pixel (x,y)"| Loop
-    Loop -->|"POST /action {click x,y | type | key}"| Hands
+    Loop -->|"POST /action {click|scroll|drag x,y | type | key}"| Hands
 ```
 
 **Key structural fact:** Screen and Hands share one container and one HTTP port; Eyes
@@ -75,9 +75,9 @@ This is the "what prompt / what feed flows to each other" answer. Per step:
 |---|---|---|---|---|
 | 1 | `screenshot()` | — | PNG bytes | [screen/server/app.py](../screen/server/app.py) |
 | 2 | `describe(png, focus?)` | `DESCRIBE_PROMPT` + optional **focus** + PNG → **Qwen2.5-VL-72B** | **text** report that separates the *live entry* from *history* (<=512 tok) | [eyes/client.py](../eyes/client.py) |
-| 3 | `decide(goal, obs, history)` | `SYSTEM_PROMPT` + `{goal, observation, history}` — **text only**, Think High (`reasoning.effort=high`) | JSON `{thought, action, target?, text?, key?, focus?}` | [brain/client.py](../brain/client.py) |
+| 3 | `decide(goal, obs, history)` | `SYSTEM_PROMPT` + `{goal, observation, history}` — **text only**, Think High (`reasoning.effort=high`) | JSON `{thought, action, target?, destination?, direction?, text?, key?, focus?}` | [brain/client.py](../brain/client.py) |
 | 4 | `locate(png, target)` | `GROUND_PROMPT(target)` + PNG → **UI-TARS-1.5-7B** | pixel `(x,y)` (+ diagnostics) | [eyes/client.py](../eyes/client.py) |
-| 5 | `hands(payload)` | `{type: click, x, y}` / `{type: type, text}` / `{type: key, key}` | xdotool executes; `{ok}` | [screen/server/app.py](../screen/server/app.py) |
+| 5 | `hands(payload)` | point actions `{type: click\|double_click\|right_click\|hover, x, y}`, `{type: scroll, x, y, direction}`, `{type: drag, x, y, x2, y2}`, `{type: type, text}`, `{type: key, key}` | xdotool executes; `{ok}` | [screen/server/app.py](../screen/server/app.py) |
 
 Notes that matter for Phase 5:
 
@@ -125,9 +125,11 @@ Narration, keyed to [`agent/loop.py`](../agent/loop.py):
 1. **Screenshot** the current desktop (top of every step — one fresh frame per step).
 2. **`describe`** it → a text observation for the Brain.
 3. **`decide`** from `goal + observation + history` → one JSON action.
-4. If the action is `done`/`fail`, return. Otherwise it is `click`/`type`/`key`.
-5. For `click` (and `type` with a target), **`locate`** the named element on the *same*
-   screenshot → `(x,y)`, then **Hands** execute it.
+4. If the action is `done`/`fail`, return. Otherwise it is a **point action**
+   (`click`/`double_click`/`right_click`/`hover`/`scroll`/`drag`), `type`, or `key`.
+5. For a point action, **`locate`** the named `target` on the *same* screenshot → `(x,y)`
+   (a `drag` also locates its `destination`), then **Hands** execute it. `type`/`key` go
+   straight to the Hands (no locate — `type` hits whatever the Brain already focused).
 6. **Append to history** a string describing the *attempted* action, then settle and loop.
 
 ---
@@ -257,7 +259,13 @@ heuristic onto a mechanical decider.
 - **Generalized to a browser + Brain chosen by bake-off.** The stack drove Google Chrome to
   search "who am I". A 5-model bake-off picked **`qwen/qwen3.6-flash`** as the default Brain
   (beat v4-pro and minimax-m3 on cost AND capability once the harness was fixed).
+- **Hands primitive audit → full natural set.** Audited all primitives: `type`/`key` clean-
+  atomic, `click` naturally-composite-and-safe (move-then-click clobbers nothing), `move`
+  renamed to `hover` and wired to the Brain. No second `type`-class bug. Added the missing
+  natural actions — `double_click`, `right_click`, `hover`, `scroll` (`direction`), `drag`
+  (`target`→`destination`) — each ONE atomic xdotool call. Static-checked; not yet run live.
 
 **Still open** (see [backlog.md](backlog.md)): the *explicit* post-action re-check/recover
-step (Phase 5 — deferred until base capability ≥80%); auditing all hands primitives for
-atomicity; a combo/macro action; validating qwen3.6-flash on the calculator suite.
+step (Phase 5 — deferred until base capability ≥80%); a combo/macro action (compose the now-
+atomic primitives); validating qwen3.6-flash on the calculator suite; live-verifying the new
+`scroll`/`drag`/`double_click`/`right_click`/`hover` primitives on a real screen.

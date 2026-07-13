@@ -61,7 +61,7 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 - **last_verified**: ""
 - **verified_by**: ""
 - **update_trigger**: "when the Screen container stack, the /screenshot|/action API, or ports change"
-- **notes**: "Phase 1 — the Screen+Hands: disposable Ubuntu container (Xvfb + fluxbox + xdotool + scrot) exposing screenshot + click/type over a Flask API (:8000) with noVNC live view (:6080). NOTE: lists xcalc; the app was since swapped to gnome-calculator (see central architecture-overview) — README slightly stale here."
+- **notes**: "Phase 1 — the Screen+Hands: disposable Ubuntu container (Xvfb + fluxbox + xdotool + scrot) exposing screenshot + the full Hands action set (click/double_click/right_click/hover/scroll/drag/type/key) over a Flask API (:8000) with noVNC live view (:6080). Apps: gnome-calculator, xterm, Chrome (xcalc note fixed 2026-07-13)."
 
 ### `eyes/README.md`
 

@@ -26,6 +26,15 @@ from brain.client import decide, SYSTEM_PROMPT  # noqa: E402
 
 SCREEN = "http://localhost:8000"
 
+# Point-and-do actions handled identically: locate the named target, act at that pixel.
+# (scroll and drag are handled separately — they need a direction / a second point.)
+_POINT_VERB = {
+    "click": "clicked",
+    "double_click": "double-clicked",
+    "right_click": "right-clicked",
+    "hover": "hovered",
+}
+
 
 def _open(req, retries=4):
     """urlopen with a few retries — the Screen's dev server can drop a cold connection."""
@@ -96,11 +105,25 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
                 log(f"\n[FAIL] Brain gave up: {thought}")
                 return {"status": "fail", "steps": step, "history": history}
 
-            if act == "click":
+            if act in _POINT_VERB:
+                # point-and-do: the Eyes locate the named target, the Hands act at that pixel
                 target = action.get("target", "")
                 loc = locate(shot, target)                       # Eyes: where
-                hands({"type": "click", "x": loc["x"], "y": loc["y"]})  # Hands: do
-                did = f"clicked '{target}' at ({loc['x']},{loc['y']})"
+                hands({"type": act, "x": loc["x"], "y": loc["y"]})  # Hands: do
+                did = f"{_POINT_VERB[act]} '{target}' at ({loc['x']},{loc['y']})"
+            elif act == "scroll":
+                target = action.get("target", "")
+                direction = (action.get("direction") or "down").lower()
+                loc = locate(shot, target)
+                hands({"type": "scroll", "x": loc["x"], "y": loc["y"], "direction": direction})
+                did = f"scrolled {direction} at '{target}' ({loc['x']},{loc['y']})"
+            elif act == "drag":
+                target = action.get("target", "")
+                dest = action.get("destination", "")
+                a = locate(shot, target)                         # Eyes: start point
+                b = locate(shot, dest)                           # Eyes: drop point
+                hands({"type": "drag", "x": a["x"], "y": a["y"], "x2": b["x"], "y2": b["y"]})
+                did = f"dragged '{target}' ({a['x']},{a['y']}) -> '{dest}' ({b['x']},{b['y']})"
             elif act == "type":
                 # type sends text to whatever is FOCUSED — it must NOT click first, or it
                 # would drop the cursor/selection the Brain just set up (e.g. a Ctrl+A

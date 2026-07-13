@@ -18,7 +18,7 @@ GitHub: **github.com/alvseek/BRYES** (remote named `alvseek`, commit identity
 | Piece | What | Where |
 |---|---|---|
 | **Screen** | disposable Ubuntu desktop (Xvfb + fluxbox), screenshots + input | local Docker container, `screen/` |
-| **Hands** | `xdotool` click/type/key inside that container | same container |
+| **Hands** | `xdotool` click/double-click/right-click/hover/scroll/drag/type/key inside that container | same container |
 | **Eyes** | two models: **Qwen2.5-VL-72B** *describes* the screen (text for the Brain), **UI-TARS-1.5-7B** *locates* elements (grounding → coordinates) | rented, OpenRouter, `eyes/` |
 | **Brain** | `qwen3.6-flash` (default, swappable) — state → next action (reasoning) | rented, OpenRouter, `brain/` |
 
@@ -28,7 +28,8 @@ is a last resort, Phase 6); prove ONE real task end-to-end before generalizing.
 ## Repo layout
 
 - `screen/` — Dockerfile + Flask control API (`/health`, `/screenshot`, `/action`),
-  `docker-compose.yml`, `test_phase1.py`. `/action` verbs: `click`, `move`, `type`, `key`.
+  `docker-compose.yml`, `test_phase1.py`. `/action` verbs: `click`, `double_click`,
+  `right_click`, `hover`, `scroll`, `drag`, `type`, `key`.
   Live view: noVNC at `http://localhost:6080/vnc.html`; control API on `:8000`.
 - `eyes/client.py` — `describe(img)` (screen → text, via Qwen2.5-VL-72B) + `locate(img, instr)` (element → pixel x,y, via UI-TARS-1.5-7B).
 - `brain/client.py` — `decide(goal, observation, history)` → structured JSON action.
@@ -70,6 +71,9 @@ is a last resort, Phase 6); prove ONE real task end-to-end before generalizing.
   NOT click first (a click deselects a Ctrl+A selection → text appends instead of replaces,
   which broke browser URL-bar entry). The Brain focuses via an explicit `click`, then
   optionally `key` ctrl+a, then `type`. Composition (macros) belongs ABOVE the primitives.
+  The full natural pointer set is `click` / `double_click` / `right_click` / `hover` /
+  `scroll` (`direction` up|down) / `drag` (`target`→`destination`) — each is ONE atomic
+  xdotool call with no hidden action. (2026-07-13; `scroll`/`drag`/etc. not yet run live.)
 - **Real browser = Google Chrome from the .deb:** apt `chromium`/`chromium-browser` on
   Ubuntu 24.04 is a *snap transitional* that won't run in a container. Chrome is installed
   from the official `.deb` (in the Dockerfile), launched `--no-sandbox` (root). Test apps

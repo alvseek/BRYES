@@ -11,8 +11,8 @@ will drive it through the same two endpoints built here.
 |---|---|
 | **Xvfb** | Virtual display (`:99`) — a desktop with no monitor |
 | **fluxbox** | Lightweight window manager |
-| **xcalc + xterm** | A visible app to click/type against |
-| **xdotool** | The "Hands" — performs clicks, typing, keypresses |
+| **gnome-calculator + xterm + Chrome** | Visible apps to click/type against |
+| **xdotool** | The "Hands" — clicks, scrolls, drags, typing, keypresses |
 | **scrot** | Takes the screenshots |
 | **Flask API** (`:8000`) | Exposes the two abilities over HTTP |
 | **x11vnc + noVNC** (`:6080`) | Live view of the desktop in your browser |
@@ -59,7 +59,11 @@ curl -s -X POST http://localhost:8000/action \
 | `/health` | GET | — | `{"status":"ok","display":":99"}` |
 | `/screenshot` | GET | — | `image/png` |
 | `/action` | POST | `{"type":"click","x":..,"y":..,"button":1}` | `{"ok":true}` |
-| `/action` | POST | `{"type":"move","x":..,"y":..}` | `{"ok":true}` |
+| `/action` | POST | `{"type":"double_click","x":..,"y":..}` | `{"ok":true}` |
+| `/action` | POST | `{"type":"right_click","x":..,"y":..}` | `{"ok":true}` |
+| `/action` | POST | `{"type":"hover","x":..,"y":..}` | `{"ok":true}` |
+| `/action` | POST | `{"type":"scroll","x":..,"y":..,"direction":"down","amount":3}` | `{"ok":true}` |
+| `/action` | POST | `{"type":"drag","x":..,"y":..,"x2":..,"y2":..}` | `{"ok":true}` |
 | `/action` | POST | `{"type":"type","text":".."}` | `{"ok":true}` |
 | `/action` | POST | `{"type":"key","key":".."}` | `{"ok":true}` |
 

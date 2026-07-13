@@ -12,13 +12,14 @@ in [../roadmap.md](../roadmap.md); this is the finer-grained "what's left right 
 
 ## Next steps (do these next)
 
-- [ ] **Audit every hands primitive for basic/atomic behavior.** `type` was the offender
-      (it clicked first, deselecting a Ctrl+A → text appended). Confirm `click` / `key` /
-      `move` don't bundle extra behavior. **Principle: primitives stay dumb; composition
-      belongs one level up.**
+- [ ] **Live-verify the new hands primitives** — `scroll` / `drag` / `double_click` /
+      `right_click` / `hover` are static-checked only (compile + cross-layer consistency),
+      never exercised on a real screen. Prove them in a container run (Chrome is the natural
+      test: `scroll` a page, `right_click` a link, `double_click` to select).
 - [ ] **Add a combo/macro action** — a composite the Brain can issue in one shot, e.g.
       `ctrl+a → type "who am I" → Enter`. Built from the atomic primitives, sequenced above
-      them (not baked into any single primitive).
+      them (not baked into any single primitive). The atomic set to compose from is now the
+      full natural set (below).
 - [ ] **Validate `qwen3.6-flash` on the calculator suite** (`1550×3÷4`, `128+47`, `512−137`,
       `7÷8`, `12+34+56` on clutter) before fully trusting it as the default Brain — it was
       only crowned on ONE task (browser search).
@@ -29,6 +30,9 @@ in [../roadmap.md](../roadmap.md); this is the finer-grained "what's left right 
 
 ## Tech debts (known gaps / risks)
 
+- **New hands primitives not live-verified** — `scroll`/`drag`/`double_click`/`right_click`/
+  `hover` pass static checks but have never touched a real screen; behaviour under real apps
+  (esp. Chrome scroll amount, drag timing) is unconfirmed. (See next-steps live-verify item.)
 - **No explicit verify-and-recover** — the loop infers progress implicitly from the next
   observation; a missed click isn't deliberately caught. (Same as Phase 5 above.)
 - **Brain choice validated on one task only** (browser search). Not yet the calculator suite.
@@ -42,6 +46,10 @@ in [../roadmap.md](../roadmap.md); this is the finer-grained "what's left right 
 
 ## Recently resolved (for context)
 
+- **Hands primitive audit + full natural set** → audited all primitives (`type`/`key` clean-
+  atomic; `click` naturally-composite-and-safe; `move`→`hover`, now wired to the Brain); no
+  second `type`-class bug found. Added the missing natural actions `double_click` /
+  `right_click` / `hover` / `scroll` / `drag`, each one atomic xdotool call. (2026-07-13)
 - **History-vs-live clear-loop** → fixed by moving `describe` to a VLM (Qwen2.5-VL-72B) that
   separates the live entry from history. (2026-07-13)
 - **`type` append bug** → `type` made atomic (no click). (2026-07-13)
