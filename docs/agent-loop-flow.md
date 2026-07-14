@@ -75,7 +75,7 @@ This is the "what prompt / what feed flows to each other" answer. Per step:
 |---|---|---|---|---|
 | 1 | `screenshot()` | — | PNG bytes | [screen/server/app.py](../screen/server/app.py) |
 | 2 | `describe(png, focus?)` | `DESCRIBE_PROMPT` + optional **focus** + PNG → **Qwen2.5-VL-72B** | **text** report that separates the *live entry* from *history* (<=512 tok) | [eyes/client.py](../eyes/client.py) |
-| 3 | `decide(goal, obs, history)` | `SYSTEM_PROMPT` + `{goal, observation, history}` — **text only**, Think High (`reasoning.effort=high`) | JSON `{thought, action, target?, destination?, direction?, text?, key?, focus?}` | [brain/client.py](../brain/client.py) |
+| 3 | `decide(goal, obs, history)` | `SYSTEM_PROMPT` + `{goal, observation, history}` — **text only**, Think High (`reasoning.effort=high`) | JSON `{thought, action, target?, destination?, direction?, seconds?, text?, key?, focus?}` | [brain/client.py](../brain/client.py) |
 | 4 | `locate(png, target)` | `GROUND_PROMPT(target)` + PNG → **UI-TARS-1.5-7B** | pixel `(x,y)` (+ diagnostics) | [eyes/client.py](../eyes/client.py) |
 | 5 | `hands(payload)` | point actions `{type: click\|double_click\|right_click\|hover, x, y}`, `{type: scroll, x, y, direction}`, `{type: drag, x, y, x2, y2}`, `{type: type, text}`, `{type: key, key}` | xdotool executes; `{ok}` | [screen/server/app.py](../screen/server/app.py) |
 
@@ -126,7 +126,9 @@ Narration, keyed to [`agent/loop.py`](../agent/loop.py):
 2. **`describe`** it → a text observation for the Brain.
 3. **`decide`** from `goal + observation + history` → one JSON action.
 4. If the action is `done`/`fail`, return. Otherwise it is a **point action**
-   (`click`/`double_click`/`right_click`/`hover`/`scroll`/`drag`), `type`, or `key`.
+   (`click`/`double_click`/`right_click`/`hover`/`scroll`/`drag`), `type`, `key`,
+   `wait` (pause `seconds` for a loading screen — no UI touch), or `screenshot` (save the
+   current frame as a deliverable `capture-NN.png` — no UI touch).
 5. For a point action, **`locate`** the named `target` on the *same* screenshot → `(x,y)`
    (a `drag` also locates its `destination`), then **Hands** execute it. `type`/`key` go
    straight to the Hands (no locate — `type` hits whatever the Brain already focused).

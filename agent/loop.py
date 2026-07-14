@@ -79,6 +79,7 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
     log(f"(transcript -> {rundir})\n")
     history = []
     focus = None
+    captures = 0
     try:
         for step in range(1, max_steps + 1):
             runlog.set_step(step)
@@ -124,6 +125,22 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
                 b = locate(shot, dest)                           # Eyes: drop point
                 hands({"type": "drag", "x": a["x"], "y": a["y"], "x2": b["x"], "y2": b["y"]})
                 did = f"dragged '{target}' ({a['x']},{a['y']}) -> '{dest}' ({b['x']},{b['y']})"
+            elif act == "wait":
+                # Let a loading screen settle. No UI interaction — just pause and re-observe.
+                # The Brain chooses the duration; clamp to a sane range.
+                try:
+                    secs = float(action.get("seconds", 2))
+                except (TypeError, ValueError):
+                    secs = 2.0
+                secs = max(0.5, min(secs, 30.0))    # 30s ceiling ~ standard API timeout
+                time.sleep(secs)
+                did = f"waited {secs:g}s for the screen to settle"
+            elif act == "screenshot":
+                # Capture the current screen as a deliverable (distinct from the per-step
+                # diagnostic frames). Reuses this step's frame — exactly what the Brain saw.
+                captures += 1
+                runlog.save_image(f"capture-{captures:02d}.png", shot)
+                did = f"captured screenshot #{captures} (capture-{captures:02d}.png)"
             elif act == "type":
                 # type sends text to whatever is FOCUSED — it must NOT click first, or it
                 # would drop the cursor/selection the Brain just set up (e.g. a Ctrl+A

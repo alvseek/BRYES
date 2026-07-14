@@ -1,7 +1,7 @@
 ---
 project: BRYES
 title: Architecture Overview
-updated: 2026-07-13
+updated: 2026-07-14
 tags: [computer-use-agent, vision, openrouter, docker, ui-tars, deepseek, architecture]
 ---
 
@@ -74,11 +74,22 @@ is a last resort, Phase 6); prove ONE real task end-to-end before generalizing.
   optionally `key` ctrl+a, then `type`. Composition (macros) belongs ABOVE the primitives.
   The full natural pointer set is `click` / `double_click` / `right_click` / `hover` /
   `scroll` (`direction` up|down) / `drag` (`target`→`destination`) — each is ONE atomic
-  xdotool call with no hidden action. (2026-07-13; `scroll`/`drag`/etc. not yet run live.)
+  xdotool call with no hidden action. Movement is regression-tested (`test_hands.py` +
+  `/pointer`); `scroll` also validated live on Tokopedia (2026-07-14).
+- **Vision-first — no shell channel:** the agent acts ONLY through GUI input (xdotool
+  keystrokes into the focused window); there is no "run a command" primitive, so anything it
+  does needs a visible target. Beyond the Hands, the Brain has two loop-level actions: `wait`
+  (pause N Brain-chosen seconds, clamped 0.5–30s, for a loading screen — no UI touch) and
+  `screenshot` (save the current frame as a `capture-NN.png` deliverable). Full Brain action
+  set: click / double_click / right_click / hover / scroll / drag / type / key / wait /
+  screenshot / done / fail.
 - **Real browser = Google Chrome from the .deb:** apt `chromium`/`chromium-browser` on
   Ubuntu 24.04 is a *snap transitional* that won't run in a container. Chrome is installed
-  from the official `.deb` (in the Dockerfile), launched `--no-sandbox` (root). Test apps
-  in the container: gnome-calculator, xterm, Google Chrome.
+  from the official `.deb` (in the Dockerfile), launched `--no-sandbox` (Chrome won't run its
+  sandbox as root; the disposable container is the isolation boundary and holds no secrets —
+  the API key lives on the host). **The entrypoint auto-boots Chrome** at `CHROME_START_URL`
+  (default google.com, override per task); gnome-calculator + xterm stay installed for
+  on-demand launch, not auto-started.
 - **DeepSeek V4 is a reasoning model:** hidden reasoning tokens count against `max_tokens`
   and truncate the JSON (`content: null`) if the cap is too low. Current config enables
   **Think High** (`reasoning:{effort:"high"}`) + `max_tokens: 8192` (headroom for trace +
@@ -95,5 +106,6 @@ is a last resort, Phase 6); prove ONE real task end-to-end before generalizing.
 
 0 key ✅ · 1 Screen ✅ · 2 Eyes ✅ · 3 Brain ✅ · 4 Closed loop ✅ · 5 Verify-and-recover ◐
 (seeds in — VLM describe, atomic `type`, run transcripts; computes varied calcs cleanly
-AND searches "who am I" in Chrome; explicit post-action re-check/recover still to come) ·
+AND searches "who am I" in Chrome, and searched + captured Tokopedia page-1 results via
+`wait`+`screenshot`; explicit post-action re-check/recover still to come) ·
 6 Hosting ⬜ (only if forced). **Brain default: `qwen3.6-flash`** (bake-off winner).

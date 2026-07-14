@@ -74,7 +74,16 @@ Rules:
   (open a context menu), "hover" (move the pointer ONTO a target to reveal a menu/tooltip,
   without clicking), "scroll" (wheel-scroll at a target — set "direction" to "up" or "down",
   e.g. to bring off-screen content into view), "drag" (press on "target" and release on
-  "destination" — for sliders, moving items). Plus "type", "key", "done", "fail".
+  "destination" — for sliders, moving items). Plus "type", "key", "wait", "screenshot", "done", "fail".
+- WAIT FOR LOADING, DON'T GUESS. If the screen is still loading (a spinner, or a blank/partial
+  page with content not yet rendered), do NOT act on it or finish — use action "wait" and set
+  "seconds" to how long to pause before looking again (e.g. 2-4s for a heavy web page, more if
+  it is very slow). Waiting does not touch the screen; it just lets the content appear so your
+  NEXT observation is accurate.
+- SCREENSHOT TO CAPTURE. Use action "screenshot" to save the current screen as an output you
+  were asked to produce (to record or capture what is shown). It does not change the screen.
+  To capture content that spans multiple screens (a long or infinite results list), "scroll"
+  and "screenshot" repeatedly so each part is saved.
 - Choose exactly ONE next action that makes real progress toward the goal.
 - If the OBSERVATION shows the goal is already satisfied, use action "done".
 - If you are truly stuck or the goal is impossible, use action "fail".
@@ -83,17 +92,18 @@ Rules:
 JSON schema:
 {
   "thought": "<reasoning in English, with NO quotation marks inside: what the screen shows now, progress vs the GOAL, and the next action>",
-  "action": "click" | "double_click" | "right_click" | "hover" | "scroll" | "drag" | "type" | "key" | "done" | "fail",
+  "action": "click" | "double_click" | "right_click" | "hover" | "scroll" | "drag" | "type" | "key" | "wait" | "screenshot" | "done" | "fail",
   "target": "<element description; required for click/double_click/right_click/hover/scroll, and the START point of a drag>",
   "destination": "<element description; the drop point, required for drag>",
   "direction": "<'up' or 'down'; required for scroll>",
+  "seconds": "<number of seconds to pause; required for wait>",
   "text": "<text to type into the CURRENTLY-FOCUSED field; required for type>",
   "key": "<key name like Return, Escape, Tab; required when action is key>",
   "focus": "<optional: what the Eyes should concentrate on next>"
 }"""
 
 VALID_ACTIONS = {"click", "double_click", "right_click", "hover", "scroll", "drag",
-                 "type", "key", "done", "fail"}
+                 "type", "key", "wait", "screenshot", "done", "fail"}
 
 
 def _load_key():

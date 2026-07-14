@@ -24,14 +24,21 @@ printf 'session.screen0.rootCommand: xsetroot -solid #2e3440\n' > /root/.fluxbox
 echo "[entrypoint] window manager (fluxbox)"
 fluxbox >/tmp/fluxbox.log 2>&1 &
 
-echo "[entrypoint] dbus session bus (gnome-calculator needs it)"
+echo "[entrypoint] dbus session bus (Chrome + GUI apps use it)"
 eval "$(dbus-launch --sh-syntax)"
 export DBUS_SESSION_BUS_ADDRESS DBUS_SESSION_BUS_PID
 
-echo "[entrypoint] test apps: gnome-calculator + xterm"
-gnome-calculator >/tmp/calc.log 2>&1 &
-# cursorBlink off so a static desktop stays byte-stable between screenshots
-xterm -geometry 80x24+760+60 -xrm 'XTerm*cursorBlink:false' >/tmp/xterm.log 2>&1 &
+# Boot app: Google Chrome — the agent's browsing surface. gnome-calculator and xterm
+# stay INSTALLED for on-demand calc/terminal tasks (launch via `docker exec`), just not
+# auto-started, so the browsing screen is clean. Override the start page with CHROME_START_URL.
+: "${CHROME_START_URL:=https://www.google.com}"
+echo "[entrypoint] Google Chrome -> $CHROME_START_URL"
+google-chrome-stable \
+  --no-sandbox --no-first-run --no-default-browser-check \
+  --disable-gpu --disable-dev-shm-usage \
+  --user-data-dir=/tmp/chrome-profile \
+  --window-size=1280,800 --window-position=0,0 \
+  "$CHROME_START_URL" >/tmp/chrome.log 2>&1 &
 
 echo "[entrypoint] live view: x11vnc + noVNC on :6080"
 x11vnc -display "$DISPLAY" -forever -shared -nopw -rfbport 5900 -quiet -bg >/tmp/x11vnc.log 2>&1 || true

@@ -1,7 +1,7 @@
 ---
 project: BRYES
 title: Backlog — Tech Debts & Next Steps
-updated: 2026-07-13
+updated: 2026-07-14
 ---
 
 # BRYES — Backlog
@@ -12,11 +12,16 @@ in [../roadmap.md](../roadmap.md); this is the finer-grained "what's left right 
 
 ## Next steps (do these next)
 
-- [ ] **Confirm app-level hands behavior on a real app** — the *movement* of every primitive
-      is now regression-tested deterministically (`screen/test_hands.py` via the new `/pointer`
-      endpoint: pointer lands on target, drag ends at destination, right_click opens the menu).
-      Still eyeball-only: that `scroll` actually scrolls a page and `double_click` selects —
-      drive these against Chrome at `:6080` to confirm.
+- [ ] **Give BRYES a WhatsApp messaging task** (Alvi's vision — the next big goal): drive
+      WhatsApp Web so the agent can chat with / help anyone who messages its number. The first
+      genuinely *useful* real-world task; a step toward the legendary-ecosystem vision.
+- [ ] **Define an infinite-scroll capture stop-condition** — Tokopedia has no pagination
+      (infinite scroll), so "all of page 1" is undefined. A capture task needs an explicit
+      bound: a product count, a target item, or N screenshots (the bounded `screenshot`-×N
+      approach worked cleanly on 2026-07-14).
+- [ ] **Confirm the remaining app-level hands behavior** — `scroll` is now confirmed app-level
+      (Tokopedia results scrolled through distinct screenfuls, 2026-07-14). Still eyeball-only:
+      `double_click` selects, `right_click` context menu, `drag` on a draggable surface.
 - [ ] **Add a combo/macro action** — a composite the Brain can issue in one shot, e.g.
       `ctrl+a → type "who am I" → Enter`. Built from the atomic primitives, sequenced above
       them (not baked into any single primitive). The atomic set to compose from is now the
@@ -31,9 +36,11 @@ in [../roadmap.md](../roadmap.md); this is the finer-grained "what's left right 
 
 ## Tech debts (known gaps / risks)
 
-- **Hands app-behavior not yet confirmed on a real app** — movement is regression-tested
-  (`test_hands.py` + `/pointer`), but Chrome scroll *amount* feel and drag timing under a real
-  draggable surface are still unconfirmed. (See next-steps confirm item.)
+- **Some hands app-behavior still unconfirmed** — `scroll` is now confirmed app-level on
+  Tokopedia; `double_click` / `right_click` / `drag` behavior on a real surface is still
+  unverified. (See next-steps confirm item.)
+- **Infinite-scroll has no natural stop** — pages like Tokopedia lazy-load forever, so a
+  "cover the whole results" task can't terminate on pagination; it needs an explicit bound.
 - **No explicit verify-and-recover** — the loop infers progress implicitly from the next
   observation; a missed click isn't deliberately caught. (Same as Phase 5 above.)
 - **Brain choice validated on one task only** (browser search). Not yet the calculator suite.
@@ -47,6 +54,15 @@ in [../roadmap.md](../roadmap.md); this is the finer-grained "what's left right 
 
 ## Recently resolved (for context)
 
+- **`wait` + `screenshot` actions (validated live on Tokopedia)** → the Brain can now `wait`
+  (Brain-chosen seconds, clamped 0.5–30s) for a loading page, and `screenshot` to save a
+  deliverable frame (`capture-NN.png`, distinct from per-step diagnostic frames). Validated
+  end-to-end: searched Tokopedia for 'DDR5 5600 SODIMM', **waited** out the results spinner,
+  then **scroll + screenshot ×3** captured three distinct real screenfuls → clean `done` in
+  10 steps. Browser generalization works on a real commercial site (no bot-wall). (2026-07-14)
+- **Chrome auto-boots** → the Screen entrypoint launches Google Chrome at `CHROME_START_URL`
+  (default google.com; per-task override); gnome-calculator + xterm stay installed for
+  on-demand launch, not auto-started — clean browsing screen. (2026-07-14)
 - **Hands regression test + `/pointer`** → added a read-only `/pointer` (mouse x,y) endpoint
   and `screen/test_hands.py`: 5 deterministic, model-free checks (all primitives execute; bad
   payloads 400; point actions land the pointer; drag ends at destination; right_click opens
