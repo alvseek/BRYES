@@ -85,6 +85,14 @@ def record(phase, request, response, **meta):
     _tx.flush()
 
 
+def note(text):
+    """Append a lightweight one-line note (e.g. per-step timing) to the transcript."""
+    if _tx is None:
+        return
+    _tx.write(f"\n_{text}_\n")
+    _tx.flush()
+
+
 def stop():
     """Close the current transcript (safe to call when inactive)."""
     global _tx, _dir

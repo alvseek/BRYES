@@ -11,7 +11,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from loop import run, screenshot  # noqa: E402
+from loop import run  # noqa: E402
+from devices import ContainerDevice  # noqa: E402
 from paths import artifact  # noqa: E402
 
 GOAL = ("Use the on-screen calculator to compute 7 + 8. Click the buttons in order "
@@ -26,7 +27,7 @@ def main():
         print("  -", h)
 
     with open(artifact("agent_final.png"), "wb") as f:
-        f.write(screenshot())
+        f.write(ContainerDevice().screenshot())
     print("\nsaved agent_final.png — the display should read 15.")
     return 0 if result["status"] == "done" else 1
 

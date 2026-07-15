@@ -111,6 +111,18 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 - **update_trigger**: "when the effector-tier model changes or a new channel (Tier 1 API/MCP, a persona surface) is added/built"
 - **notes**: "ADR-001 — BRYES's effector hierarchy: the Brain routes each intent to the highest-available channel (Tier 1 API/MCP [future] · Tier 2 shell /exec · Tier 3 vision-fallback). Reframes BRYES as a tool-using agent, vision = one tool; future channels inherit the pattern."
 
+### `docs/adr/2026-07-15-device-interface.md`
+
+- **type**: adr
+- **scope**: shared
+- **roles**: []
+- **status**: useful
+- **tags**: [adr, device, capabilities, phone, adb, protocol, architecture]
+- **last_verified**: "2026-07-15"
+- **verified_by**: "claude-software-architect"
+- **update_trigger**: "when the Device interface / Capabilities change or a new body (WindowsDevice, another phone) is added"
+- **notes**: "ADR-002 — the `Device` abstraction: Screen+Hands+shell extracted into a swappable *vision-controllable body* (`devices/` package: base/container/phone) with a per-device `Capabilities` manifest; loop/Brain/Eyes stay device-agnostic, transport is device-private. Proven by adding a real Android phone (`PhoneDevice`, adb/USB) as body #2. Orthogonal to ADR-001 (tier vs body)."
+
 ---
 
 ## How to Use This File

@@ -28,7 +28,7 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 # (cheapest). (Do NOT use legacy deepseek-chat / deepseek-reasoner — retire 2026-07-24.)
 MODEL = "qwen/qwen3.6-flash"
 
-SYSTEM_PROMPT = """You are the Brain of a computer-use agent. You have more than one way
+_BASE_PROMPT = """You are the Brain of a computer-use agent. You have more than one way
 to act, and you pick the most DIRECT one that fits each task:
 - SHELL (a real terminal inside the machine): the "shell" action runs a command line.
   Prefer it for anything the command line does well — files, system info, networking
@@ -108,11 +108,12 @@ Rules:
 - If the OBSERVATION shows the goal is already satisfied, use action "done".
 - If you are truly stuck or the goal is impossible, use action "fail".
 - Respond with ONLY a JSON object, no prose, no markdown fences.
+"""
 
-JSON schema:
+_JSON_SCHEMA = """JSON schema:
 {
   "thought": "<reasoning in English, with NO quotation marks inside: what the screen shows now, progress vs the GOAL, and the next action>",
-  "action": "click" | "double_click" | "right_click" | "hover" | "scroll" | "drag" | "type" | "key" | "wait" | "screenshot" | "shell" | "done" | "fail",
+  "action": __ACTION_ENUM__,
   "target": "<element description; required for click/double_click/right_click/hover/scroll, and the START point of a drag>",
   "destination": "<element description; the drop point, required for drag>",
   "direction": "<'up' or 'down'; required for scroll>",
@@ -125,8 +126,56 @@ JSON schema:
   "focus": "<optional: what the Eyes should concentrate on next>"
 }"""
 
-VALID_ACTIONS = {"click", "double_click", "right_click", "hover", "scroll", "drag",
-                 "type", "key", "wait", "screenshot", "shell", "done", "fail"}
+# Action vocabulary is assembled per-device from the active body's Capabilities (ADR-002):
+# the Brain is only offered verbs the current body supports. The loop-meta actions (wait,
+# screenshot, done, fail) are always available; `shell` only if the body has one. `caps` is
+# read duck-typed (no devices import), so the Brain stays decoupled from device internals.
+_VERB_ORDER = ("click", "double_click", "right_click", "hover", "scroll", "drag", "type", "key")
+_FULL_VERBS = frozenset(_VERB_ORDER)     # back-compat default when decide() gets no caps
+
+
+def _actions_for(caps):
+    """The ordered actions this body offers: its supported verbs, +shell if it has one,
+    plus the always-available loop metas. caps=None -> full desktop vocabulary."""
+    verbs = _FULL_VERBS if caps is None else caps.verbs
+    has_shell = True if caps is None else caps.has_shell
+    acts = [v for v in _VERB_ORDER if v in verbs]
+    acts += ["wait", "screenshot"]
+    if has_shell:
+        acts.append("shell")
+    acts += ["done", "fail"]
+    return acts
+
+
+def _device_preamble(caps):
+    """A short ACTIVE-BODY header naming the body the Brain controls and its exact action
+    set. Empty for caps=None, which preserves the original prompt verbatim."""
+    if caps is None:
+        return ""
+    lines = [
+        f"ACTIVE BODY: you are controlling {caps.name} — a {caps.width}x{caps.height} pixel screen.",
+        "YOUR AVAILABLE ACTIONS on this body are EXACTLY: "
+        f"{', '.join(_actions_for(caps))}. Use ONLY these action names.",
+    ]
+    if caps.has_shell:
+        lines.append(f"This body HAS a shell ({caps.shell_flavor}); the 'shell' action runs a command line.")
+    else:
+        lines.append("This body has NO shell — do everything through on-screen (vision) "
+                     "actions; there is no 'shell' action.")
+    if caps.keys:
+        lines.append(f"Named keys for the 'key' action: {', '.join(sorted(caps.keys))}.")
+    return "\n".join(lines) + "\n\n"
+
+
+def build_system_prompt(caps=None):
+    """Full system prompt for a body: device preamble + the tuned base prose + a JSON
+    schema whose `action` enum lists only this body's actions."""
+    enum = " | ".join(f'"{a}"' for a in _actions_for(caps))
+    return _device_preamble(caps) + _BASE_PROMPT + "\n" + _JSON_SCHEMA.replace("__ACTION_ENUM__", enum)
+
+
+# Back-compat: the default (full desktop) prompt, still importable as SYSTEM_PROMPT.
+SYSTEM_PROMPT = build_system_prompt(None)
 
 
 def _load_key():
@@ -149,7 +198,7 @@ def _extract_json(text):
         raise
 
 
-def decide(goal, observation, history=None, *, model=None, effort="high",
+def decide(goal, observation, history=None, *, caps=None, model=None, effort="high",
            timeout=60, retries=2):
     """Return the next action as a dict: {thought, action, target?, text?, key?, focus?}.
 
@@ -162,6 +211,8 @@ def decide(goal, observation, history=None, *, model=None, effort="high",
     whole run; the retry asks explicitly for one strict JSON object.
     """
     model = model or MODEL
+    system_prompt = build_system_prompt(caps)      # device-aware: verbs from caps
+    valid_actions = set(_actions_for(caps))
     key = _load_key()
     if not key:
         raise RuntimeError("OPENROUTER_API_KEY not found (check BRYES/.env)")
@@ -192,7 +243,7 @@ def decide(goal, observation, history=None, *, model=None, effort="high",
             "max_tokens": 8192,
             "response_format": {"type": "json_object"},
             "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user},
             ],
         }
@@ -219,7 +270,7 @@ def decide(goal, observation, history=None, *, model=None, effort="high",
                 raise ValueError(
                     f"empty content (finish_reason={choice.get('finish_reason')})")
             action = _extract_json(content)
-            if action.get("action") not in VALID_ACTIONS:
+            if action.get("action") not in valid_actions:
                 raise ValueError(f"invalid action in {content!r}")
         except (json.JSONDecodeError, ValueError) as e:
             last_err = e

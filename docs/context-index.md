@@ -21,6 +21,7 @@ load on relevance.
 - **Repo:** github.com/alvseek/BRYES · local `c:\Work\IM\BRYES` · remote `alvseek`, commit identity `alvseek`.
 - **Secret:** `OPENROUTER_API_KEY` in gitignored `.env` (one key = Eyes + Brain). Never commit it.
 - **Run the Screen:** `cd screen && docker compose up -d` → API `:8000`, live view `:6080/vnc.html`.
+- **Bodies ([ADR-002](adr/2026-07-15-device-interface.md)):** the loop drives a swappable `Device` — `ContainerDevice` (default, HTTP) or `PhoneDevice` (real Android over adb/USB, `tools/platform-tools/adb.exe`). `run(goal, device=None)` → container.
 - **Brain:** default `qwen/qwen3.6-flash` (swappable via `run(brain_model=...)`).
 - **Apps in the Screen:** gnome-calculator, xterm, Google Chrome (baked into the Dockerfile).
 - **Phase:** 0–4 done; loop runs varied calcs + a Chrome "who am I" search. Phase 5 (verify-and-recover, "the product") deferred until base capability ≥80% — see [backlog.md](backlog.md).

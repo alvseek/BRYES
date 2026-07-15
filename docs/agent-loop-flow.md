@@ -278,3 +278,21 @@ heuristic onto a mechanical decider.
 step (Phase 5 — deferred until base capability ≥80%); a combo/macro action (compose the now-
 atomic primitives); validating qwen3.6-flash on the calculator suite; live-verifying the new
 `scroll`/`drag`/`double_click`/`right_click`/`hover` primitives on a real screen.
+
+---
+
+## 7. Update (2026-07-15) — Device abstraction + first phone run
+
+- **Screen+Hands+shell now sit behind the `Device` abstraction** ([ADR-002](adr/2026-07-15-device-interface.md)):
+  the loop calls `device.screenshot()` / `device.act()` / `device.shell()`, not hardcoded HTTP.
+  `ContainerDevice` is the default body (this whole flow, transport-unchanged); **`PhoneDevice`
+  (adb/USB)** is body #2 — the wiring above is the *container* body's transport, and the phone
+  swaps HTTP→adb with the loop / Eyes / Brain untouched. The Brain's action vocab is assembled from
+  the active body's `Capabilities` (a phone never gets offered `right_click`).
+- **Per-phase timing** added to `run()` (`screen / describe / decide / locate / act` seconds per
+  step + totals). First measurement: `describe` ≈ 19.5s vs `decide` ≈ 3.2s/step — **the Eyes VLM,
+  not the Brain, is the loop's latency** (corrected a wrong assumption). See [backlog.md](backlog.md).
+- **Seam B reconfirmed on the phone.** The "open Settings" run wandered to step_limit: with
+  actions-only history and **no state-delta**, the Brain *inferred* ("scrolled twice, suggesting
+  I'm at the bottom") instead of seeing what changed — a fresh, concrete instance of Seam B (§4) and
+  the sharpest case yet for the Phase-5 change-feedback primitive.

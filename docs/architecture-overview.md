@@ -26,6 +26,24 @@ GitHub: **github.com/alvseek/BRYES** (remote named `alvseek`, commit identity
 **Two rules from the roadmap:** rent everything until it hurts (local GPU 3060 Ti 8GB
 is a last resort, Phase 6); prove ONE real task end-to-end before generalizing.
 
+## Bodies — the Device abstraction ([ADR-002](adr/2026-07-15-device-interface.md))
+
+Screen + Hands + shell are **not** hard-wired to the container — they sit behind a swappable
+**`Device`** interface (a *vision-controllable body*: `screenshot()` + `act()` + optional
+`shell()`, plus a `Capabilities` manifest). The loop, Eyes, and Brain are **device-agnostic**;
+each body keeps its transport private:
+
+| Body | Transport | Notes |
+|---|---|---|
+| **`ContainerDevice`** (default) | HTTP → `:8000` | the Dockerized desktop, 1280×800, `bash` shell, all 8 pointer verbs |
+| **`PhoneDevice`** | `adb` (USB) | a real Android phone — `screencap` / `input` / `adb shell`; 1080×2400 portrait, no right_click/hover, Back/Home keys, `scroll`→swipe |
+| *`WindowsDevice`* | *(future)* | `mss` + `pyautogui`, in-process — named, not built |
+
+The Brain assembles its **action vocabulary from the active body's `Capabilities`** — it is only
+offered verbs the current body can do (a phone never sees `right_click`). Pure API/MCP channels
+(no screen) are deliberately NOT `Device`s — that's a separate effector abstraction
+([ADR-001](adr/2026-07-15-effector-hierarchy.md)'s Tier-1). One mind, swappable bodies.
+
 ## Repo layout
 
 - `screen/` — Dockerfile + Flask control API (`/health`, `/screenshot`, `/pointer`,
@@ -34,6 +52,7 @@ is a last resort, Phase 6); prove ONE real task end-to-end before generalizing.
   `click`, `double_click`, `right_click`, `hover`,
   `scroll`, `drag`, `type`, `key`. `/pointer` returns the mouse `(x,y)` for model-free
   action assertions. Live view: noVNC at `http://localhost:6080/vnc.html`; control API on `:8000`.
+- `devices/` — the **Device abstraction** ([ADR-002](adr/2026-07-15-device-interface.md)): `base.py` (`Device` Protocol + `Capabilities`), `container.py` (`ContainerDevice`), `phone.py` (`PhoneDevice`, adb), `test_phone.py` (deterministic smoke). The loop's `run(goal, device=None)` defaults to `ContainerDevice`.
 - `eyes/client.py` — `describe(img)` (screen → text, via Qwen2.5-VL-72B) + `locate(img, instr)` (element → pixel x,y, via UI-TARS-1.5-7B).
 - `brain/client.py` — `decide(goal, observation, history)` → structured JSON action.
 - `agent/loop.py` — `run(goal)` chains screenshot → describe → decide → locate → act.

@@ -10,3 +10,7 @@
 __pycache__/
 *.pyc
 .venv/
+
+# Local dev tools — Android platform-tools (adb) for the PhoneDevice; ~15MB of
+# binaries, installed locally, never committed. PhoneDevice references adb by path.
+/tools/
