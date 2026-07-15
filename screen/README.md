@@ -1,7 +1,7 @@
 # BRYES — Phase 1: The Screen
 
-A disposable Ubuntu desktop running in a container that you can **screenshot** and
-**click inside** over HTTP. This is the "Screen + Hands" piece of the BRYES
+A disposable Ubuntu desktop running in a container that you can **screenshot**,
+**click inside**, and **run shell commands in** over HTTP. This is the "Screen + Hands" piece of the BRYES
 architecture (see [roadmap.md](../roadmap.md)). The Eyes and Brain (Phases 2–4)
 will drive it through the same two endpoints built here.
 
@@ -14,7 +14,7 @@ will drive it through the same two endpoints built here.
 | **gnome-calculator + xterm + Chrome** | Visible apps to click/type against |
 | **xdotool** | The "Hands" — clicks, scrolls, drags, typing, keypresses |
 | **scrot** | Takes the screenshots |
-| **Flask API** (`:8000`) | Exposes the two abilities over HTTP |
+| **Flask API** (`:8000`) | Exposes the abilities over HTTP (screenshot, input, shell) |
 | **x11vnc + noVNC** (`:6080`) | Live view of the desktop in your browser |
 
 ## Run it
@@ -30,12 +30,13 @@ or **prove it from the command line**:
 ```bash
 python test_phase1.py             # saves shot_before.png + shot_after.png
 python test_hands.py              # deterministic regression check for the Hands primitives
+python test_shell.py              # deterministic regression check for the shell channel (/exec)
 ```
 
 **Done when** (from the roadmap): a screenshot returns a PNG, and a click visibly
 changes the next screenshot. `test_phase1.py` checks exactly that.
 
-## The two abilities (HTTP API)
+## The abilities (HTTP API)
 
 ```bash
 # Screenshot -> PNG
@@ -53,6 +54,10 @@ curl -s -X POST http://localhost:8000/action \
 # Press a key  (Return, Escape, Tab, ctrl+a, ...)
 curl -s -X POST http://localhost:8000/action \
   -H "Content-Type: application/json" -d '{"type":"key","key":"Return"}'
+
+# Run a shell command inside the container (Tier-2 effector; timeout default 30s, max 300)
+curl -s -X POST http://localhost:8000/exec \
+  -H "Content-Type: application/json" -d '{"command":"uname -r"}'
 ```
 
 | Endpoint | Method | Body | Returns |
@@ -68,6 +73,7 @@ curl -s -X POST http://localhost:8000/action \
 | `/action` | POST | `{"type":"drag","x":..,"y":..,"x2":..,"y2":..}` | `{"ok":true}` |
 | `/action` | POST | `{"type":"type","text":".."}` | `{"ok":true}` |
 | `/action` | POST | `{"type":"key","key":".."}` | `{"ok":true}` |
+| `/exec` | POST | `{"command":"uname -r","timeout":30,"stdin":".."}` (Tier-2 shell) | `{"ok":true,"exit_code":0,"stdout":"..","stderr":".."}` |
 
 ## Manage
 

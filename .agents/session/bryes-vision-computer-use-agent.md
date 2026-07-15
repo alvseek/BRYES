@@ -5,6 +5,28 @@ from `roadmap.md`. Project context: [architecture-overview](../../docs/architect
 
 ---
 
+### [2026-07-15 15.06] (agent: software-architect) — SHELL EFFECTOR CHANNEL (Tier 2) + EFFECTOR-HIERARCHY ADR — BRYES BECOMES A TOOL-USING AGENT 🐚🧰🏗️
+
+**Session theme**: A vision reframe → a full `/high-wizard` → `/implement-plan` → `/wrap-up` cycle. Opened on Alvi's "person with phone/email" vision + a WhatsApp-vs-combo fork; landed on the deeper insight — the agent shouldn't act ONLY by vision. Added a **shell/command effector channel** and captured the **effector-hierarchy** (Tier 1 API/MCP · Tier 2 shell · Tier 3 vision-fallback) as BRYES's first ADR.
+
+**What happened**:
+- **The reframe (Alvi)**: "if something has an API/MCP or a command line, connect from the Brain directly — like how you use the OS shell — not through Eyes+Hands." Named the architecture: vision demoted from the ONLY effector to the Tier-3 fallback; the Brain routes each intent to the most direct channel. Nuance surfaced: for *persona* surfaces (WhatsApp) vision-on-a-real-device is the MORE human path, so effector choice = *(is there an API?) AND (does human-indistinguishability matter here?)*.
+- **Phone/WhatsApp groundwork**: named the load-bearing constraint — a phone NUMBER can't be conjured by open-source; it must be *provisioned* (SIM/VoIP). Open source *operates* a phone (scrcpy/adb), it doesn't manufacture a number. Recommended a real Android + real SIM driven by vision (reuses BRYES's loop). Deferred to a later session; shell channel first (foundational, deterministic, success-feeling).
+- **HW design — co-designed through Alvi's catches** (9 confirmed decisions). Three reshapes: (1) **interactivity** — one-shot `/exec` can't answer a mid-run prompt → do NOT build a PTY (Level 3); genuinely-interactive terminals fall back to **vision-driving xterm** (already possible). (2) **timeout vs `wait`** — I first argued to drop the Brain-settable timeout; Alvi pushed "what about installs, clamp to what?" → **I conceded** (background+poll is fiddly for finite-long commands; a Brain-declared `timeout`, clamped 30s→300s, is cleaner). (3) **async `/exec`** — "can we make it async like your shell?" → named the constraint: async's payoff is gated behind loop concurrency BRYES lacks (a single sequential loop just polls instead of blocks) → **deferred, designed as an additive upgrade**.
+- **Implementation (5 phases, all green)**: `/exec` endpoint (`shell=True`, clamp [1,300], `_clip` ~4 KB, `errors="replace"`, `TimeoutExpired`→`timed_out`); deterministic `test_shell.py` (6 checks); Brain vocab + tier-routing + non-interactive discipline; loop `exec_cmd()` + `shell` branch threading exit+output into HISTORY; docs (rewrote the now-false "no shell channel" fact) + **ADR-001**. Live: `uname -r` and `find /root -name "*.py" | wc -l` (a **pipe**) both `done` in 2 steps via shell, no vision.
+- **Quality Review**: 1 minor finding (binary output → `UnicodeDecodeError` → 500) → fixed with `errors="replace"`, re-verified. FIT: no `qa/` instrument (BRYES convention) → runtime covered inline, all green.
+
+**Co-build texture**: a genuine co-architecture session — Alvi drove the design through precise catches (interactivity, timeout-for-installs, async), and I **conceded cleanly to his timeout instinct** in a domain I was leading (background+poll IS fiddly; his knob was right). The empirical rhythm held: name the constraint first, defer what the current architecture can't yet consume (async, Level-3, Tier-1), ship the smallest reframing step.
+
+**Outcomes**:
+- Deliverables: `screen/server/app.py` (`/exec`), `screen/test_shell.py`, `brain/client.py` (shell vocab + tier routing), `agent/loop.py` (`exec_cmd` + shell branch), docs (architecture-overview, agent-loop-flow, screen/README, backlog), **ADR-001** (`docs/adr/2026-07-15-effector-hierarchy.md`), completed plan.
+- **Tech debts** (carried + new): [carry] hands app-behavior unconfirmed (double_click/right_click/drag); [carry] infinite-scroll has no natural stop; [carry] no explicit verify-and-recover (Phase 5); [carry] Brain validated on few tasks (calc suite un-run); [carry] MiniMax M3 needs hand-holding; [carry] `describe` verbose / cost-at-scale unmeasured; **[new] async `/exec` deferred** (until loop concurrency / frequent long jobs); **[new] Tier 1 (API/MCP) named but unbuilt**.
+- **Next steps** (carried + new): **give BRYES a phone / WhatsApp task** (now a Tier-3 persona surface on the effector-tier architecture — the north star); define an infinite-scroll capture stop-condition; confirm remaining hands behavior; add a combo/macro action (less urgent now shell exists); validate qwen3.6-flash on the calc suite; Phase 5 at ≥80%; **[new] a Tier-1 API channel (e.g. email)** to exercise the tier pattern.
+
+**Promotions**: → docs/architecture-overview.md (effector-tier model) · docs/agent-loop-flow.md (shell path + "exception to Seam B") · docs/backlog.md (shell resolved + async deferred) · docs/adr/2026-07-15-effector-hierarchy.md (ADR-001, new).
+
+---
+
 ### [2026-07-14 10.15] (agent: software-architect) — HANDS NATURAL SET + REGRESSION TEST + `wait`/`screenshot` ACTIONS → BROWSER TASK WORKS ON TOKOPEDIA 🤖👁️🛒✅
 
 **Session theme**: Turned the browser-generalization *proof* into a real, working browser *task*. Completed the Hands primitive set, built a deterministic regression test, added the two loop-level actions the agent was missing (`wait`, `screenshot`), and drove the whole thing to search Tokopedia and capture page-1 results — end to end, on a real commercial site.

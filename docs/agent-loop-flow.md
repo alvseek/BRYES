@@ -1,9 +1,9 @@
 ---
 project: BRYES
 title: Agent Loop — Wiring & Data Flow
-updated: 2026-07-13
+updated: 2026-07-15
 doc_type: flow-diagram
-tags: [loop, data-flow, wiring, describe, decide, locate, verify, phase-5, post-mortem]
+tags: [loop, data-flow, wiring, describe, decide, locate, shell, effector, verify, phase-5, post-mortem]
 ---
 
 # BRYES — Agent Loop: Wiring & Data Flow
@@ -75,9 +75,10 @@ This is the "what prompt / what feed flows to each other" answer. Per step:
 |---|---|---|---|---|
 | 1 | `screenshot()` | — | PNG bytes | [screen/server/app.py](../screen/server/app.py) |
 | 2 | `describe(png, focus?)` | `DESCRIBE_PROMPT` + optional **focus** + PNG → **Qwen2.5-VL-72B** | **text** report that separates the *live entry* from *history* (<=512 tok) | [eyes/client.py](../eyes/client.py) |
-| 3 | `decide(goal, obs, history)` | `SYSTEM_PROMPT` + `{goal, observation, history}` — **text only**, Think High (`reasoning.effort=high`) | JSON `{thought, action, target?, destination?, direction?, seconds?, text?, key?, focus?}` | [brain/client.py](../brain/client.py) |
+| 3 | `decide(goal, obs, history)` | `SYSTEM_PROMPT` + `{goal, observation, history}` — **text only**, Think High (`reasoning.effort=high`) | JSON `{thought, action, target?, destination?, direction?, seconds?, text?, key?, command?, timeout?, focus?}` | [brain/client.py](../brain/client.py) |
 | 4 | `locate(png, target)` | `GROUND_PROMPT(target)` + PNG → **UI-TARS-1.5-7B** | pixel `(x,y)` (+ diagnostics) | [eyes/client.py](../eyes/client.py) |
 | 5 | `hands(payload)` | point actions `{type: click\|double_click\|right_click\|hover, x, y}`, `{type: scroll, x, y, direction}`, `{type: drag, x, y, x2, y2}`, `{type: type, text}`, `{type: key, key}` | xdotool executes; `{ok}` | [screen/server/app.py](../screen/server/app.py) |
+| 6 | `exec_cmd(payload)` (shell action only — no describe/locate) | `{command, timeout?, stdin?}` → `POST /exec` (subprocess `shell=True`, sandboxed) | `{ok, exit_code, stdout, stderr}` — threaded into HISTORY | [screen/server/app.py](../screen/server/app.py) |
 
 Notes that matter for Phase 5:
 
@@ -127,8 +128,9 @@ Narration, keyed to [`agent/loop.py`](../agent/loop.py):
 3. **`decide`** from `goal + observation + history` → one JSON action.
 4. If the action is `done`/`fail`, return. Otherwise it is a **point action**
    (`click`/`double_click`/`right_click`/`hover`/`scroll`/`drag`), `type`, `key`,
-   `wait` (pause `seconds` for a loading screen — no UI touch), or `screenshot` (save the
-   current frame as a deliverable `capture-NN.png` — no UI touch).
+   `wait` (pause `seconds` for a loading screen — no UI touch), `screenshot` (save the
+   current frame as a deliverable `capture-NN.png` — no UI touch), or `shell` (run a command
+   via `POST /exec` — no locate, no UI touch; the exit code + output thread into HISTORY).
 5. For a point action, **`locate`** the named `target` on the *same* screenshot → `(x,y)`
    (a `drag` also locates its `destination`), then **Hands** execute it. `type`/`key` go
    straight to the Hands (no locate — `type` hits whatever the Brain already focused).
@@ -176,6 +178,11 @@ the action changed anything. So:
 > **Seam B is Phase 5.** The roadmap's differentiator — *"after each action, check the
 > new screenshot: did the thing I intended actually happen? If not, recover"* — is
 > precisely the verification this loop does not yet do.
+
+> **Shell is the exception to Seam B.** A `shell` action's HISTORY entry carries the command's
+> *real* exit code + stdout (observed from `/exec`), not an unverified "I tried X." So the
+> shell channel already has the outcome-in-memory that GUI actions lack — verification is
+> built into its result, not deferred to a screenshot compare. (2026-07-15, [ADR-001](adr/2026-07-15-effector-hierarchy.md).)
 
 ---
 

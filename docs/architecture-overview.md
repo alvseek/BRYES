@@ -1,14 +1,15 @@
 ---
 project: BRYES
 title: Architecture Overview
-updated: 2026-07-14
-tags: [computer-use-agent, vision, openrouter, docker, ui-tars, deepseek, architecture]
+updated: 2026-07-15
+tags: [computer-use-agent, vision, shell, effector-tiers, openrouter, docker, ui-tars, deepseek, architecture]
 ---
 
 # BRYES — Architecture Overview
 
-**BRYES = Brain-Eyes.** A vision-based **computer-use agent**: it screenshots a
-desktop, decides an action, and clicks/types — the perception→action loop. Built
+**BRYES = Brain-Eyes.** A **computer-use agent**: it screenshots a desktop and acts —
+clicking/typing through vision, or running a command **directly via a shell channel** when
+the task suits the command line. The perception→action loop, built
 phase-by-phase from a `roadmap.md` Alvi hands over one phase at a time.
 GitHub: **github.com/alvseek/BRYES** (remote named `alvseek`, commit identity
 `alvseek`). Local: `c:\Work\IM\BRYES`. Windows + Docker Desktop (WSL2).
@@ -17,7 +18,7 @@ GitHub: **github.com/alvseek/BRYES** (remote named `alvseek`, commit identity
 
 | Piece | What | Where |
 |---|---|---|
-| **Screen** | disposable Ubuntu desktop (Xvfb + fluxbox), screenshots + input | local Docker container, `screen/` |
+| **Screen** | disposable Ubuntu desktop (Xvfb + fluxbox): screenshots + input, plus a sandboxed **shell** (`/exec`) | local Docker container, `screen/` |
 | **Hands** | `xdotool` click/double-click/right-click/hover/scroll/drag/type/key inside that container | same container |
 | **Eyes** | two models: **Qwen2.5-VL-72B** *describes* the screen (text for the Brain), **UI-TARS-1.5-7B** *locates* elements (grounding → coordinates) | rented, OpenRouter, `eyes/` |
 | **Brain** | `qwen3.6-flash` (default, swappable) — state → next action (reasoning) | rented, OpenRouter, `brain/` |
@@ -28,8 +29,9 @@ is a last resort, Phase 6); prove ONE real task end-to-end before generalizing.
 ## Repo layout
 
 - `screen/` — Dockerfile + Flask control API (`/health`, `/screenshot`, `/pointer`,
-  `/action`), `docker-compose.yml`, `test_phase1.py`, `test_hands.py` (deterministic Hands
-  regression test). `/action` verbs: `click`, `double_click`, `right_click`, `hover`,
+  `/action`, `/exec`), `docker-compose.yml`, `test_phase1.py`, `test_hands.py` (deterministic
+  Hands regression test), `test_shell.py` (deterministic shell-channel test). `/action` verbs:
+  `click`, `double_click`, `right_click`, `hover`,
   `scroll`, `drag`, `type`, `key`. `/pointer` returns the mouse `(x,y)` for model-free
   action assertions. Live view: noVNC at `http://localhost:6080/vnc.html`; control API on `:8000`.
 - `eyes/client.py` — `describe(img)` (screen → text, via Qwen2.5-VL-72B) + `locate(img, instr)` (element → pixel x,y, via UI-TARS-1.5-7B).
@@ -76,13 +78,21 @@ is a last resort, Phase 6); prove ONE real task end-to-end before generalizing.
   `scroll` (`direction` up|down) / `drag` (`target`→`destination`) — each is ONE atomic
   xdotool call with no hidden action. Movement is regression-tested (`test_hands.py` +
   `/pointer`); `scroll` also validated live on Tokopedia (2026-07-14).
-- **Vision-first — no shell channel:** the agent acts ONLY through GUI input (xdotool
-  keystrokes into the focused window); there is no "run a command" primitive, so anything it
-  does needs a visible target. Beyond the Hands, the Brain has two loop-level actions: `wait`
-  (pause N Brain-chosen seconds, clamped 0.5–30s, for a loading screen — no UI touch) and
-  `screenshot` (save the current frame as a `capture-NN.png` deliverable). Full Brain action
-  set: click / double_click / right_click / hover / scroll / drag / type / key / wait /
-  screenshot / done / fail.
+- **Effector tiers — vision is the fallback, not the only tool** ([ADR-001](adr/2026-07-15-effector-hierarchy.md)):
+  the Brain routes each intent to the most direct channel available.
+  **Tier 2 — shell:** the `shell` action runs a NON-interactive command inside the container
+  via `POST /exec` (`shell=True`, sandboxed; returns `{ok, exit_code, stdout, stderr}`) — used
+  for OS/file/CLI/network tasks. Its result threads into HISTORY (invisible on screen, unlike a
+  GUI action whose feedback is the next screenshot). Liveness: a 30s timeout (Brain-extendable
+  via a `timeout` field, clamped to 300s) is `/exec`'s only recovery valve — a blocking call
+  would freeze the loop, so every call is bounded; output truncated ~4 KB. Interactive terminals
+  (REPL/ssh) are NOT for `shell` — the Brain drives `xterm` with vision.
+  **Tier 3 — vision (Eyes + Hands):** GUI-only surfaces. **Tier 1 — API/MCP:** future; the
+  pattern is named so later channels (http/mcp/email/phone) inherit it. Beyond the Hands, the
+  Brain also has loop-level `wait` (pause N Brain-chosen seconds, clamped 0.5–30s) and
+  `screenshot` (save a `capture-NN.png` deliverable). Full Brain action set: click /
+  double_click / right_click / hover / scroll / drag / type / key / wait / screenshot /
+  **shell** / done / fail.
 - **Real browser = Google Chrome from the .deb:** apt `chromium`/`chromium-browser` on
   Ubuntu 24.04 is a *snap transitional* that won't run in a container. Chrome is installed
   from the official `.deb` (in the Dockerfile), launched `--no-sandbox` (Chrome won't run its

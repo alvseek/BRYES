@@ -1,7 +1,7 @@
 ---
 project: BRYES
 title: Backlog — Tech Debts & Next Steps
-updated: 2026-07-14
+updated: 2026-07-15
 ---
 
 # BRYES — Backlog
@@ -51,9 +51,23 @@ in [../roadmap.md](../roadmap.md); this is the finer-grained "what's left right 
   call (every step) and the biggest token cost. Matters at scale (Phase 6), not now.
 - **Cost at scale unmeasured** — per-run is cents in prototyping; the every-step `describe`
   is the line item to watch if usage grows (Phase 6 hosting question).
+- **Async `/exec` deferred** — `/exec` is synchronous (blocks the loop until done/timeout). The
+  async/background+poll upgrade is a clean *additive* branch, deferred until the loop goes
+  concurrent/multi-channel or long jobs get frequent (ADR-001). Until then: long-but-finite
+  commands use an extended `timeout` (≤300s); very-long ones background with `&` + poll via `wait`.
+- **Effector tiers only 2 of 3 built** — Tier 2 (shell) + Tier 3 (vision) exist; **Tier 1
+  (API/MCP)** is named by ADR-001 but unbuilt. The next channels (a Tier-3 *persona* surface for
+  WhatsApp; a Tier-1 API channel like email) will exercise whether the inherited pattern holds.
 
 ## Recently resolved (for context)
 
+- **Shell effector channel (Tier 2) — `POST /exec` + `shell` action** → the Brain now runs
+  non-interactive commands directly instead of driving the GUI for OS/file/CLI/network tasks:
+  `/exec` runs `shell=True` in the sandboxed container (30s timeout, Brain-extendable to 300s,
+  ~4 KB truncation, optional `stdin`, `errors="replace"`), and the result threads into HISTORY;
+  the Brain prompt teaches tier-routing (shell vs vision) + non-interactive discipline. Verified
+  live (`uname -r`, `find | wc -l`) + deterministic `test_shell.py`. Reframes BRYES as a
+  **tool-using agent, vision = one tool** — see [ADR-001](adr/2026-07-15-effector-hierarchy.md). (2026-07-15)
 - **`wait` + `screenshot` actions (validated live on Tokopedia)** → the Brain can now `wait`
   (Brain-chosen seconds, clamped 0.5–30s) for a loading page, and `screenshot` to save a
   deliverable frame (`capture-NN.png`, distinct from per-step diagnostic frames). Validated

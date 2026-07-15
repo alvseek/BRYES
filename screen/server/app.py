@@ -9,8 +9,11 @@ Exposes the container's two abilities over HTTP so the other pieces
                        action (hover/click/drag/...) landed where intended
   POST /action      -> click / double_click / right_click / hover / scroll /
                        drag / type / key, executed by xdotool
+  POST /exec        -> run a non-interactive shell command inside this container
+                       (the Tier-2 effector), returning {ok, exit_code, stdout, stderr}
 
-Everything talks to the Xvfb display named by $DISPLAY.
+The GUI endpoints talk to the Xvfb display named by $DISPLAY; /exec runs in the
+container's plain environment (no display needed).
 """
 import os
 import subprocess
@@ -26,6 +29,19 @@ def _run(cmd):
     """Run a command against the virtual display, capturing output."""
     env = dict(os.environ, DISPLAY=DISPLAY)
     return subprocess.run(cmd, env=env, capture_output=True, text=True)
+
+
+_MAX_OUT = 4096  # cap each stream fed back to the Brain — bounds output SIZE, not time
+
+
+def _clip(s, limit=_MAX_OUT):
+    """Keep output small enough for the Brain's context: head + tail with an elision
+    marker. Unbounded stdout would blow the Brain's context and cost."""
+    s = s or ""
+    if len(s) <= limit:
+        return s
+    half = limit // 2
+    return f"{s[:half]}\n...[{len(s) - limit} chars elided]...\n{s[-half:]}"
 
 
 @app.get("/health")
@@ -113,6 +129,50 @@ def action():
     return jsonify({"ok": ok, "type": atype, "stderr": "" if ok else r.stderr}), (
         200 if ok else 500
     )
+
+
+@app.post("/exec")
+def exec_command():
+    """Tier-2 shell channel: run a NON-INTERACTIVE command inside this (sandboxed)
+    container and return structured output. Runs to completion — it cannot answer a
+    mid-run prompt, so the caller uses flags/pipes/heredocs or the optional `stdin`
+    (interactive terminals are driven with vision instead).
+
+    A timeout is the ONLY recovery valve: a blocking command would otherwise freeze
+    the caller's loop with no way back in, so every call is time-bounded. Default 30s;
+    the caller may extend it (e.g. an install) up to a 5-min ceiling that bounds the
+    worst-case freeze. Safe because the container has no host mounts / socket / secrets.
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    command = data.get("command")
+    if not command or not str(command).strip():
+        return jsonify({"error": "exec requires a non-empty 'command'"}), 400
+
+    try:
+        t = int(data.get("timeout", 30))
+    except (TypeError, ValueError):
+        t = 30
+    t = max(1, min(t, 300))                     # clamp [1s, 300s]
+
+    stdin = data.get("stdin")
+    try:
+        r = subprocess.run(
+            str(command), shell=True, capture_output=True, text=True,
+            errors="replace",     # non-UTF-8 output (e.g. binary) -> readable, never a crash
+            timeout=t, input=(str(stdin) if stdin is not None else None),
+        )
+    except subprocess.TimeoutExpired:
+        return jsonify({
+            "ok": False, "exit_code": None, "stdout": "",
+            "stderr": f"timed out after {t}s", "timed_out": True,
+        }), 200
+
+    return jsonify({
+        "ok": r.returncode == 0,
+        "exit_code": r.returncode,
+        "stdout": _clip(r.stdout),
+        "stderr": _clip(r.stderr),
+    }), 200
 
 
 if __name__ == "__main__":

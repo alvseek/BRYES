@@ -57,11 +57,11 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 - **scope**: shared
 - **roles**: []
 - **status**: useful
-- **tags**: [screen, hands, docker, xvfb, xdotool, flask-api]
-- **last_verified**: "2026-07-14"
+- **tags**: [screen, hands, shell, exec, docker, xvfb, xdotool, flask-api]
+- **last_verified**: "2026-07-15"
 - **verified_by**: "claude-software-architect"
-- **update_trigger**: "when the Screen container stack, the /screenshot|/action API, or ports change"
-- **notes**: "Phase 1 — the Screen+Hands: disposable Ubuntu container (Xvfb + fluxbox + xdotool + scrot) exposing screenshot + the full Hands action set (click/double_click/right_click/hover/scroll/drag/type/key) over a Flask API (:8000) with noVNC live view (:6080). Apps: gnome-calculator, xterm, Chrome (xcalc note fixed 2026-07-13)."
+- **update_trigger**: "when the Screen container stack, the /screenshot|/action|/exec API, or ports change"
+- **notes**: "Phase 1 — the Screen+Hands: disposable Ubuntu container (Xvfb + fluxbox + xdotool + scrot) exposing screenshot + the full Hands action set (click/double_click/right_click/hover/scroll/drag/type/key) over a Flask API (:8000) with noVNC live view (:6080). Also POST /exec — the Tier-2 shell effector (run a command in the sandboxed container; ADR-001). Apps: gnome-calculator, xterm, Chrome. Tests: test_hands.py + test_shell.py."
 
 ### `eyes/README.md`
 
@@ -97,7 +97,19 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 - **last_verified**: ""
 - **verified_by**: ""
 - **update_trigger**: "when the loop's step sequence changes or verify-and-recover (Phase 5) lands"
-- **notes**: "Phase 4 — Close the Loop: agent/loop.py chains screenshot -> Eyes.describe -> Brain.decide -> Eyes.locate -> Hands act, until done/fail/step-limit. No verify-and-recover yet (that's Phase 5, the product)."
+- **notes**: "Phase 4 — Close the Loop: agent/loop.py chains screenshot -> Eyes.describe -> Brain.decide -> Eyes.locate -> Hands act, until done/fail/step-limit. Now also dispatches the `shell` action (exec_cmd -> /exec, result into HISTORY). No verify-and-recover yet (that's Phase 5, the product)."
+
+### `docs/adr/2026-07-15-effector-hierarchy.md`
+
+- **type**: adr
+- **scope**: shared
+- **roles**: []
+- **status**: useful
+- **tags**: [adr, effector-tiers, shell, vision, architecture]
+- **last_verified**: "2026-07-15"
+- **verified_by**: "claude-software-architect"
+- **update_trigger**: "when the effector-tier model changes or a new channel (Tier 1 API/MCP, a persona surface) is added/built"
+- **notes**: "ADR-001 — BRYES's effector hierarchy: the Brain routes each intent to the highest-available channel (Tier 1 API/MCP [future] · Tier 2 shell /exec · Tier 3 vision-fallback). Reframes BRYES as a tool-using agent, vision = one tool; future channels inherit the pattern."
 
 ---
 

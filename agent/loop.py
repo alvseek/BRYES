@@ -60,6 +60,17 @@ def hands(payload):
     return res
 
 
+def exec_cmd(payload):
+    """POST a shell command to /exec (Tier-2 effector); return the parsed result
+    {ok, exit_code, stdout, stderr, timed_out?}."""
+    req = urllib.request.Request(
+        SCREEN + "/exec", data=json.dumps(payload).encode(),
+        headers={"Content-Type": "application/json"}, method="POST")
+    res = json.loads(_open(req))
+    runlog.record("exec", payload, res)
+    return res
+
+
 def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=None):
     """Drive the loop until the Brain says done/fail or steps run out.
 
@@ -93,7 +104,8 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
             focus = action.get("focus") or focus          # Brain steers the Eyes next step
 
             log(f"[step {step}] eyes: {observation[:100].strip()}...")
-            detail = action.get("target") or action.get("text") or action.get("key") or ""
+            detail = (action.get("target") or action.get("text") or action.get("key")
+                      or action.get("command") or "")
             log(f"         brain: {thought}")
             log(f"         -> {act} {detail}".rstrip())
             if focus:
@@ -141,6 +153,24 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
                 captures += 1
                 runlog.save_image(f"capture-{captures:02d}.png", shot)
                 did = f"captured screenshot #{captures} (capture-{captures:02d}.png)"
+            elif act == "shell":
+                # Tier-2 effector: run a command directly instead of driving the GUI. The
+                # result is invisible on screen, so thread exit + output into HISTORY —
+                # that's how the Brain sees what happened (vision uses the next screenshot).
+                cmd = action.get("command", "")
+                payload = {"command": cmd}
+                if action.get("timeout") is not None:
+                    payload["timeout"] = action["timeout"]
+                if action.get("stdin") is not None:
+                    payload["stdin"] = action["stdin"]
+                res = exec_cmd(payload)
+                out = (res.get("stdout") or "").strip()
+                did = f"ran shell '{cmd}' -> exit {res.get('exit_code')}; out: {out or '(empty)'}"
+                err = (res.get("stderr") or "").strip()
+                if not res.get("ok") and err:
+                    did += f"; err: {err}"
+                if res.get("timed_out"):
+                    did += " [TIMED OUT]"
             elif act == "type":
                 # type sends text to whatever is FOCUSED — it must NOT click first, or it
                 # would drop the cursor/selection the Brain just set up (e.g. a Ctrl+A
