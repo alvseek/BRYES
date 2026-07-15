@@ -14,3 +14,8 @@ computer-use agent: screenshot → decide → click).
 ## Agent Orientation
 This repo maintains a structured orientation map at `docs/orientation-map.md`.
 Load it before starting work for architecture and navigation context.
+
+## Agent Memory
+Fleet-authored work-product for this project lives in `.agents/` — session history
+(`.agents/session/`) and project knowledge (`.agents/knowledge/`). Any agent working here
+can read and extend it. See [.agents/README.md](.agents/README.md).
