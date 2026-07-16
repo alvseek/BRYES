@@ -12,6 +12,15 @@ in [../roadmap.md](../roadmap.md); this is the finer-grained "what's left right 
 
 ## Next steps (do these next)
 
+- [ ] **TEST the shipped structured-output work live** (2026-07-16, [ADR-005](adr/2026-07-16-structured-output-standard.md)):
+      the **model-fallback is UNEXERCISED** (qwen→deepseek escape wired + unit-verified, never actually
+      fired); focus-failure recovery + the `BOX_PROMPT` recalibration were only **targeted-tested**, not
+      re-validated in a fresh full run. Run the calc/browser tasks, force a primary failure, confirm.
+- [ ] **Design the macro/combo input action** (harness-level batching) — a composite the Brain
+      issues in ONE shot, e.g. `type "1024*8096/112" → Enter`, built from the atomic primitives and
+      sequenced above them (not baked into a single primitive). **Strongly motivated this session**:
+      batching cut a 16-step calc run to 4, and the Brain's degeneration loop was it *straining to plan
+      a multi-step sequence* under the one-action-at-a-time contract — a combo action relieves both.
 - [ ] **Give BRYES a WhatsApp messaging task** (Alvi's vision — the next big goal): chat with /
       help anyone who messages its number. The **`PhoneDevice` body now exists** (a real Android over
       adb/USB), so WhatsApp *on the real phone* is now an option alongside WhatsApp Web — but the
@@ -24,10 +33,6 @@ in [../roadmap.md](../roadmap.md); this is the finer-grained "what's left right 
 - [ ] **Confirm the remaining app-level hands behavior** — `scroll` is now confirmed app-level
       (Tokopedia results scrolled through distinct screenfuls, 2026-07-14). Still eyeball-only:
       `double_click` selects, `right_click` context menu, `drag` on a draggable surface.
-- [ ] **Add a combo/macro action** — a composite the Brain can issue in one shot, e.g.
-      `ctrl+a → type "who am I" → Enter`. Built from the atomic primitives, sequenced above
-      them (not baked into any single primitive). The atomic set to compose from is now the
-      full natural set (below).
 - [ ] **Validate `qwen3.6-flash` on the calculator suite** (`1550×3÷4`, `128+47`, `512−137`,
       `7÷8`, `12+34+56` on clutter) before fully trusting it as the default Brain — it was
       only crowned on ONE task (browser search).
@@ -35,6 +40,16 @@ in [../roadmap.md](../roadmap.md); this is the finer-grained "what's left right 
 
 ## Tech debts (known gaps / risks)
 
+- **Model-fallback UNEXERCISED live** — `decide()`'s qwen→`deepseek-v4-flash` last-attempt escape
+  ([ADR-005](adr/2026-07-16-structured-output-standard.md)) is wired + unit-verified but has never
+  actually fired in a run; focus-failure recovery + the `BOX_PROMPT` recalibration were only
+  targeted-tested. Needs a live shakeout (a forced primary failure).
+- **Doc-sync incomplete (the visual_focus/visual_expectation renames)** — `architecture-overview.md`
+  and `agent-loop-flow.md` still use the old `focus`/`expect` names; context-index / backlog /
+  orientation-map were synced at the 2026-07-16 wrap-up, the two prose docs deferred.
+- **Broader ruff pass deferred** — ruff is set up (`ruff.toml`) and this session's new files are
+  clean, but 6 pre-existing issues remain (semicolon one-liners in `eyes/client.py`, a missing
+  `raise ... from` in `_ask`). A full-repo `ruff check --fix && ruff format` is its own follow-up.
 - **Some hands app-behavior still unconfirmed** — `scroll` is now confirmed app-level on
   Tokopedia; `double_click` / `right_click` / `drag` behavior on a real surface is still
   unverified. (See next-steps confirm item.)
@@ -81,6 +96,7 @@ in [../roadmap.md](../roadmap.md); this is the finer-grained "what's left right 
 
 ## Recently resolved (for context)
 
+- **Structured-output STANDARD + verify-focus + focus-failure harness, [ADR-005](adr/2026-07-16-structured-output-standard.md)** → LLM JSON is now a **Pydantic model → forced tool-call → OUR validation** (`structured.py`), never `json_object` free-text — the malformed-JSON class is eliminated by construction (old crash root-caused via new decide-error instrumentation: a **1148-token reasoning-loop** under `json_object`). **Verify-focus**: `focus`→`visual_focus`, `expect`→`visual_expectation` — the Brain now aims the Eyes where an action's EFFECT shows (the display), not the control it pressed (+ "keys don't light up" operator fix). **Focus-failure**: `box()` reports `NOT_FOUND` instead of fabricating coords → `describe` gives `VISUAL_FOCUS FAILED` + overview → Brain re-orients; `BOX_PROMPT` recalibrated (genuine-absence only; 0/9 false-neg in a targeted test). **Model**: qwen primary + `deepseek-v4-flash` backup (decide's last attempt escapes — 18 providers vs qwen's 1). + `quality-standard.md`, ruff, a cp1252 console-crash fix. Commit `d9c6b2c`. (2026-07-16)
 - **Describe-speed — two-mode foveal describe + trim, [ADR-004](adr/2026-07-16-foveal-describe-trim.md)** → `describe` cut from **5–16s to ~2s** (now *under* the Brain). Root: latency is **output-length-bound** (72B boxes in ~1.5s but describes in 5–16s, same frame). **OVERVIEW** (no focus): downscaled ×0.5 gist on **qwen3-vl-8b**. **TRIM** (focus): 72B `box()` → crop (+15%) → q3-8b describes the crop; `expect` now REQUIRES `focus` and rides the crop as `VERIFICATION`. 72B → authoritative Eyes (boxing + `recheck` careful re-read); ladder `q3-8b → recheck → request_diff`. Thinking off (14× cost, no gain). Qwen2.5-VL emits **absolute** box coords at any res (validated at 1280×800 **and** 2560×1600/4.1M px — no conversion). Box `None` (unparseable/failed) → full-frame fallback. Deterministic `eyes/test_describe.py`; live browser task `done` in 4 steps, describe 1.8–3.3s. (2026-07-16)
 - **Phase 5 — verify-and-recover (change-feedback), [ADR-003](adr/2026-07-16-change-feedback-verify-and-recover.md)** → **Seam B closed** by giving the Brain a semantic post-action check. **Layer 2 (primary):** the Brain emits a `expect` with each action; `describe(…, expect=…)` **REPORTS that thing's actual state** → `VERIFICATION: <what's literally shown>` in the observation (grounded, no verdict — the Brain compares; regional via `focus`, ~free — rides describe). *(The Eyes report, the Brain judges — VLM binary verdicts proved noisy on 1024×4096: whitespace nitpicks, self-contradictions; descriptions were always accurate.)* **Layer 3:** `request_diff` → a Brain-gated 2-image `eyes.diff(prev, cur)` appended as "CHANGES SINCE YOUR LAST ACTION". **Recovery** lives in the Brain (off the report); the loop keeps only a dumb *advisory* guard on a repeated *identical* action; it never picks the action. `focus`/`expect`/`request_diff` now form one prospective describe-modifier family. **Dropped:** the screen-wide pixel no-op ("Layer 1") — whole-frame mean-diff can't separate a small real change from noise and UI-TARS can't box a crop region; `framediff.py` + `test_framediff.py` kept & parked for the describe-speed thread. Live-proven: "8+5" verified clean to `done`; an impossible task escalated fairly + broke the loop. Also hardened `decide` with a network retry. (2026-07-16)
 - **Device abstraction (ADR-002) — Screen+Hands+shell behind a swappable `Device`** → the loop

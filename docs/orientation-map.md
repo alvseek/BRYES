@@ -147,6 +147,30 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 - **update_trigger**: "when the describe modes (overview/trim), the boxer, the crop-describe model, or the recheck rung change"
 - **notes**: "ADR-004 — two-mode foveal describe cuts describe latency (5-16s -> ~2s) by attacking OUTPUT LENGTH, not model/image (72B boxes in ~1.5s but describes in 5-16s, same frame). OVERVIEW (no focus): downscaled x0.5 gist on qwen3-vl-8b. TRIM (focus): 72B box() -> crop(+15%) -> q3-8b describes the crop; expect now REQUIRES focus, rides the crop as VERIFICATION. 72B demoted to authoritative Eyes (boxing + `recheck` careful re-read). Ladder q3-8b -> recheck -> request_diff. Qwen2.5-VL emits ABSOLUTE box coords at any res (validated to 4M px, no conversion). box None (unparseable/failed) -> full-frame fallback. Live: describe now UNDER decide."
 
+### `docs/adr/2026-07-16-structured-output-standard.md`
+
+- **type**: adr
+- **scope**: shared
+- **roles**: []
+- **status**: useful
+- **tags**: [adr, structured-output, pydantic, tool-calling, validation, format-enforcement, model-fallback, architecture]
+- **last_verified**: "2026-07-16"
+- **verified_by**: "claude-software-architect"
+- **update_trigger**: "when the structured-output mechanism (structured.py / BrainAction / tool-calling), the model primary/backup, or the format-enforcement standard changes"
+- **notes**: "ADR-005 — structured LLM output: formats are enforced by TOOLS, not the AI. LLM JSON goes through a Pydantic model -> forced tool-call -> OUR Pydantic validation (structured.py), never response_format:json_object free-text; validity never depends on provider enforcement. Eliminates the malformed-JSON class (old crash was a reasoning-loop degeneration under json_object). brain/decide() refactored onto it (BrainAction model). Model: qwen3.6-flash primary + deepseek-v4-flash backup (decide's last attempt escapes — 18 providers vs qwen's 1). Also: box() NOT_FOUND -> VISUAL_FOCUS FAILED + overview (no fabricated crops); focus->visual_focus, expect->visual_expectation."
+
+### `docs/quality-standard.md`
+
+- **type**: other
+- **scope**: shared
+- **roles**: []
+- **status**: useful
+- **tags**: [quality-standard, conventions, structured-output, ruff, analyze-code-quality]
+- **last_verified**: "2026-07-16"
+- **verified_by**: "claude-software-architect"
+- **update_trigger**: "when a project convention changes (error handling, efficiency, security, tooling/ruff, or a project-specific rule) or a new dimension is added"
+- **notes**: "The project quality standard — 9 dimensions filled from code (error handling degrades-not-crashes, model tiering, .env secrets, ASCII console, module-per-role, ruff, conventional-commits). Dimension 9 headline: FORMATS ARE ENFORCED BY TOOLS, NOT THE AI (ADR-005). State/UX dims marked N/A (no UI). Consumed by /analyze-code-quality Dimension 8."
+
 ---
 
 ## How to Use This File
