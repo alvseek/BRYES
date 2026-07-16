@@ -123,6 +123,18 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 - **update_trigger**: "when the Device interface / Capabilities change or a new body (WindowsDevice, another phone) is added"
 - **notes**: "ADR-002 — the `Device` abstraction: Screen+Hands+shell extracted into a swappable *vision-controllable body* (`devices/` package: base/container/phone) with a per-device `Capabilities` manifest; loop/Brain/Eyes stay device-agnostic, transport is device-private. Proven by adding a real Android phone (`PhoneDevice`, adb/USB) as body #2. Orthogonal to ADR-001 (tier vs body)."
 
+### `docs/adr/2026-07-16-change-feedback-verify-and-recover.md`
+
+- **type**: adr
+- **scope**: shared
+- **roles**: []
+- **status**: useful
+- **tags**: [adr, phase-5, verify-and-recover, expect, change-feedback, seam-b, recovery]
+- **last_verified**: "2026-07-16"
+- **verified_by**: "claude-software-architect"
+- **update_trigger**: "when the change-feedback design changes (expect/focus/request_diff modifiers, the recovery trigger) or framediff is un-parked"
+- **notes**: "ADR-003 — Phase 5 verify-and-recover closes Seam B. Change-feedback is the VLM's job, split correctly (Eyes perceive, Brain judges): the Brain emits a `expect` per action, and the next `describe` REPORTS that thing's actual state (`VERIFICATION: <state>`, no verdict) for the Brain to compare — Layer 2, primary. Plus `request_diff` (Brain-gated 2-image diff, Layer 3) and a dumb advisory repeated-action recovery guard. Two things measured & dropped: the screen-wide pixel no-op ('Layer 1' — a typed digit scores below the noise floor, UI-TARS can't box a crop region; `framediff.py` parked), and the VLM pass/fail verdict (noisy — report-not-judge instead). Unifies focus/expect/request_diff into one prospective describe-modifier family."
+
 ---
 
 ## How to Use This File

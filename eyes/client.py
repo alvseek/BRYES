@@ -69,6 +69,15 @@ DESCRIBE_PROMPT = (
     "Do NOT suggest actions and do NOT give coordinates. Only report what is there."
 )
 
+DIFF_PROMPT = (
+    "You are comparing two screenshots of the SAME user interface: the FIRST image is "
+    "BEFORE an action, the SECOND is AFTER it. Describe ONLY what CHANGED from BEFORE to "
+    "AFTER — specifically: elements that appeared/disappeared, moved, or changed their "
+    "text/value/state; a dialog or menu opening or closing; a selection or focus change. "
+    "If nothing meaningful changed, say exactly 'No significant change.' Report only what "
+    "is literally different in the pixels — do NOT infer intent or describe unchanged parts."
+)
+
 
 def _load_key():
     env = Path(__file__).resolve().parent.parent / ".env"
@@ -96,24 +105,27 @@ def smart_resize(height, width, factor=IMAGE_FACTOR,
     return h_bar, w_bar
 
 
-def _ask(prompt, image_bytes, *, model, max_tokens, timeout):
-    """Send one image+text chat turn to `model` on OpenRouter, return the text reply."""
+def _ask(prompt, images, *, model, max_tokens, timeout):
+    """Send one text+image(s) chat turn to `model` on OpenRouter, return the text reply.
+
+    `images` is a single PNG (bytes) or several (list[bytes], sent in order) — the
+    multi-image form powers diff() (BEFORE + AFTER frames in one call).
+    """
     key = _load_key()
     if not key:
         raise RuntimeError("OPENROUTER_API_KEY not found (check BRYES/.env)")
-    b64 = base64.b64encode(image_bytes).decode()
+    if isinstance(images, (bytes, bytearray)):
+        images = [images]
+    content = [{"type": "text", "text": prompt}]
+    for img in images:
+        b64 = base64.b64encode(img).decode()
+        content.append({"type": "image_url",
+                        "image_url": {"url": f"data:image/png;base64,{b64}"}})
     body = {
         "model": model,
         "temperature": 0,
         "max_tokens": max_tokens,
-        "messages": [{
-            "role": "user",
-            "content": [
-                {"type": "text", "text": prompt},
-                {"type": "image_url",
-                 "image_url": {"url": f"data:image/png;base64,{b64}"}},
-            ],
-        }],
+        "messages": [{"role": "user", "content": content}],
     }
     req = urllib.request.Request(
         OPENROUTER_URL,
@@ -133,25 +145,61 @@ def _ask(prompt, image_bytes, *, model, max_tokens, timeout):
     return data["choices"][0]["message"]["content"].strip()
 
 
-def describe(image_bytes, focus=None, *, timeout=60):
+def describe(image_bytes, focus=None, expect=None, *, timeout=60):
     """Return a text report of what is on screen, for the Brain to reason over.
 
-    If `focus` is given (the Brain telling the Eyes what matters this step), the
-    description concentrates on that area — detailed there, one line for everything
-    else. Called with focus=None (e.g. the first step) it reports the whole screen.
+    Two optional prospective modifiers the Brain sets on its last action:
+      - `focus`  — a SECTION/REGION of the screen (spatial: WHERE to look). The report
+        concentrates there — detailed in that region, one line for everything else.
+      - `expect` — the thing the Brain wants checked AFTER its last action (WHAT to look
+        at). The report opens with `VERIFICATION: <the actual state of that thing>` — a
+        grounded description, NOT a verdict; the Brain compares it to what it expected.
+    Called with both None (e.g. the first step) it reports the whole screen.
     """
     prompt = DESCRIBE_PROMPT
     if focus:
         prompt += (
-            f"\n\nFOCUS: concentrate on {focus}. Describe it in full detail — its "
-            "current state, every visible label, and any values or text it shows right "
-            "now (distinguish a live entry/input from a log of past results). Mention "
-            "anything else on screen in at most one line."
+            f"\n\nFOCUS: a SECTION/REGION of the screen to concentrate on: {focus}. "
+            "Describe that region in full detail — its current state, every visible "
+            "label, and any values or text it shows right now (distinguish a live "
+            "entry/input from a log of past results). Mention anything else on screen in "
+            "at most one line. (FOCUS is only WHERE to look — it is NOT a claim to check.)"
         )
-    result = _ask(prompt, image_bytes, model=DESCRIBE_MODEL, max_tokens=512,
+    if expect:
+        prompt += (
+            "\n\nThe decision-maker (who cannot see the screen) is checking on this after "
+            "their last action: \"" + expect + "\". Report the ACTUAL current state of that "
+            "specific thing, exactly as you see it in the pixels. Begin your reply with "
+            "'VERIFICATION: <precisely what is shown regarding it right now>'. Do NOT judge "
+            "whether it matches, and do NOT say verified/failed — just report what IS there "
+            "(the decision-maker will compare). Then continue with the normal description."
+        )
+    # 1024 (not 512): headroom for the VERIFY verdict + a busy-screen description without
+    # truncating. NOT 8192 like decide() — describe is a VLM emitting visible text (no hidden
+    # reasoning tokens to budget), and the prompt keeps it concise; a big ceiling would only
+    # invite the verbose describe that blurred the Brain's context (the 2026-07-13 regression).
+    result = _ask(prompt, image_bytes, model=DESCRIBE_MODEL, max_tokens=1024,
                   timeout=timeout)
     if runlog:
-        runlog.record("describe", f"focus: {focus or '(none)'}", result)
+        runlog.record("describe",
+                      f"focus: {focus or '(none)'} | expect: {expect or '(none)'}", result)
+    return result
+
+
+def diff(prev_bytes, cur_bytes, focus=None, *, timeout=60):
+    """One VLM call over BOTH frames -> a text account of what changed (Phase 5, Layer 3).
+
+    EXPENSIVE: two images in a single call, heavier than a describe. The loop runs it only
+    when the Brain sets request_diff (it is stuck / an effect is subtle). `focus` (optional)
+    narrows the comparison to a region.
+    """
+    prompt = DIFF_PROMPT
+    if focus:
+        prompt += f"\n\nConcentrate the comparison on this region: {focus}."
+    result = _ask(prompt, [prev_bytes, cur_bytes], model=DESCRIBE_MODEL, max_tokens=1024,
+                  timeout=timeout)
+    if runlog:
+        runlog.record("diff", f"focus: {focus or '(none)'}", result)
     return result
 
 

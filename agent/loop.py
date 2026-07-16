@@ -5,12 +5,22 @@ Chains the four pieces into one autonomous cycle:
     screenshot -> Eyes.describe(focus) -> Brain.decide -> Eyes.locate -> Hands act -> repeat
                                                         until "done"/"fail"/step-limit
 
-Phase-5 seeds now in the loop:
-  - HISTORY carries BOTH what the Eyes saw and the action taken each step, so the Brain
-    can detect "my last action changed nothing" and stop repeating it (no-progress).
-  - The Brain steers the Eyes via a `focus` field, carried into the next describe() so
-    the description stays on the task-relevant area.
-Still missing (later Phase-5 work): an explicit post-action re-check/recover step.
+Phase-5 change-feedback in the loop:
+  - The Brain predicts a checkable `expect` with each action; the loop rides it into the
+    next describe(), where the Eyes REPORT the actual state of that thing ("VERIFICATION:
+    ...") — grounded perception, NOT a verdict; the Brain compares it to what it expected
+    (Layer 2, the primary change-feedback: Eyes perceive, Brain judges). A screen-wide pixel
+    diff can't answer this — it drowns small changes (a typed digit) in whole-frame noise and
+    can't be regionally cropped (UI-TARS only points) — so this is the VLM's job, not a pixel
+    metric. (The VLM is asked to REPORT, not judge, because its binary verdicts were noisy —
+    whitespace nitpicks, self-contradictions — while its descriptions are accurate.)
+  - The Brain steers the Eyes via a `focus` region, carried into the next describe().
+  - When stuck, the Brain can request an EXPENSIVE 2-image diff (request_diff) of the
+    before/after frames for a precise account of what changed (Layer 3).
+  - Recovery lives in the Brain (it rethinks off the accurate VERIFICATION report). The loop
+    keeps only a dumb, ADVISORY guard: if the SAME action repeats many times it nudges (and,
+    one step later, suggests the 2-image diff). Different actions never trip it, so
+    exploration is safe; it never picks the action itself.
 """
 import os
 import sys
@@ -19,7 +29,7 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import runlog  # noqa: E402
 from devices import ContainerDevice, ALL_VERBS  # noqa: E402
-from eyes.client import describe, locate, DESCRIBE_PROMPT, GROUND_PROMPT  # noqa: E402
+from eyes.client import describe, locate, diff as vlm_diff, DESCRIBE_PROMPT, GROUND_PROMPT  # noqa: E402
 from brain.client import decide, build_system_prompt  # noqa: E402
 
 # The Screen+Hands+shell transport now lives behind the Device abstraction (ADR-002):
@@ -34,6 +44,13 @@ _POINT_VERB = {
     "right_click": "right-clicked",
     "hover": "hovered",
 }
+
+# Recovery backstop (Phase 5): the Brain now judges progress itself, by comparing the Eyes'
+# VERIFICATION report to what it expected. The loop keeps only a dumb, ADVISORY guard against
+# a runaway — the SAME action repeated many times in a row (different actions never trip it,
+# so exploration is safe; a legitimately-repeating action like scrolling just gets a nudge it
+# can ignore). Real recovery lives in the Brain, off the accurate report.
+_REPEAT_LIMIT = 2   # consecutive identical actions before an advisory "you're repeating" nudge
 
 
 def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=None,
@@ -58,7 +75,12 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
     log(f"(transcript -> {rundir})\n")
     history = []
     focus = None
+    expect = None                # the Brain's prediction for THIS step (set last step)
+    want_diff = False            # did the last action ask for an expensive 2-image diff?
     captures = 0
+    prev_shot = None             # last step's frame — kept for the Layer-3 2-image diff
+    last_sig = None              # signature of the previous action
+    repeat_streak = 0            # consecutive identical actions (advisory runaway guard)
     totals = {"screen": 0.0, "describe": 0.0, "decide": 0.0, "locate": 0.0, "act": 0.0}
     _loc = {"s": 0.0}      # per-step locate accumulator; timed_locate() adds into it
 
@@ -75,12 +97,47 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
             shot = device.screenshot()
             t_screen = time.perf_counter() - t
             runlog.save_image(f"step-{step:02d}.png", shot)
+
             t = time.perf_counter()
-            observation = describe(shot, focus=focus)     # Eyes: what's on screen (focused)
+            # Eyes: what's on screen (focused region), + REPORT the actual state of what the
+            # Brain set in `expect` ("VERIFICATION: ...") for the Brain to compare — Layer 2,
+            # the regional, semantic change-feedback (the Eyes perceive; the Brain judges).
+            observation = describe(shot, focus=focus, expect=expect)
             t_describe = time.perf_counter() - t
+
+            # Layer 3 (Phase 5): if the LAST action requested it, run the EXPENSIVE 2-image
+            # diff (prev vs current = the effect of that action) and append a precise
+            # "what changed" account to the observation the Brain is about to read. Gated
+            # by the Brain (request_diff) — never automatic.
+            if want_diff and prev_shot is not None:
+                changes = vlm_diff(prev_shot, shot, focus=focus)
+                observation += "\n\nCHANGES SINCE YOUR LAST ACTION:\n" + changes
+                log(f"         [diff] {changes[:100].strip()}...")
+
+            # Recovery backstop (Phase 5): dumb, ADVISORY runaway guard — if the SAME action
+            # has repeated many times, nudge the Brain (graduated: at limit+1 also push the
+            # 2-image diff). The Brain does the real recovery from the VERIFICATION report;
+            # this only catches a stubborn loop, and never picks the action itself.
+            escalation = None
+            if repeat_streak >= _REPEAT_LIMIT and last_sig:
+                a, tgt = last_sig
+                what = f"the same '{a}'" + (f" on '{tgt}'" if tgt else "") + " action"
+                base = (f"SYSTEM ALERT: you have repeated {what} {repeat_streak + 1} times in "
+                        "a row with no apparent progress.")
+                if repeat_streak >= _REPEAT_LIMIT + 1:
+                    escalation = (base + " STOP repeating it. Set \"request_diff\": true to "
+                                  "get a precise account of what is actually on screen, then "
+                                  "choose a genuinely DIFFERENT action — or use 'fail' if the "
+                                  "goal cannot be reached.")
+                else:
+                    escalation = (base + " Reconsider — try a genuinely DIFFERENT action, or "
+                                  "use 'fail' if the goal cannot be reached.")
+                log(f"         [escalation] same action x{repeat_streak + 1} -> nudging Brain"
+                    + (" (suggest diff)" if repeat_streak >= _REPEAT_LIMIT + 1 else ""))
+
             t = time.perf_counter()
-            action = decide(goal, observation, history,
-                            caps=device.caps, model=brain_model)  # Brain decides (device-aware)
+            action = decide(goal, observation, history, caps=device.caps,
+                            model=brain_model, escalation=escalation)  # device-aware decide
             t_decide = time.perf_counter() - t
             totals["screen"] += t_screen
             totals["describe"] += t_describe
@@ -89,6 +146,13 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
             act = action.get("action")
             thought = action.get("thought", "")
             focus = action.get("focus") or focus          # Brain steers the Eyes next step
+            expect = action.get("expect")                  # verified next step (not sticky)
+            want_diff = bool(action.get("request_diff"))   # 2-image diff next step (not sticky)
+            # Track repeated identical actions for the advisory runaway guard above.
+            sig = (act, action.get("target") or action.get("text")
+                   or action.get("key") or "")
+            repeat_streak = repeat_streak + 1 if sig == last_sig else 0
+            last_sig = sig
 
             log(f"[step {step}] eyes: {observation[:100].strip()}...")
             detail = (action.get("target") or action.get("text") or action.get("key")
@@ -192,6 +256,10 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
             # stale past descriptions — accumulating those blurs the signal, especially
             # now that describe is verbose.
             history.append(did)
+
+            # Carry this step's frame forward for the Layer-3 2-image diff: next step's
+            # request_diff compares prev_shot (before the action) vs the fresh frame (after).
+            prev_shot = shot
 
             log("")
             time.sleep(settle)

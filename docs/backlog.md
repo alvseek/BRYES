@@ -31,44 +31,7 @@ in [../roadmap.md](../roadmap.md); this is the finer-grained "what's left right 
 - [ ] **Validate `qwen3.6-flash` on the calculator suite** (`1550×3÷4`, `128+47`, `512−137`,
       `7÷8`, `12+34+56` on clutter) before fully trusting it as the default Brain — it was
       only crowned on ONE task (browser search).
-- [ ] **Phase 5 — verify-and-recover** (the product): after each action, check "did the intended
-      thing happen?" and recover instead of marching on. **Deferred until base capability clears
-      ~80%** of tasks. **The gap** (pinpointed 2026-07-15 on the phone "open Settings" run): the loop
-      feeds current-`describe` + actions-only history but **no state-delta**, so the Brain *infers*
-      what its actions did ("scrolled twice, suggesting I'm at the bottom") instead of being told —
-      it can't detect a no-op and wanders. Two failure shapes to catch: **no effect** and **wrong
-      effect**. **Design worked out 2026-07-15 (ready to `/high-wizard`):**
-    - **Layer 1 — pixel no-op detector** (deterministic, ~free, Brain-independent): compare this
-      step's top-of-step screenshot to the previous one; if effectively identical, tell the Brain
-      *"your last action changed nothing."* Catches the exact failure the Brain is blind to (each
-      `describe` is independent → it narrates an unchanged screen as fresh). Mechanism = `frame_diff`:
-      downscale both frames to ~64×64 grayscale, mean-abs-diff, threshold — downscaling washes out
-      cursor/clock noise; **threshold tuned empirically** (log no-op vs real-change diffs, don't
-      guess). Only fire after *state-changing* actions (not `wait`/`screenshot`).
-    - **Layer 2 — `expect` verified in the VLM** (cheap, grounded, SAME describe call): the Brain
-      emits a checkable `expect` with its action; the loop carries it into the next `describe`
-      (exactly like `focus` already rides along); the **VLM verifies it against pixels** ("VERIFY:
-      'Settings app is open' → FALSE; still on the home launcher"). Grounded, not inferred (dodges
-      Seam A + Brain rationalization), no extra call. **Bias `expect` toward ABSOLUTE/nameable
-      target-states** ("an icon labeled 'Settings' is visible") not relative ("new apps appeared") —
-      then the *current* frame suffices, no diff needed. **Trap:** VLMs confirm eagerly — the verify
-      prompt must be **neutral/disconfirming** ("if it is NOT true, say so and report what IS shown"),
-      same no-infer discipline as `DESCRIBE_PROMPT`.
-    - **Escalation ladder (cost→need):** ① pixel no-op diff (free, "did anything move?") → ② `expect`
-      in the describe (cheap, grounded, "is my target true now?") → ③ **two-image VLM diff** — the
-      Brain **requests** it *only when stuck / verification is inconclusive*; the loop feeds prev+current
-      to the VLM → "what SPECIFICALLY changed", and returns that **to the Brain**. Frame it in the
-      **system prompt as EXPENSIVE + SLOW — use sparingly, only when truly stuck** (a 2-image call is
-      heavier than the describe we're already trying to shrink). Gated behind "something's wrong", never
-      every step.
-    - **Constraints:** compact signals only; do NOT re-feed full past describes (re-blurs — the reason
-      history went actions-only on 2026-07-13); the common path (①+②) adds **zero** extra VLM calls.
-    - **Open (decide at build):** whether Layer 1 is still needed once Layer 2's `expect`-check is in
-      (test it — the past no-op failures were all *pre-*`expect`); recovery = pure Think-High reasoning
-      on the signal vs a hard backstop (same no-op ×N → force-different). The `frame_diff` primitive
-      built for Layer 1 also becomes the trigger for **incremental/change-driven describe** in the
-      separate *describe-speed* thread (small diff → describe just the changed tile) — one primitive,
-      two threads.
+- [x] **Phase 5 — verify-and-recover** ✅ **DONE (2026-07-16, [ADR-003](adr/2026-07-16-change-feedback-verify-and-recover.md)).** Shipped as **Layer 2 (`expect` verified in the VLM) as the primary change-feedback** + Layer 3 (Brain-requested 2-image diff) + a recovery backstop (same-action-and-failing → escalate). **The original screen-wide pixel "Layer 1" was dropped** after measurement: a single typed digit (~0.02–0.09 mean-diff) sits below the idle noise floor (~0.25), and UI-TARS can't box a region to crop → "did my action work?" is a regional/semantic question the VLM answers, not a pixel metric. `framediff.py` is kept & parked (see Recently resolved + the describe-speed lever above).
 
 ## Tech debts (known gaps / risks)
 
@@ -83,12 +46,22 @@ in [../roadmap.md](../roadmap.md); this is the finer-grained "what's left right 
 - **MiniMax M3 needs hand-holding** — it *did* the search but never recognized completion on
   the generic goal; only finished with a pampered, step-by-step instruction. Sensitive to
   instruction specificity; not a safe default.
-- **`describe` (Qwen-VL) is the per-step bottleneck** — good for faithfulness, but it's the
-  highest-volume call (every step), the biggest token cost, AND (measured 2026-07-15) the dominant
-  *latency*: ~19.5s/step on the container vs ~3.2s for `decide`; the phone's larger 1080×2400 frame
-  is likely worse. The lever for loop speed. Options: **downscale the frame before `describe`** (the
-  Eyes' `locate` already rescales coords, so it's safe), a faster VLM, or skip-`describe`-when-frame-
-  unchanged.
+- **The two rented model calls (`describe` + `decide`) dominate loop latency, both slow & variable.**
+  The 2026-07-15 headline "`describe` ~19.5s vs `decide` ~3.2s" was a **single sample** and over-drawn:
+  a fuller 2026-07-16 run measured `describe` **5–16s** AND `decide` **3–12s** per step — both the
+  VLM (Qwen-VL, every step) and the Brain LLM (qwen3.6-flash, reasoning.effort=high) are high-variance.
+  `describe` is still often the largest and the biggest token cost, so it's a real speed lever
+  (**downscale the frame before `describe`** — `locate` already rescales coords, so it's safe; a faster
+  VLM; or skip-`describe`-when-frame-unchanged, which is what parked `framediff.py` is for). But `decide`
+  is NOT negligible and additionally **stalls** (next item). Per-phase timing (`screen/describe/decide/
+  locate/act`) is correct — it isolates each call in a non-overlapping window; don't re-read the n=1
+  headline as gospel.
+- **`decide` (Brain) call could stall the whole loop** — it caught only `HTTPError`, so a dropped/
+  timed-out/slow-trickle connection hung or crashed the run (observed 2026-07-16: a step stalled in
+  `decide`, *after* `describe` had completed). **Partially fixed**: `decide` now catches `URLError`/
+  `TimeoutError`/`ConnectionError` and retries with backoff via its outer loop (mirrors `ContainerDevice`).
+  Remaining: a genuinely slow-but-alive reasoning response isn't bounded (a total wall-clock cap would
+  need a thread/alarm) — accepted for now.
 - **Cost at scale unmeasured** — per-run is cents in prototyping; the every-step `describe`
   is the line item to watch if usage grows (Phase 6 hosting question).
 - **Async `/exec` deferred** — `/exec` is synchronous (blocks the loop until done/timeout). The
@@ -101,6 +74,7 @@ in [../roadmap.md](../roadmap.md); this is the finer-grained "what's left right 
 
 ## Recently resolved (for context)
 
+- **Phase 5 — verify-and-recover (change-feedback), [ADR-003](adr/2026-07-16-change-feedback-verify-and-recover.md)** → **Seam B closed** by giving the Brain a semantic post-action check. **Layer 2 (primary):** the Brain emits a `expect` with each action; `describe(…, expect=…)` **REPORTS that thing's actual state** → `VERIFICATION: <what's literally shown>` in the observation (grounded, no verdict — the Brain compares; regional via `focus`, ~free — rides describe). *(The Eyes report, the Brain judges — VLM binary verdicts proved noisy on 1024×4096: whitespace nitpicks, self-contradictions; descriptions were always accurate.)* **Layer 3:** `request_diff` → a Brain-gated 2-image `eyes.diff(prev, cur)` appended as "CHANGES SINCE YOUR LAST ACTION". **Recovery** lives in the Brain (off the report); the loop keeps only a dumb *advisory* guard on a repeated *identical* action; it never picks the action. `focus`/`expect`/`request_diff` now form one prospective describe-modifier family. **Dropped:** the screen-wide pixel no-op ("Layer 1") — whole-frame mean-diff can't separate a small real change from noise and UI-TARS can't box a crop region; `framediff.py` + `test_framediff.py` kept & parked for the describe-speed thread. Live-proven: "8+5" verified clean to `done`; an impossible task escalated fairly + broke the loop. Also hardened `decide` with a network retry. (2026-07-16)
 - **Device abstraction (ADR-002) — Screen+Hands+shell behind a swappable `Device`** → the loop
   now depends on a `Device` Protocol (screenshot/act/optional shell + a `Capabilities` manifest),
   not a transport; `ContainerDevice` (HTTP, byte-identical) is the default body and **`PhoneDevice`

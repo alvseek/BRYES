@@ -179,6 +179,8 @@ the action changed anything. So:
 > new screenshot: did the thing I intended actually happen? If not, recover"* — is
 > precisely the verification this loop does not yet do.
 
+> **✅ Seam B closed (2026-07-16, Phase 5 — see §8 + [ADR-003](adr/2026-07-16-change-feedback-verify-and-recover.md)).** The Brain now emits a `expect` with each action; the loop rides it into the next `describe`, which **REPORTS the actual state** of that thing (`VERIFICATION: <what's shown>`) — grounded perception, not a verdict — and the Brain compares it to what it expected. History no longer just records an unverified attempt — the *next observation* carries a grounded reading of what the last action produced. (Two design choices, both measured: change-feedback is **semantic not pixel** — a whole-frame pixel diff was dropped; and the VLM **reports, doesn't judge** — binary verdicts were noisy. See §8.)
+
 > **Shell is the exception to Seam B.** A `shell` action's HISTORY entry carries the command's
 > *real* exit code + stdout (observed from `/exec`), not an unverified "I tried X." So the
 > shell channel already has the outcome-in-memory that GUI actions lack — verification is
@@ -296,3 +298,51 @@ atomic primitives); validating qwen3.6-flash on the calculator suite; live-verif
   actions-only history and **no state-delta**, the Brain *inferred* ("scrolled twice, suggesting
   I'm at the bottom") instead of seeing what changed — a fresh, concrete instance of Seam B (§4) and
   the sharpest case yet for the Phase-5 change-feedback primitive.
+
+---
+
+## 8. Change-feedback — verify-and-recover (Phase 5, 2026-07-16)
+
+Seam B is closed by making "did my action work?" the **VLM's** job. Three prospective
+**describe-modifiers** — set on a step-N action, consumed by step-N+1's `describe`:
+
+| Modifier | Axis | Effect |
+|---|---|---|
+| `focus` | WHERE (spatial region) | `describe` concentrates on that section |
+| `expect` | WHAT to check (assertion) | `describe` REPORTS that thing's actual state → `VERIFICATION: <what's literally shown>` at the top of the observation (no verdict — the Brain compares) |
+| `request_diff` | precise before/after | loop runs `eyes.diff(prev_shot, shot)` (one 2-image VLM call) → appends `CHANGES SINCE YOUR LAST ACTION` |
+
+**Layer 2 (`expect`) is the primary change-feedback** — regional (scoped by `focus`) and
+semantic, riding the `describe` that happens anyway (zero extra cost). The Eyes **report** the
+state; the **Brain judges** the match (the VLM's binary verdicts were noisy — whitespace
+nitpicks, self-contradictions — while its descriptions are accurate). **Layer 3 (`request_diff`)**
+is the expensive, Brain-gated rung for when it's stuck. **Recovery** lives in the Brain (it
+rethinks off the accurate report); the loop keeps only a **dumb, advisory** guard — if the SAME
+action repeats `_REPEAT_LIMIT=2`× it nudges (graduated — one more also suggests `request_diff`).
+Different actions never trip it; it never picks the action.
+
+```mermaid
+sequenceDiagram
+    participant L as Loop
+    participant E as Eyes
+    participant B as Brain
+    Note over L: shot = screenshot()
+    L->>E: describe(shot, focus, expect)
+    E-->>L: observation ("VERIFICATION: <actual state>" — Brain compares)
+    opt last action set request_diff
+        L->>E: diff(prev_shot, shot, focus)
+        E-->>L: "CHANGES SINCE LAST ACTION: ..."
+    end
+    Note over L: advisory: if SAME action repeats >=2x -> nudge
+    L->>B: decide(goal, observation(+diff), history, escalation)
+    B-->>L: action {..., expect?, request_diff?, focus?}
+    Note over L: act; prev_shot = shot
+```
+
+**Why NOT a screen-wide pixel no-op detector.** The original design had a free "Layer 1" —
+a whole-frame `frame_diff` tagging `NO VISIBLE CHANGE`. Measurement killed it: a single typed
+digit scores ~0.02–0.09 mean-diff, *below* the ~0.25 idle noise floor (higher resolution doesn't
+help — inherent to mean-over-whole-frame), and it can't be regionally cropped because UI-TARS-1.5
+only returns points, never boxes. "No change" is only meaningful *in a region, semantically* —
+which is exactly `expect`+`focus`. `framediff.py` is kept & parked for the describe-speed thread
+(where "did a *lot* change → re-describe?" IS a screen-wide question). Full rationale: [ADR-003](adr/2026-07-16-change-feedback-verify-and-recover.md).

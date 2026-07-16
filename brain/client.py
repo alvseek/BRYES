@@ -10,6 +10,7 @@ descriptions into coordinates; the Hands (Phase 1) execute them.
 import json
 import os
 import re
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -59,6 +60,11 @@ Rules:
   three things in order: (a) what the OBSERVATION shows right now, (b) what you have
   already done (HISTORY), and (c) what still remains to reach the GOAL. Decide from that
   comparison. If the OBSERVATION contradicts what you expected, trust the OBSERVATION.
+- COMPARE THE VERIFICATION REPORT: when the OBSERVATION begins with "VERIFICATION:", that
+  is the Eyes reporting the ACTUAL state of what you set in "expect" (a grounded reading of
+  the pixels, not a verdict). Compare it to what you expected. If it differs, your action
+  MAYBE didn't do what you thought — rethink or adapt (re-read the state, try a different
+  target or action). If it matches, proceed.
 - Refer to elements by description (e.g. "the Submit button").
   NEVER output pixel coordinates - the Eyes handle pixels.
 - When a button's label is a symbol, name it with the WORD, e.g. "the equals (=)
@@ -70,13 +76,23 @@ Rules:
   the target with its LOCATION and context so the Eyes pick the RIGHT one, e.g. "the
   equals (=) button at the bottom-right of the keypad" or "the orange equals button on
   the keypad" — not just "the equals button".
-- FOCUS THE EYES, SPECIFICALLY: set "focus" to the precise element or region whose EXACT
-  current state you need for your next decision and to verify your last action — e.g. the
-  current input/entry field and exactly what it contains right now, or the specific
-  control you are about to use — not just the whole app or window. The more specific and
-  contextual the focus, the more accurately the Eyes report the state you must act on.
-  Keep the focus on the relevant area across steps, moving it only when the task moves to
-  a new area.
+- FOCUS THE EYES ON A REGION (WHERE): set "focus" to the SECTION/REGION of the screen
+  whose EXACT current state you need next — e.g. the current input/entry field, a specific
+  control, or a panel — not the whole app or window. "focus" only steers WHERE the Eyes
+  look; it is NOT a claim to check (that is "expect"). The more specific and contextual the
+  region, the more accurately the Eyes report the state you must act on. Keep the focus on
+  the relevant area across steps, moving it only when the task moves to a new area.
+- PREDICT THE RESULT (EXPECT): whenever you take an action that SHOULD change the screen,
+  set "expect" to the state you predict will be TRUE right afterward, phrased as an
+  ABSOLUTE, NAMEABLE target-state (e.g. "the Settings app is open", "the address bar shows
+  example.com") — NOT a relative one ("something new appeared"). Next step the Eyes REPORT
+  the actual state of that thing back to you (the OBSERVATION begins "VERIFICATION: ..."),
+  for you to compare against what you expected.
+- WHEN STUCK, ASK FOR A DIFF (EXPENSIVE): if you cannot tell what your last action did —
+  the OBSERVATION is ambiguous, or the VERIFICATION report doesn't match what you expected —
+  set "request_diff": true. Next step you will receive a precise "CHANGES SINCE YOUR LAST
+  ACTION" account. It costs a SLOW, EXPENSIVE extra vision pass, so use it sparingly —
+  only when genuinely stuck, never as a routine check.
 - TEXT ENTRY: the "type" action sends text to whatever field is currently FOCUSED — it
   does NOT move focus. To enter text: first "click" the field to focus it, then "type".
   To REPLACE a field's existing contents (e.g. an address bar with a URL in it): "click"
@@ -123,7 +139,9 @@ _JSON_SCHEMA = """JSON schema:
   "command": "<the full shell command line to run; required for shell>",
   "timeout": "<optional seconds for shell, up to 300; default 30>",
   "stdin": "<optional text to feed the shell command's standard input>",
-  "focus": "<optional: what the Eyes should concentrate on next>"
+  "expect": "<optional: the specific target-state you predict after this action, phrased ABSOLUTE/nameable (e.g. 'the Settings app is open'); next step the Eyes REPORT that thing's actual state ('VERIFICATION: ...') for you to compare>",
+  "focus": "<optional: a SECTION/REGION of the screen the Eyes should concentrate on next (spatial — WHERE to look)>",
+  "request_diff": "<optional true: request an EXPENSIVE, SLOW precise before/after visual diff next step — set ONLY when an effect is subtle or you are stuck; NOT routinely>"
 }"""
 
 # Action vocabulary is assembled per-device from the active body's Capabilities (ADR-002):
@@ -199,7 +217,7 @@ def _extract_json(text):
 
 
 def decide(goal, observation, history=None, *, caps=None, model=None, effort="high",
-           timeout=60, retries=2):
+           timeout=60, retries=2, escalation=None):
     """Return the next action as a dict: {thought, action, target?, text?, key?, focus?}.
 
     `effort` sets DeepSeek V4's thinking mode via OpenRouter's `reasoning.effort`
@@ -218,9 +236,11 @@ def decide(goal, observation, history=None, *, caps=None, model=None, effort="hi
         raise RuntimeError("OPENROUTER_API_KEY not found (check BRYES/.env)")
 
     hist_txt = "\n".join(f"- {h}" for h in (history or [])) or "(none yet)"
+    escalation_block = f"\n\n{escalation}" if escalation else ""
     user_base = (f"GOAL:\n{goal}\n\n"
                  f"OBSERVATION (what is on screen now):\n{observation}\n\n"
-                 f"HISTORY (actions you have already taken):\n{hist_txt}\n\n"
+                 f"HISTORY (actions you have already taken):\n{hist_txt}"
+                 f"{escalation_block}\n\n"
                  f"Decide the single next action as JSON.")
 
     last_err = None
@@ -262,6 +282,15 @@ def decide(goal, observation, history=None, *, caps=None, model=None, effort="hi
             data = json.loads(urllib.request.urlopen(req, timeout=timeout).read())
         except urllib.error.HTTPError as e:
             raise RuntimeError(f"OpenRouter HTTP {e.code}: {e.read().decode()[:400]}")
+        except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
+            # Network stall / timeout / reset on the Brain call. Unlike ContainerDevice this
+            # had NO retry, so a dropped or timed-out connection hung/crashed the whole loop
+            # (observed 2026-07-16: a step stalled in decide, after describe completed). Back
+            # off and retry via the outer loop instead. (A genuinely slow-but-alive reasoning
+            # response is a latency matter, not this error path.)
+            last_err = e
+            time.sleep(1.0 * (attempt + 1))
+            continue
 
         choice = data["choices"][0]
         content = choice["message"].get("content")
