@@ -65,6 +65,14 @@ Rules:
   the pixels, not a verdict). Compare it to what you expected. If it differs, your action
   MAYBE didn't do what you thought — rethink or adapt (re-read the state, try a different
   target or action). If it matches, proceed.
+- RE-READ A DOUBTFUL REPORT (RECHECK): the focused region is read by a FAST model, which can
+  occasionally MISREAD a small crop. If a VERIFICATION report contradicts what you expected
+  and you cannot tell whether your ACTION failed OR the Eyes simply misread that region, set
+  "recheck": true. Next step the SAME focused region is re-read by a slower, higher-fidelity
+  model — use that to confirm the real state BEFORE you conclude the action failed or change
+  course. It is cheaper than a full diff. Escalate to "request_diff" only if a careful
+  re-read still leaves you unable to tell what happened. Do NOT set "recheck" routinely — only
+  on a genuine expect-vs-report contradiction.
 - Refer to elements by description (e.g. "the Submit button").
   NEVER output pixel coordinates - the Eyes handle pixels.
 - When a button's label is a symbol, name it with the WORD, e.g. "the equals (=)
@@ -87,7 +95,9 @@ Rules:
   ABSOLUTE, NAMEABLE target-state (e.g. "the Settings app is open", "the address bar shows
   example.com") — NOT a relative one ("something new appeared"). Next step the Eyes REPORT
   the actual state of that thing back to you (the OBSERVATION begins "VERIFICATION: ..."),
-  for you to compare against what you expected.
+  for you to compare against what you expected. Set "expect" ONLY together with "focus":
+  point "focus" at the region whose state you are verifying, so the Eyes crop to it and read
+  it closely. An "expect" without a "focus" cannot be verified precisely.
 - WHEN STUCK, ASK FOR A DIFF (EXPENSIVE): if you cannot tell what your last action did —
   the OBSERVATION is ambiguous, or the VERIFICATION report doesn't match what you expected —
   set "request_diff": true. Next step you will receive a precise "CHANGES SINCE YOUR LAST
@@ -140,7 +150,8 @@ _JSON_SCHEMA = """JSON schema:
   "timeout": "<optional seconds for shell, up to 300; default 30>",
   "stdin": "<optional text to feed the shell command's standard input>",
   "expect": "<optional: the specific target-state you predict after this action, phrased ABSOLUTE/nameable (e.g. 'the Settings app is open'); next step the Eyes REPORT that thing's actual state ('VERIFICATION: ...') for you to compare>",
-  "focus": "<optional: a SECTION/REGION of the screen the Eyes should concentrate on next (spatial — WHERE to look)>",
+  "focus": "<optional: a SECTION/REGION of the screen the Eyes should concentrate on next (spatial — WHERE to look); REQUIRED whenever you set expect>",
+  "recheck": "<optional true: re-read the SAME focused region at higher fidelity next step — set ONLY when a VERIFICATION report contradicts your expectation and you cannot tell if the action failed or the fast read was wrong; cheaper than request_diff>",
   "request_diff": "<optional true: request an EXPENSIVE, SLOW precise before/after visual diff next step — set ONLY when an effect is subtle or you are stuck; NOT routinely>"
 }"""
 

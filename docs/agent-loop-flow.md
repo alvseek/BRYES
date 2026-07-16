@@ -1,7 +1,7 @@
 ---
 project: BRYES
 title: Agent Loop — Wiring & Data Flow
-updated: 2026-07-15
+updated: 2026-07-16
 doc_type: flow-diagram
 tags: [loop, data-flow, wiring, describe, decide, locate, shell, effector, verify, phase-5, post-mortem]
 ---
@@ -293,7 +293,9 @@ atomic primitives); validating qwen3.6-flash on the calculator suite; live-verif
   the active body's `Capabilities` (a phone never gets offered `right_click`).
 - **Per-phase timing** added to `run()` (`screen / describe / decide / locate / act` seconds per
   step + totals). First measurement: `describe` ≈ 19.5s vs `decide` ≈ 3.2s/step — **the Eyes VLM,
-  not the Brain, is the loop's latency** (corrected a wrong assumption). See [backlog.md](backlog.md).
+  not the Brain, is the loop's latency** (corrected a wrong assumption). **Superseded 2026-07-16
+  (§9, [ADR-004](adr/2026-07-16-foveal-describe-trim.md)):** the two-mode foveal describe cut it to
+  ~2s and moved the bottleneck back onto the Brain. See [backlog.md](backlog.md).
 - **Seam B reconfirmed on the phone.** The "open Settings" run wandered to step_limit: with
   actions-only history and **no state-delta**, the Brain *inferred* ("scrolled twice, suggesting
   I'm at the bottom") instead of seeing what changed — a fresh, concrete instance of Seam B (§4) and
@@ -346,3 +348,38 @@ help — inherent to mean-over-whole-frame), and it can't be regionally cropped 
 only returns points, never boxes. "No change" is only meaningful *in a region, semantically* —
 which is exactly `expect`+`focus`. `framediff.py` is kept & parked for the describe-speed thread
 (where "did a *lot* change → re-describe?" IS a screen-wide question). Full rationale: [ADR-003](adr/2026-07-16-change-feedback-verify-and-recover.md).
+
+---
+
+## 9. Foveal describe + trim — describe-speed ([ADR-004](adr/2026-07-16-foveal-describe-trim.md), 2026-07-16)
+
+`describe` was the loop's bottleneck (5–16s). The load-bearing find: latency is **output-length-bound** — the 72B *boxes* a frame in ~1.5s but *describes* it in 5–16s (same model, same image). So `describe` became **two-mode foveal** — say less, about less:
+
+| Mode | When | What |
+|---|---|---|
+| **OVERVIEW** | no `focus` | downscale ×0.5 → coarse gist (environment / apps / eye-catching) on **qwen3-vl-8b**. The salience cues where to `focus` next. |
+| **TRIM** | `focus` set | 72B `box(focus)` → crop (+15% pad, full-res) → describe the crop on **q3-8b**. `expect` (now *requires* `focus`) rides the crop as `VERIFICATION:`. |
+
+72B is demoted from default describer to the **authoritative Eyes** (boxing + the `recheck` careful re-read). Ladder: **q3-8b → `recheck` (72B re-read on an `expect`-mismatch) → `request_diff`** (§8's 2-image diff). Thinking off on all describe calls (measured 14× latency, zero gain). Trim makes cheap models faithful — small VLMs confabulate on full frames but are clean on a small crop; box `None` (unparseable/failed) → full-frame fallback.
+
+```mermaid
+sequenceDiagram
+    participant L as Loop
+    participant B72 as 72B (box / careful)
+    participant Q as q3-8b (describe)
+    L->>Q: describe(shot, focus, expect, careful)
+    alt no focus (OVERVIEW)
+        Q-->>L: downscaled gist
+    else focus set (TRIM)
+        L->>B72: box(shot, focus)
+        B72-->>L: (x1,y1,x2,y2) | None
+        Note over L: crop +15% (full frame if None)
+        alt careful (recheck rung)
+            L->>B72: describe(crop) + expect
+        else default
+            L->>Q: describe(crop) + expect
+        end
+    end
+```
+
+**Coordinate convention (validated):** Qwen2.5-VL emits **absolute** box coords at any resolution — confirmed at 1280×800 AND 2560×1600 (4.1M px, above the ~2.1M clamp). `box()` takes them as-is; no conversion. **Live:** a browser search ran `done` in 4 steps with describe **1.8–3.3s** per step, now *under* `decide` — the bottleneck left the Eyes.

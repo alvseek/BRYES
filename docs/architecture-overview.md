@@ -1,7 +1,7 @@
 ---
 project: BRYES
 title: Architecture Overview
-updated: 2026-07-15
+updated: 2026-07-16
 tags: [computer-use-agent, vision, shell, effector-tiers, openrouter, docker, ui-tars, deepseek, architecture]
 ---
 
@@ -20,7 +20,7 @@ GitHub: **github.com/alvseek/BRYES** (remote named `alvseek`, commit identity
 |---|---|---|
 | **Screen** | disposable Ubuntu desktop (Xvfb + fluxbox): screenshots + input, plus a sandboxed **shell** (`/exec`) | local Docker container, `screen/` |
 | **Hands** | `xdotool` click/double-click/right-click/hover/scroll/drag/type/key inside that container | same container |
-| **Eyes** | two models: **Qwen2.5-VL-72B** *describes* the screen (text for the Brain), **UI-TARS-1.5-7B** *locates* elements (grounding → coordinates) | rented, OpenRouter, `eyes/` |
+| **Eyes** | **qwen3-vl-8b** *describes* (two-mode foveal, [ADR-004](adr/2026-07-16-foveal-describe-trim.md)), **Qwen2.5-VL-72B** *boxes* a focus region + does careful re-reads, **UI-TARS-1.5-7B** *locates* elements (grounding → coordinates) | rented, OpenRouter, `eyes/` |
 | **Brain** | `qwen3.6-flash` (default, swappable) — state → next action (reasoning) | rented, OpenRouter, `brain/` |
 
 **Two rules from the roadmap:** rent everything until it hurts (local GPU 3060 Ti 8GB
@@ -53,16 +53,20 @@ offered verbs the current body can do (a phone never sees `right_click`). Pure A
   `scroll`, `drag`, `type`, `key`. `/pointer` returns the mouse `(x,y)` for model-free
   action assertions. Live view: noVNC at `http://localhost:6080/vnc.html`; control API on `:8000`.
 - `devices/` — the **Device abstraction** ([ADR-002](adr/2026-07-15-device-interface.md)): `base.py` (`Device` Protocol + `Capabilities`), `container.py` (`ContainerDevice`), `phone.py` (`PhoneDevice`, adb), `test_phone.py` (deterministic smoke). The loop's `run(goal, device=None)` defaults to `ContainerDevice`.
-- `eyes/client.py` — `describe(img)` (screen → text, via Qwen2.5-VL-72B) + `locate(img, instr)` (element → pixel x,y, via UI-TARS-1.5-7B).
+- `eyes/client.py` — `describe(img, focus?, expect?, careful?)` (two-mode foveal, [ADR-004](adr/2026-07-16-foveal-describe-trim.md): overview gist / boxed-crop trim; q3-8b, 72B for box+careful) + `box(img, target)` (region → bbox, 72B) + `locate(img, instr)` (element → pixel x,y, UI-TARS). Regression: `eyes/test_describe.py`.
 - `brain/client.py` — `decide(goal, observation, history)` → structured JSON action.
 - `agent/loop.py` — `run(goal)` chains screenshot → describe → decide → locate → act.
 - `.env` (gitignored) holds `OPENROUTER_API_KEY` (one key covers Eyes + Brain). Template: `.env.example`.
 
 ## Models (OpenRouter slugs — verified live)
 
-- **Eyes / describe:** `qwen/qwen2.5-vl-72b-instruct` — a general VLM reads the screen
-  faithfully (separates the live entry from history/log; ~$0.25/M in, $0.75/M out, image
-  billed as input tokens). Called EVERY step → the highest-volume cost.
+- **Eyes / describe:** `qwen/qwen3-vl-8b-instruct` — the fast default describer (two-mode
+  foveal, [ADR-004](adr/2026-07-16-foveal-describe-trim.md)): a downscaled OVERVIEW gist when
+  unfocused, a 72B-boxed + cropped TRIM read when focused. Faithful on trimmed crops, ~0.3–1.4s.
+  Called EVERY step but **no longer the bottleneck** (describe dropped from 5–16s to ~2s).
+- **Eyes / box + careful re-read:** `qwen/qwen2.5-vl-72b-instruct` — the authoritative Eyes:
+  `box(target)` returns a bounding box for the TRIM crop (the ONLY reliable boxer — bake-off
+  4/4 incl. small targets), and does the `recheck` careful re-read. ~$0.25/M in, $0.75/M out.
 - **Eyes / locate (grounding):** `bytedance/ui-tars-1.5-7b` — the ONLY UI-TARS on
   OpenRouter. $0.10/M in, $0.20/M out, images free. UI-TARS is Qwen2.5-VL-7B tuned for
   grounding: great at pointing, but the fine-tune degraded description — which is why
@@ -87,8 +91,15 @@ offered verbs the current body can do (a phone never sees `right_click`). Pure A
   symbol buttons in words AND with position/context ("the equals (=) button on the keypad").
 - **Describe vs locate use DIFFERENT models:** UI-TARS is a grounding fine-tune — asked to
   *describe*, it confabulates results and flattens a history/log into the current state
-  (caused clear-loops + false "done"). So `describe` runs on a general VLM
-  (Qwen2.5-VL-72B) that separates the live entry from history; `locate` stays on UI-TARS.
+  (caused clear-loops + false "done"). So `describe` runs on a general VLM; `locate` stays on UI-TARS.
+- **Describe latency ∝ output length; trim makes cheap models faithful** ([ADR-004](adr/2026-07-16-foveal-describe-trim.md)):
+  the 72B *boxes* in ~1.5s but *describes* in 5–16s on the SAME frame — *generation*, not the
+  model/image, is the cost. So describe is two-mode foveal: OVERVIEW downscales (×0.5) for a
+  cheap gist; TRIM boxes (72B) → crops (+15%) → describes the crop on the fast **qwen3-vl-8b**.
+  Small VLMs confabulate on full frames but are faithful on a trimmed crop (nothing to
+  hallucinate) — q3-8b is safe there, and only there. 72B emits **absolute** box coords at any
+  resolution (validated to 4M px — no conversion). Ladder: q3-8b → `recheck` (72B re-read on an
+  `expect`-mismatch) → `request_diff`. Live: describe fell to ~2s, now *under* the Brain.
 - **Hands primitives are atomic:** `type` just sends text to the FOCUSED field — it does
   NOT click first (a click deselects a Ctrl+A selection → text appends instead of replaces,
   which broke browser URL-bar entry). The Brain focuses via an explicit `click`, then
@@ -133,8 +144,8 @@ offered verbs the current body can do (a phone never sees `right_click`). Pure A
 
 ## Phase status (roadmap)
 
-0 key ✅ · 1 Screen ✅ · 2 Eyes ✅ · 3 Brain ✅ · 4 Closed loop ✅ · 5 Verify-and-recover ◐
-(seeds in — VLM describe, atomic `type`, run transcripts; computes varied calcs cleanly
-AND searches "who am I" in Chrome, and searched + captured Tokopedia page-1 results via
-`wait`+`screenshot`; explicit post-action re-check/recover still to come) ·
+0 key ✅ · 1 Screen ✅ · 2 Eyes ✅ · 3 Brain ✅ · 4 Closed loop ✅ · 5 Verify-and-recover ✅
+([ADR-003](adr/2026-07-16-change-feedback-verify-and-recover.md) — `expect`/`VERIFICATION`,
+Brain-judged) · describe-speed then solved via the two-mode foveal describe
+([ADR-004](adr/2026-07-16-foveal-describe-trim.md), describe 5–16s → ~2s) ·
 6 Hosting ⬜ (only if forced). **Brain default: `qwen3.6-flash`** (bake-off winner).

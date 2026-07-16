@@ -1,7 +1,7 @@
 ---
 project: BRYES
 title: Backlog — Tech Debts & Next Steps
-updated: 2026-07-15
+updated: 2026-07-16
 ---
 
 # BRYES — Backlog
@@ -46,16 +46,23 @@ in [../roadmap.md](../roadmap.md); this is the finer-grained "what's left right 
 - **MiniMax M3 needs hand-holding** — it *did* the search but never recognized completion on
   the generic goal; only finished with a pampered, step-by-step instruction. Sensitive to
   instruction specificity; not a safe default.
-- **The two rented model calls (`describe` + `decide`) dominate loop latency, both slow & variable.**
-  The 2026-07-15 headline "`describe` ~19.5s vs `decide` ~3.2s" was a **single sample** and over-drawn:
-  a fuller 2026-07-16 run measured `describe` **5–16s** AND `decide` **3–12s** per step — both the
-  VLM (Qwen-VL, every step) and the Brain LLM (qwen3.6-flash, reasoning.effort=high) are high-variance.
-  `describe` is still often the largest and the biggest token cost, so it's a real speed lever
-  (**downscale the frame before `describe`** — `locate` already rescales coords, so it's safe; a faster
-  VLM; or skip-`describe`-when-frame-unchanged, which is what parked `framediff.py` is for). But `decide`
-  is NOT negligible and additionally **stalls** (next item). Per-phase timing (`screen/describe/decide/
-  locate/act`) is correct — it isolates each call in a non-overlapping window; don't re-read the n=1
-  headline as gospel.
+- **`decide` (the Brain) is now the dominant loop latency** (3–12s/step, high-variance under
+  `reasoning.effort=high`). **`describe` is SOLVED** — the two-mode foveal describe
+  ([ADR-004](adr/2026-07-16-foveal-describe-trim.md)) cut it from 5–16s to ~2s (OVERVIEW downscaled
+  gist / TRIM 72B-box → crop → q3-8b), moving the bottleneck off the Eyes and onto the Brain. The
+  next latency lever, if it matters, is a faster/lighter `decide` config or model; `framediff.py`
+  (skip-describe-when-unchanged) is still parked.
+- **A box cache would save ~1.5s/step on stable focus regions.** TRIM does 2 calls (72B box +
+  q3-8b describe); the box (~1.5s) dominates. A cache keyed by the focus-string would skip re-boxing
+  a region that hasn't moved across steps. Follow-up (not yet built).
+- **Phone-body boxing (tall aspect) untested.** The *resolution* concern for `box()` is CLOSED
+  (validated at 2560×1600 / 4.1M px, absolute coords). The phone *body* (1080×2400 portrait, over adb)
+  is a separate follow-up — the boxer should be spot-checked on a live phone frame before trusting TRIM there.
+- **[experiment] Thinking `diff`?** `request_diff` (the top, stuck-only escalation rung) runs on the
+  72B's non-thinking default. Its latency doesn't matter (it's the last resort), and 2-image
+  change-detection with noise-filtering is more analytical than single-frame describe (where thinking
+  measured useless) — so a *reasoning* VLM might read subtle changes better. Untested; needs a
+  thinking-capable VLM + a measurement before adopting.
 - **`decide` (Brain) call could stall the whole loop** — it caught only `HTTPError`, so a dropped/
   timed-out/slow-trickle connection hung or crashed the run (observed 2026-07-16: a step stalled in
   `decide`, *after* `describe` had completed). **Partially fixed**: `decide` now catches `URLError`/
@@ -74,6 +81,7 @@ in [../roadmap.md](../roadmap.md); this is the finer-grained "what's left right 
 
 ## Recently resolved (for context)
 
+- **Describe-speed — two-mode foveal describe + trim, [ADR-004](adr/2026-07-16-foveal-describe-trim.md)** → `describe` cut from **5–16s to ~2s** (now *under* the Brain). Root: latency is **output-length-bound** (72B boxes in ~1.5s but describes in 5–16s, same frame). **OVERVIEW** (no focus): downscaled ×0.5 gist on **qwen3-vl-8b**. **TRIM** (focus): 72B `box()` → crop (+15%) → q3-8b describes the crop; `expect` now REQUIRES `focus` and rides the crop as `VERIFICATION`. 72B → authoritative Eyes (boxing + `recheck` careful re-read); ladder `q3-8b → recheck → request_diff`. Thinking off (14× cost, no gain). Qwen2.5-VL emits **absolute** box coords at any res (validated at 1280×800 **and** 2560×1600/4.1M px — no conversion). Box `None` (unparseable/failed) → full-frame fallback. Deterministic `eyes/test_describe.py`; live browser task `done` in 4 steps, describe 1.8–3.3s. (2026-07-16)
 - **Phase 5 — verify-and-recover (change-feedback), [ADR-003](adr/2026-07-16-change-feedback-verify-and-recover.md)** → **Seam B closed** by giving the Brain a semantic post-action check. **Layer 2 (primary):** the Brain emits a `expect` with each action; `describe(…, expect=…)` **REPORTS that thing's actual state** → `VERIFICATION: <what's literally shown>` in the observation (grounded, no verdict — the Brain compares; regional via `focus`, ~free — rides describe). *(The Eyes report, the Brain judges — VLM binary verdicts proved noisy on 1024×4096: whitespace nitpicks, self-contradictions; descriptions were always accurate.)* **Layer 3:** `request_diff` → a Brain-gated 2-image `eyes.diff(prev, cur)` appended as "CHANGES SINCE YOUR LAST ACTION". **Recovery** lives in the Brain (off the report); the loop keeps only a dumb *advisory* guard on a repeated *identical* action; it never picks the action. `focus`/`expect`/`request_diff` now form one prospective describe-modifier family. **Dropped:** the screen-wide pixel no-op ("Layer 1") — whole-frame mean-diff can't separate a small real change from noise and UI-TARS can't box a crop region; `framediff.py` + `test_framediff.py` kept & parked for the describe-speed thread. Live-proven: "8+5" verified clean to `done`; an impossible task escalated fairly + broke the loop. Also hardened `decide` with a network retry. (2026-07-16)
 - **Device abstraction (ADR-002) — Screen+Hands+shell behind a swappable `Device`** → the loop
   now depends on a `Device` Protocol (screenshot/act/optional shell + a `Capabilities` manifest),

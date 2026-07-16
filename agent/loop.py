@@ -77,6 +77,7 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
     focus = None
     expect = None                # the Brain's prediction for THIS step (set last step)
     want_diff = False            # did the last action ask for an expensive 2-image diff?
+    want_recheck = False         # did the last action ask for a careful 72B re-read? (recheck rung)
     captures = 0
     prev_shot = None             # last step's frame — kept for the Layer-3 2-image diff
     last_sig = None              # signature of the previous action
@@ -98,11 +99,15 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
             t_screen = time.perf_counter() - t
             runlog.save_image(f"step-{step:02d}.png", shot)
 
+            if want_recheck:
+                log("         [recheck] re-reading the focused region on the 72B (careful)")
             t = time.perf_counter()
-            # Eyes: what's on screen (focused region), + REPORT the actual state of what the
-            # Brain set in `expect` ("VERIFICATION: ...") for the Brain to compare — Layer 2,
-            # the regional, semantic change-feedback (the Eyes perceive; the Brain judges).
-            observation = describe(shot, focus=focus, expect=expect)
+            # Eyes: what's on screen. describe() picks its mode (ADR-004): no focus -> a
+            # downscaled OVERVIEW gist; focus set -> TRIM (72B box -> crop -> fast describe).
+            # It also REPORTs the actual state of what the Brain set in `expect` ("VERIFICATION:
+            # ...") for the Brain to compare — the Eyes perceive; the Brain judges. careful=
+            # want_recheck routes the crop describe to the 72B (the recheck rung of the ladder).
+            observation = describe(shot, focus=focus, expect=expect, careful=want_recheck)
             t_describe = time.perf_counter() - t
 
             # Layer 3 (Phase 5): if the LAST action requested it, run the EXPENSIVE 2-image
@@ -148,6 +153,7 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
             focus = action.get("focus") or focus          # Brain steers the Eyes next step
             expect = action.get("expect")                  # verified next step (not sticky)
             want_diff = bool(action.get("request_diff"))   # 2-image diff next step (not sticky)
+            want_recheck = bool(action.get("recheck"))     # careful 72B re-read next step (not sticky)
             # Track repeated identical actions for the advisory runaway guard above.
             sig = (act, action.get("target") or action.get("text")
                    or action.get("key") or "")

@@ -1,7 +1,7 @@
 ---
 project: BRYES
 title: Context Index
-updated: 2026-07-13
+updated: 2026-07-16
 ---
 
 # BRYES Project Context
@@ -23,5 +23,7 @@ load on relevance.
 - **Run the Screen:** `cd screen && docker compose up -d` → API `:8000`, live view `:6080/vnc.html`.
 - **Bodies ([ADR-002](adr/2026-07-15-device-interface.md)):** the loop drives a swappable `Device` — `ContainerDevice` (default, HTTP) or `PhoneDevice` (real Android over adb/USB, `tools/platform-tools/adb.exe`). `run(goal, device=None)` → container.
 - **Brain:** default `qwen/qwen3.6-flash` (swappable via `run(brain_model=...)`).
+- **Eyes ([ADR-004](adr/2026-07-16-foveal-describe-trim.md)):** `describe` = `qwen/qwen3-vl-8b` (two-mode foveal — overview gist / boxed-crop trim, ~2s); `box` + careful re-read = `qwen/qwen2.5-vl-72b`; `locate` = `bytedance/ui-tars-1.5-7b`.
 - **Apps in the Screen:** gnome-calculator, xterm, Google Chrome (baked into the Dockerfile).
-- **Phase:** 0–4 done; loop runs varied calcs + a Chrome "who am I" search. Phase 5 (verify-and-recover, "the product") deferred until base capability ≥80% — see [backlog.md](backlog.md).
+- **Screen resolution:** `SCREEN_RESOLUTION` env override in `docker-compose.yml` (default `1280x800x24`; e.g. `SCREEN_RESOLUTION=2560x1600x24 docker compose up -d --force-recreate`).
+- **Phase:** 0–5 done. The loop verifies + recovers ([ADR-003](adr/2026-07-16-change-feedback-verify-and-recover.md)) and `describe` is two-mode foveal (~2s, [ADR-004](adr/2026-07-16-foveal-describe-trim.md)) — bottleneck now the Brain. Runs varied calcs, Chrome searches, Tokopedia capture. See [backlog.md](backlog.md).

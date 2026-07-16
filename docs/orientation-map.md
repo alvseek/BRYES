@@ -135,6 +135,18 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 - **update_trigger**: "when the change-feedback design changes (expect/focus/request_diff modifiers, the recovery trigger) or framediff is un-parked"
 - **notes**: "ADR-003 — Phase 5 verify-and-recover closes Seam B. Change-feedback is the VLM's job, split correctly (Eyes perceive, Brain judges): the Brain emits a `expect` per action, and the next `describe` REPORTS that thing's actual state (`VERIFICATION: <state>`, no verdict) for the Brain to compare — Layer 2, primary. Plus `request_diff` (Brain-gated 2-image diff, Layer 3) and a dumb advisory repeated-action recovery guard. Two things measured & dropped: the screen-wide pixel no-op ('Layer 1' — a typed digit scores below the noise floor, UI-TARS can't box a crop region; `framediff.py` parked), and the VLM pass/fail verdict (noisy — report-not-judge instead). Unifies focus/expect/request_diff into one prospective describe-modifier family."
 
+### `docs/adr/2026-07-16-foveal-describe-trim.md`
+
+- **type**: adr
+- **scope**: shared
+- **roles**: []
+- **status**: useful
+- **tags**: [adr, describe-speed, foveal, trim, box, overview, q3-8b, recheck, architecture]
+- **last_verified**: "2026-07-16"
+- **verified_by**: "claude-software-architect"
+- **update_trigger**: "when the describe modes (overview/trim), the boxer, the crop-describe model, or the recheck rung change"
+- **notes**: "ADR-004 — two-mode foveal describe cuts describe latency (5-16s -> ~2s) by attacking OUTPUT LENGTH, not model/image (72B boxes in ~1.5s but describes in 5-16s, same frame). OVERVIEW (no focus): downscaled x0.5 gist on qwen3-vl-8b. TRIM (focus): 72B box() -> crop(+15%) -> q3-8b describes the crop; expect now REQUIRES focus, rides the crop as VERIFICATION. 72B demoted to authoritative Eyes (boxing + `recheck` careful re-read). Ladder q3-8b -> recheck -> request_diff. Qwen2.5-VL emits ABSOLUTE box coords at any res (validated to 4M px, no conversion). box None (unparseable/failed) -> full-frame fallback. Live: describe now UNDER decide."
+
 ---
 
 ## How to Use This File

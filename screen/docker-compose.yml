@@ -7,6 +7,9 @@ services:
       # Page Chrome opens on at boot. Override per task, e.g.
       #   CHROME_START_URL=https://www.tokopedia.com docker compose up -d --build
       - CHROME_START_URL=${CHROME_START_URL:-https://www.google.com}
+      # Xvfb geometry. Override for high-res boxing/trim tests or a bigger 1:1 screen, e.g.
+      #   SCREEN_RESOLUTION=2560x1600x24 docker compose up -d --force-recreate
+      - SCREEN_RESOLUTION=${SCREEN_RESOLUTION:-1280x800x24}
     ports:
       - "8000:8000"   # control API: GET /screenshot, POST /action
       - "6080:6080"   # noVNC live desktop -> http://localhost:6080/vnc.html
