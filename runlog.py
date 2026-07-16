@@ -12,13 +12,12 @@ the standalone phase tests write nothing.
     runlog.start(goal, static={"brain.SYSTEM_PROMPT": ...})
     runlog.set_step(1)
     runlog.save_image("step-01.png", png_bytes)
-    runlog.record("describe", request, response, focus="...")
+    runlog.record("describe", request, response, visual_focus="...")
     ...
     runlog.stop()
 """
 import json
 from datetime import datetime
-from pathlib import Path
 
 from paths import ARTIFACTS
 
@@ -58,6 +57,11 @@ def set_step(n):
     if _tx:
         _tx.write(f"\n# Step {n}\n")
         _tx.flush()
+
+
+def current_step():
+    """The step index currently being recorded (0 before the first set_step)."""
+    return _step
 
 
 def save_image(name, data):

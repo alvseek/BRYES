@@ -11,7 +11,7 @@ NOT wired into the loop's change-feedback. It was built for Phase-5 Layer 1 (a p
 drowns small localised changes (a single typed digit scores ~0.05, BELOW the ~0.25 idle
 noise floor) AND cannot be regionally cropped (UI-TARS only points, never boxes). "Did my
 action work?" is a regional, semantic question — so the loop answers it with the VLM
-(`expect` verified in describe(), Layer 2), not a pixel metric.
+(`visual_expectation` verified in describe(), Layer 2), not a pixel metric.
 
 Parked here, intact, for its RIGHT consumer — the incremental/change-driven `describe`
 speed thread, where "did a LOT change -> re-describe?" IS a screen-wide question. See

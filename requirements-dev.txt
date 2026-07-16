@@ -1,0 +1,2 @@
+# Dev-only tooling (not needed to run BRYES). Install: pip install -r requirements-dev.txt
+ruff>=0.6      # lint + format — config in ruff.toml (quality-standard.md Dimension 8)

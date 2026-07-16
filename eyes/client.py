@@ -1,8 +1,8 @@
 """BRYES — The Eyes.
 
 Screenshot -> text/coords, each capability on the model that does its job best:
-  describe(img, focus, expect, careful) -> text report (two-mode foveal, ADR-004):
-       OVERVIEW (no focus) = downscaled gist on qwen3-vl-8b; TRIM (focus) = 72B box() ->
+  describe(img, visual_focus, visual_expectation, careful) -> text report (two-mode foveal, ADR-004):
+       OVERVIEW (no visual_focus) = downscaled gist on qwen3-vl-8b; TRIM (visual_focus) = 72B box() ->
        crop -> q3-8b describes the crop. `careful` re-reads a crop on the 72B (recheck rung).
   box(img, target)         -> (x1,y1,x2,y2) bounding box for the TRIM crop, via Qwen2.5-VL-72B
        (the only reliable boxer; absolute coords at any resolution) — or None (-> full frame).
@@ -50,7 +50,7 @@ DESCRIBE_MODEL = "qwen/qwen3-vl-8b-instruct"
 # small VLMs only point / mislocate. Stays on 72B — the authoritative Eyes.
 BOX_MODEL = "qwen/qwen2.5-vl-72b-instruct"
 # careful describe — the recheck rung (ADR-004): re-read a crop on the 72B when the fast
-# q3-8b read is doubted (an expect-mismatch). Same model as BOX_MODEL, distinct role.
+# q3-8b read is doubted (a visual_expectation mismatch). Same model as BOX_MODEL, distinct role.
 CAREFUL_MODEL = "qwen/qwen2.5-vl-72b-instruct"
 
 IMAGE_FACTOR = 28
@@ -93,14 +93,18 @@ DIFF_PROMPT = (
 )
 
 BOX_PROMPT = (
-    "The image is {w}x{h} pixels. Return the bounding box of {target}. "
-    "Respond with ONLY four integers in absolute pixel coordinates, comma-separated, "
-    "as x1,y1,x2,y2 (top-left corner then bottom-right corner). Nothing else."
+    "The image is {w}x{h} pixels. Find {target}. "
+    "If it is present — EVEN IF small, partially covered, or hard to delineate exactly — "
+    "respond with ONLY four integers in absolute pixel coordinates, comma-separated, as "
+    "x1,y1,x2,y2 (top-left corner then bottom-right corner); a best-estimate box is fine. "
+    "Respond with ONLY the word NOT_FOUND if {target} is GENUINELY not present anywhere in "
+    "the image (its window/element is closed, minimized, or off-screen) — NEVER merely "
+    "because it is small or hard to pinpoint. Nothing else either way."
 )
 
-# OVERVIEW mode (describe with NO focus): a downscaled full frame -> a coarse gist. Positive-
-# framed (telling a model what NOT to read primes it to read exactly that); the eye-catching
-# salience is a FEATURE — it is the cue that tells the Brain where to `focus` next.
+# OVERVIEW mode (describe with NO visual_focus): a downscaled full frame -> a coarse gist.
+# Positive-framed (telling a model what NOT to read primes it to read exactly that); the
+# eye-catching salience is a FEATURE — the cue that tells the Brain where to look next.
 OVERVIEW_PROMPT = (
     "You are the eyes of a computer-use agent taking a first quick glance at the screen for a "
     "decision-maker who cannot see it. Give a brief, high-level overview — the way a person "
@@ -112,9 +116,10 @@ OVERVIEW_PROMPT = (
     "values and full text for a later focused look."
 )
 
-# TRIM mode (describe WITH focus): the frame is already cropped to the focus region, so the
-# model only sees what matters -> read it faithfully. Generic across domains (calc display,
-# a web form, a marketplace price). `focus` hint + `expect` VERIFICATION are appended per call.
+# TRIM mode (describe WITH visual_focus): the frame is already cropped to the visual_focus
+# region, so the model only sees what matters -> read it faithfully. Generic across domains
+# (calc display, a web form, a marketplace price). The region hint + `visual_expectation`
+# VERIFICATION are appended per call.
 CROP_PROMPT = (
     "This image is a cropped region of a computer screen (a focused area to look at closely). "
     "Report exactly what is in it, factually:\n"
@@ -239,12 +244,12 @@ def _crop(image_bytes, box_xyxy, pad):
     return buf.getvalue()
 
 
-def _expect_block(expect):
+def _expect_block(visual_expectation):
     """The VERIFICATION rider (Phase 5 / ADR-003): the Eyes REPORT the actual state of what
-    the Brain set in `expect` — a grounded reading, NOT a verdict. The Brain compares."""
+    the Brain set in `visual_expectation` — a grounded reading, NOT a verdict. The Brain compares."""
     return (
         "\n\nThe decision-maker (who cannot see the screen) is checking on this after their "
-        "last action: \"" + expect + "\". Report the ACTUAL current state of that specific "
+        "last action: \"" + visual_expectation + "\". Report the ACTUAL current state of that specific "
         "thing, exactly as you see it in the pixels. Begin your reply with 'VERIFICATION: "
         "<precisely what is shown regarding it right now>'. Do NOT judge whether it matches, "
         "and do NOT say verified/failed — just report what IS there (the decision-maker will "
@@ -252,70 +257,88 @@ def _expect_block(expect):
     )
 
 
-def describe(image_bytes, focus=None, expect=None, *, careful=False, timeout=60):
+def describe(image_bytes, visual_focus=None, visual_expectation=None, *, careful=False, timeout=60):
     """A text report of what is on screen, for the Brain to reason over. Two modes (ADR-004,
     foveal vision): describe latency is output-length-bound, so we say less about less.
 
-      - OVERVIEW (no `focus`): a DOWNSCALED full frame -> a coarse gist (environment / apps /
-        anything eye-catching). Cheap; the salience tells the Brain where to `focus` next.
-      - TRIM (`focus` set): 72B box() the named region -> crop (+15% pad) -> describe the CROP
-        at full resolution. Fast AND faithful (a small clean crop has little to hallucinate).
+      - OVERVIEW (no `visual_focus`): a DOWNSCALED full frame -> a coarse gist (environment /
+        apps / anything eye-catching). Cheap; the salience tells the Brain where to look next.
+      - TRIM (`visual_focus` set): 72B box() the named region -> crop (+15% pad) -> describe
+        the CROP at full res. Fast AND faithful (a small clean crop has little to hallucinate).
 
-    `expect` (which the Brain only sets WITH `focus`) rides the crop as a VERIFICATION report.
-    `careful=True` is the recheck rung: do the crop/full describe on the 72B (CAREFUL_MODEL)
-    instead of the fast q3-8b — for when a q3-8b read is doubted. Box always uses 72B.
+    `visual_focus` is WHERE the Eyes look (the region to crop + read), NOT where the Brain acts
+    — the Brain must aim it at where an action's EFFECT is visible (the display), not the
+    control it operated. `visual_expectation` (which the Brain only sets WITH `visual_focus`)
+    rides the crop as a VERIFICATION report. `careful=True` is the recheck rung: do the crop/full
+    describe on the 72B (CAREFUL_MODEL) instead of the fast q3-8b — for when a q3-8b read is doubted.
 
-    Robustness: an unparseable box() (None) -> describe the full frame (the only fallback).
-    Defensive: `expect` without `focus` violates the Brain contract -> full frame + verify.
+    Robustness: box() NOT_FOUND / miss -> a "VISUAL_FOCUS FAILED" report + an overview gist,
+    so the Brain learns its target isn't visible and re-orients (never a fabricated crop).
+    Defensive: `visual_expectation` without `visual_focus` violates the contract -> full frame + verify.
     """
     model = CAREFUL_MODEL if careful else DESCRIBE_MODEL
 
-    if not focus and not expect:
+    if not visual_focus and not visual_expectation:
         # OVERVIEW — downscaled gist.
         result = _ask(OVERVIEW_PROMPT, _downscale(image_bytes, OVERVIEW_SCALE),
                       model=model, max_tokens=1024, timeout=timeout, reasoning=NO_THINK)
         mode = f"overview x{OVERVIEW_SCALE:g}"
-    else:
-        # TRIM (focus) or the defensive full-frame path (expect without focus / box miss).
-        img = image_bytes
-        cropped = False
-        if focus:
-            b = box(image_bytes, focus, timeout=timeout)
-            if b is not None:
-                img = _crop(image_bytes, b, CROP_PAD)
-                cropped = True
-        if cropped:
-            prompt = CROP_PROMPT + f"\n\nThis crop is the region: {focus}."
-            mode = "trim"
+    elif visual_focus:
+        # TRIM: box the named region -> crop -> describe the crop.
+        b = box(image_bytes, visual_focus, timeout=timeout)
+        if b is None:
+            # FOCUS FAILED: the boxer said NOT_FOUND (or gave an unusable box). Do NOT crop a
+            # wrong region or silently full-frame — tell the Brain the region isn't visible and
+            # give a whole-screen OVERVIEW so it can re-orient (drop visual_focus, or act to
+            # bring the target into view). This is what stops the Eyes fabricating a crop.
+            overview = _ask(OVERVIEW_PROMPT, _downscale(image_bytes, OVERVIEW_SCALE),
+                            model=model, max_tokens=1024, timeout=timeout, reasoning=NO_THINK)
+            head = f"VISUAL_FOCUS FAILED: nothing matching '{visual_focus}' is visible on screen"
+            if visual_expectation:
+                head += f", so '{visual_expectation}' could NOT be verified"
+            result = f"{head}. Whole-screen overview to re-orient:\n{overview}"
+            mode = "focus-failed->overview"
         else:
-            # No usable crop: full frame with the classic describe prompt (+ focus hint).
-            prompt = DESCRIBE_PROMPT
-            if focus:
-                prompt += (f"\n\nFOCUS: concentrate on this region: {focus}. Describe it in "
-                           "full detail; mention anything else in at most one line.")
-            mode = "full(box-miss)" if focus else "full(expect-no-focus)"
-        if expect:
-            prompt += _expect_block(expect)
-        result = _ask(prompt, img, model=model, max_tokens=1024, timeout=timeout,
+            img = _crop(image_bytes, b, CROP_PAD)
+            # Persist the EXACT crop the Eyes read, so a suspect VERIFICATION can be traced to
+            # its cause: a mis-located box (wrong crop) vs a q3-8b hallucination (right crop,
+            # wrong read). Without this the crop was invisible post-run.
+            if runlog:
+                runlog.save_image(f"step-{runlog.current_step():02d}-crop"
+                                  f"{'-careful' if careful else ''}.png", img)
+            prompt = CROP_PROMPT + f"\n\nThis crop is the region: {visual_focus}."
+            if visual_expectation:
+                prompt += _expect_block(visual_expectation)
+            result = _ask(prompt, img, model=model, max_tokens=1024, timeout=timeout,
+                          reasoning=NO_THINK)
+            mode = "trim"
+    else:
+        # Defensive: visual_expectation set WITHOUT visual_focus (contract violation) — full
+        # frame + the verify block so the prediction still gets a report.
+        prompt = DESCRIBE_PROMPT + _expect_block(visual_expectation)
+        result = _ask(prompt, image_bytes, model=model, max_tokens=1024, timeout=timeout,
                       reasoning=NO_THINK)
+        mode = "full(expect-no-focus)"
 
     if runlog:
         runlog.record("describe",
                       f"mode: {mode}{' careful' if careful else ''} | "
-                      f"focus: {focus or '(none)'} | expect: {expect or '(none)'}", result)
+                      f"visual_focus: {visual_focus or '(none)'} | "
+                      f"visual_expectation: {visual_expectation or '(none)'}",
+                      result)
     return result
 
 
-def diff(prev_bytes, cur_bytes, focus=None, *, timeout=60):
+def diff(prev_bytes, cur_bytes, visual_focus=None, *, timeout=60):
     """One VLM call over BOTH frames -> a text account of what changed (Phase 5, Layer 3).
 
     EXPENSIVE: two images in a single call, heavier than a describe. The loop runs it only
-    when the Brain sets request_diff (it is stuck / an effect is subtle). `focus` (optional)
-    narrows the comparison to a region.
+    when the Brain sets request_diff (it is stuck / an effect is subtle). `visual_focus`
+    (optional) narrows the comparison to a region.
     """
     prompt = DIFF_PROMPT
-    if focus:
-        prompt += f"\n\nConcentrate the comparison on this region: {focus}."
+    if visual_focus:
+        prompt += f"\n\nConcentrate the comparison on this region: {visual_focus}."
     # The 72B (CAREFUL_MODEL), NOT the fast q3-8b: request_diff is the TOP escalation rung
     # (the Brain is stuck), so it runs on the authoritative Eyes. No reasoning param -> the
     # 72B's non-thinking default. Whether a *thinking* VLM reads 2-image changes better HERE
@@ -323,7 +346,7 @@ def diff(prev_bytes, cur_bytes, focus=None, *, timeout=60):
     result = _ask(prompt, [prev_bytes, cur_bytes], model=CAREFUL_MODEL, max_tokens=1024,
                   timeout=timeout)
     if runlog:
-        runlog.record("diff", f"focus: {focus or '(none)'}", result)
+        runlog.record("diff", f"visual_focus: {visual_focus or '(none)'}", result)
     return result
 
 
@@ -361,7 +384,7 @@ def box(image_bytes, target, *, timeout=60):
     """Return an (x1, y1, x2, y2) absolute-pixel bounding box for a named on-screen
     region, or None if the model didn't return a usable box.
 
-    Powers describe()'s TRIM mode: box a focus region -> crop -> describe the crop. Uses
+    Powers describe()'s TRIM mode: box a visual_focus region -> crop -> describe the crop. Uses
     the 72B general VLM (BOX_MODEL) — the ONLY model that boxed reliably in the bake-off,
     including small targets (UI-TARS and the small VLMs only point / mislocate).
 
@@ -371,10 +394,12 @@ def box(image_bytes, target, *, timeout=60):
     raw coords land dead-on at both — the model returns absolute even when it internally
     downscales, so NO smart_resize conversion or pre-scale is needed. (Step 1.2, 2026-07-16.)
 
-    Returns None (not an exception) on an unparseable or non-rectangular reply, so the caller
-    (describe's TRIM path) can fall back to describing the full frame. This is the ONLY
-    fallback — no geometric "is this box wrong" heuristics (a confidently-wrong box can't be
-    caught by geometry; 72B's measured accuracy + the recheck/request_diff ladder cover that).
+    Returns None (not an exception) when the target is NOT_FOUND (the model says it isn't
+    visible — no guessing), or on an unparseable / non-rectangular reply. describe()'s TRIM
+    path turns a None into a "VISUAL_FOCUS FAILED" report + overview so the Brain re-orients
+    (rather than reading a fabricated crop). No geometric "is this box wrong" heuristics — a
+    confidently-wrong box can't be caught by geometry; the NOT_FOUND escape + 72B accuracy +
+    the recheck/request_diff ladder cover that.
     """
     width, height = Image.open(io.BytesIO(image_bytes)).size
     try:

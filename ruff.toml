@@ -1,0 +1,16 @@
+# Lint + format for BRYES's agent-side Python (brain / eyes / agent / devices + root utils).
+# Run:  ruff check .   (lint)   |   ruff format .   (format)
+# The Screen container has its own minimal code under screen/.
+line-length = 99
+
+[lint]
+# E/W pycodestyle, F pyflakes, I import-sort, UP pyupgrade, B bugbear.
+select = ["E", "F", "W", "I", "UP", "B"]
+# E501 (line too long) is left to the formatter; long prompt strings / URLs can't be broken
+# and shouldn't be flagged.
+ignore = ["E501"]
+
+[lint.per-file-ignores]
+# Path-bootstrap imports must run before the third-party imports they enable.
+"brain/client.py" = ["E402"]
+"eyes/client.py" = ["E402"]

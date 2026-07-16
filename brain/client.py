@@ -1,7 +1,8 @@
 """BRYES Phase 3 — The Brain.
 
 Decides the single next action given the goal, a TEXT description of the screen,
-and the history so far. Uses DeepSeek V4 via OpenRouter.
+and the history so far. Primary model qwen3.6-flash via OpenRouter, with deepseek-v4-flash
+as the resilience fallback (ADR-005).
 
 The Brain is text-only by design: it reasons about elements *by description*
 (e.g. "the + button") and never about pixels. The Eyes (Phase 2) turn those
@@ -9,25 +10,33 @@ descriptions into coordinates; the Hands (Phase 1) execute them.
 """
 import json
 import os
-import re
-import time
-import urllib.error
-import urllib.request
+import sys
 from pathlib import Path
 
+# Make the repo root importable so `structured` (and `runlog`) resolve no matter who imports us.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from pydantic import BaseModel, Field  # noqa: E402
+
+from structured import StructuredError, structured_call  # noqa: E402
+
 try:                       # optional transcript logger (no-op when a run isn't logging)
-    import runlog
+    import runlog  # noqa: E402
 except ImportError:
     runlog = None
-
-OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 # qwen3.6-flash: best value in the 5-model browser-search bake-off (4 steps, clean done,
 # ~$0.19/$1.13 per M, 1M context). Beat v4-pro AND minimax-m3 on both cost and capability
 # once the harness was fixed (VLM describe + type-just-types + actions-only history).
-# Fallbacks if it underperforms elsewhere: tencent/hy3 (256k ctx) or deepseek-v4-flash
-# (cheapest). (Do NOT use legacy deepseek-chat / deepseek-reasoner — retire 2026-07-24.)
+# (Do NOT use legacy deepseek-chat / deepseek-reasoner — retire 2026-07-24.)
 MODEL = "qwen/qwen3.6-flash"
+
+# Backup Brain (ADR-005): if the primary fails on its allotted tries (e.g. a provider
+# degeneration / finish_reason=error), decide()'s LAST attempt escapes to this model. Chosen
+# for RESILIENCE — deepseek-v4-flash is served by 18 providers (vs qwen's single Alibaba
+# endpoint) AND is different model weights, so it escapes both a sick provider and a
+# weight-level reasoning-loop. Cheaper too. Swapping to a same-provider model wouldn't help.
+BACKUP_MODEL = "deepseek/deepseek-v4-flash"
 
 _BASE_PROMPT = """You are the Brain of a computer-use agent. You have more than one way
 to act, and you pick the most DIRECT one that fits each task:
@@ -45,7 +54,7 @@ The HISTORY lists the actions you have ALREADY taken (most recent last). Judge t
 current situation from the OBSERVATION — not from memory of past screens.
 
 Rules:
-- WRITE IN ENGLISH: reason and fill EVERY field of your JSON reply in English only,
+- WRITE IN ENGLISH: reason and fill EVERY field of your reply in English only,
   whatever the GOAL wording or the on-screen language.
 - CHOOSE THE RIGHT CHANNEL (shell vs vision). Prefer "shell" for anything a command line
   does well: reading/writing files, system info (uname, ls, cat), networking (curl/wget),
@@ -61,18 +70,18 @@ Rules:
   already done (HISTORY), and (c) what still remains to reach the GOAL. Decide from that
   comparison. If the OBSERVATION contradicts what you expected, trust the OBSERVATION.
 - COMPARE THE VERIFICATION REPORT: when the OBSERVATION begins with "VERIFICATION:", that
-  is the Eyes reporting the ACTUAL state of what you set in "expect" (a grounded reading of
+  is the Eyes reporting the ACTUAL state of what you set in "visual_expectation" (a grounded reading of
   the pixels, not a verdict). Compare it to what you expected. If it differs, your action
   MAYBE didn't do what you thought — rethink or adapt (re-read the state, try a different
   target or action). If it matches, proceed.
-- RE-READ A DOUBTFUL REPORT (RECHECK): the focused region is read by a FAST model, which can
-  occasionally MISREAD a small crop. If a VERIFICATION report contradicts what you expected
+- RE-READ A DOUBTFUL REPORT (RECHECK): the visual_focus region is read by a FAST model, which
+  can occasionally MISREAD a small crop. If a VERIFICATION report contradicts what you expected
   and you cannot tell whether your ACTION failed OR the Eyes simply misread that region, set
-  "recheck": true. Next step the SAME focused region is re-read by a slower, higher-fidelity
+  "recheck": true. Next step the SAME visual_focus region is re-read by a slower, higher-fidelity
   model — use that to confirm the real state BEFORE you conclude the action failed or change
   course. It is cheaper than a full diff. Escalate to "request_diff" only if a careful
   re-read still leaves you unable to tell what happened. Do NOT set "recheck" routinely — only
-  on a genuine expect-vs-report contradiction.
+  on a genuine visual_expectation-vs-report contradiction.
 - Refer to elements by description (e.g. "the Submit button").
   NEVER output pixel coordinates - the Eyes handle pixels.
 - When a button's label is a symbol, name it with the WORD, e.g. "the equals (=)
@@ -84,20 +93,33 @@ Rules:
   the target with its LOCATION and context so the Eyes pick the RIGHT one, e.g. "the
   equals (=) button at the bottom-right of the keypad" or "the orange equals button on
   the keypad" — not just "the equals button".
-- FOCUS THE EYES ON A REGION (WHERE): set "focus" to the SECTION/REGION of the screen
-  whose EXACT current state you need next — e.g. the current input/entry field, a specific
-  control, or a panel — not the whole app or window. "focus" only steers WHERE the Eyes
-  look; it is NOT a claim to check (that is "expect"). The more specific and contextual the
-  region, the more accurately the Eyes report the state you must act on. Keep the focus on
-  the relevant area across steps, moving it only when the task moves to a new area.
-- PREDICT THE RESULT (EXPECT): whenever you take an action that SHOULD change the screen,
-  set "expect" to the state you predict will be TRUE right afterward, phrased as an
-  ABSOLUTE, NAMEABLE target-state (e.g. "the Settings app is open", "the address bar shows
-  example.com") — NOT a relative one ("something new appeared"). Next step the Eyes REPORT
-  the actual state of that thing back to you (the OBSERVATION begins "VERIFICATION: ..."),
-  for you to compare against what you expected. Set "expect" ONLY together with "focus":
-  point "focus" at the region whose state you are verifying, so the Eyes crop to it and read
-  it closely. An "expect" without a "focus" cannot be verified precisely.
+- POINT THE EYES WHERE YOU NEED TO SEE (VISUAL_FOCUS): set "visual_focus" to the SECTION/
+  REGION the Eyes should crop and read closely NEXT — the place whose EXACT state you need to
+  see, not the whole app or window. This steers only WHERE the Eyes LOOK; it does NOT move
+  the pointer or click (acting is grounded separately from "target"). CRUCIAL: point it at
+  where you need to SEE THE OUTCOME — usually where your action's EFFECT appears (e.g. the
+  result on the display), NOT the control you are about to operate (the button you click).
+  Verification is ALWAYS about the display/result CONTENT: after ANY press — a digit OR an
+  operator (x, /, +, -) — the change shows in the DISPLAY (e.g. "1024x"), never by a key
+  lighting up; so aim the Eyes at the display/result, never at a key. The tighter and more
+  contextual the region, the more accurately the Eyes report the state. Keep it on the
+  relevant area across steps, moving it only when the task moves to a new area.
+- GET YOUR BEARINGS WITH AN OVERVIEW: leave "visual_focus" EMPTY to receive a whole-screen
+  OVERVIEW — a gist of everything on screen (apps, windows, what stands out). Use it to orient
+  when you are unsure what is shown. If an OBSERVATION begins "VISUAL_FOCUS FAILED", the region
+  you named is NOT visible (it may be closed, minimized, off-screen, or behind another window) —
+  do NOT keep asking the Eyes for it. Take an overview (omit visual_focus) to re-orient, then
+  act to bring the target into view (e.g. reopen or raise the window) before focusing on it again.
+- PREDICT WHAT YOU'LL SEE (VISUAL_EXPECTATION): whenever you take an action that SHOULD change
+  the screen, set "visual_expectation" to the state you predict will be TRUE right afterward,
+  phrased as an ABSOLUTE, NAMEABLE target-state (e.g. "the Settings app is open", "the address
+  bar shows example.com") — NOT a relative one ("something new appeared"). Next step the Eyes
+  REPORT the actual state of that thing back to you (the OBSERVATION begins "VERIFICATION: ..."),
+  for you to compare against what you expected. Set "visual_expectation" ONLY together with
+  "visual_focus", and point "visual_focus" at the region where that change will be VISIBLE — the
+  result/display area, NOT the button you pressed. The Eyes crop to it, read it closely, and
+  REPORT its actual state. (After typing a digit, verifying it means looking at the DISPLAY, not
+  the key you clicked.) A "visual_expectation" without a "visual_focus" cannot be verified precisely.
 - WHEN STUCK, ASK FOR A DIFF (EXPENSIVE): if you cannot tell what your last action did —
   the OBSERVATION is ambiguous, or the VERIFICATION report doesn't match what you expected —
   set "request_diff": true. Next step you will receive a precise "CHANGES SINCE YOUR LAST
@@ -133,27 +155,62 @@ Rules:
 - Choose exactly ONE next action that makes real progress toward the goal.
 - If the OBSERVATION shows the goal is already satisfied, use action "done".
 - If you are truly stuck or the goal is impossible, use action "fail".
-- Respond with ONLY a JSON object, no prose, no markdown fences.
+- Provide your decision by CALLING the decide_action function — do not write prose or JSON yourself.
 """
 
-_JSON_SCHEMA = """JSON schema:
-{
-  "thought": "<reasoning in English, with NO quotation marks inside: what the screen shows now, progress vs the GOAL, and the next action>",
-  "action": __ACTION_ENUM__,
-  "target": "<element description; required for click/double_click/right_click/hover/scroll, and the START point of a drag>",
-  "destination": "<element description; the drop point, required for drag>",
-  "direction": "<'up' or 'down'; required for scroll>",
-  "seconds": "<number of seconds to pause; required for wait>",
-  "text": "<text to type into the CURRENTLY-FOCUSED field; required for type>",
-  "key": "<key name like Return, Escape, Tab; required when action is key>",
-  "command": "<the full shell command line to run; required for shell>",
-  "timeout": "<optional seconds for shell, up to 300; default 30>",
-  "stdin": "<optional text to feed the shell command's standard input>",
-  "expect": "<optional: the specific target-state you predict after this action, phrased ABSOLUTE/nameable (e.g. 'the Settings app is open'); next step the Eyes REPORT that thing's actual state ('VERIFICATION: ...') for you to compare>",
-  "focus": "<optional: a SECTION/REGION of the screen the Eyes should concentrate on next (spatial — WHERE to look); REQUIRED whenever you set expect>",
-  "recheck": "<optional true: re-read the SAME focused region at higher fidelity next step — set ONLY when a VERIFICATION report contradicts your expectation and you cannot tell if the action failed or the fast read was wrong; cheaper than request_diff>",
-  "request_diff": "<optional true: request an EXPENSIVE, SLOW precise before/after visual diff next step — set ONLY when an effect is subtle or you are stuck; NOT routinely>"
-}"""
+class BrainAction(BaseModel):
+    """The Brain's single next action (ADR-005: the JSON is a FORCED tool-call validated
+    here, not a hand-built string). `action`'s allowed values are injected per-body at call
+    time (see decide); every other field is optional and applies only to specific actions.
+    Field descriptions ARE the schema the model sees — keep them instructive."""
+
+    thought: str = Field(
+        description="Your reasoning in English: what the screen shows now, progress vs the "
+                    "GOAL, and why this is the next action.")
+    action: str = Field(
+        description="The single next action to take (must be one of the allowed action names).")
+    target: str | None = Field(
+        None, description="Element description; required for click/double_click/right_click/"
+                          "hover/scroll, and the START point of a drag.")
+    destination: str | None = Field(
+        None, description="Element description; the drop point, required for drag.")
+    direction: str | None = Field(
+        None, description="'up' or 'down'; required for scroll.")
+    seconds: float | None = Field(
+        None, description="Number of seconds to pause; required for wait.")
+    text: str | None = Field(
+        None, description="Text to type into the CURRENTLY-FOCUSED field; required for type.")
+    key: str | None = Field(
+        None, description="Key name like Return, Escape, Tab; required when action is key.")
+    command: str | None = Field(
+        None, description="The full shell command line to run; required for shell.")
+    timeout: int | None = Field(
+        None, description="Optional seconds for shell, up to 300; default 30.")
+    stdin: str | None = Field(
+        None, description="Optional text to feed the shell command's standard input.")
+    visual_expectation: str | None = Field(
+        None, description="The specific target-state you predict you'll SEE after this action, "
+                          "phrased ABSOLUTE/nameable (e.g. 'the display shows 1024', 'the "
+                          "Settings app is open'); next step the Eyes read your visual_focus "
+                          "region and REPORT that thing's actual state ('VERIFICATION: ...') "
+                          "for you to compare.")
+    visual_focus: str | None = Field(
+        None, description="The SECTION/REGION the Eyes should crop and READ next — where you "
+                          "need to SEE the outcome, i.e. where your action's EFFECT shows "
+                          "(e.g. the display/result), NOT the control you operated (the "
+                          "button); spatial — WHERE to look, never where to click; REQUIRED "
+                          "whenever you set visual_expectation. Leave EMPTY to get a whole-"
+                          "screen overview (a gist) — use that to re-orient, e.g. after a "
+                          "'VISUAL_FOCUS FAILED' report means the region you named isn't visible.")
+    recheck: bool | None = Field(
+        None, description="Set true to re-read the SAME visual_focus region at higher fidelity "
+                          "next step — ONLY when a VERIFICATION report contradicts your "
+                          "expectation and you cannot tell if the action failed or the fast "
+                          "read was wrong; cheaper than request_diff.")
+    request_diff: bool | None = Field(
+        None, description="Set true to request an EXPENSIVE, SLOW precise before/after visual "
+                          "diff next step — ONLY when an effect is subtle or you are stuck; "
+                          "NOT routinely.")
 
 # Action vocabulary is assembled per-device from the active body's Capabilities (ADR-002):
 # the Brain is only offered verbs the current body supports. The loop-meta actions (wait,
@@ -197,10 +254,10 @@ def _device_preamble(caps):
 
 
 def build_system_prompt(caps=None):
-    """Full system prompt for a body: device preamble + the tuned base prose + a JSON
-    schema whose `action` enum lists only this body's actions."""
-    enum = " | ".join(f'"{a}"' for a in _actions_for(caps))
-    return _device_preamble(caps) + _BASE_PROMPT + "\n" + _JSON_SCHEMA.replace("__ACTION_ENUM__", enum)
+    """The system prompt for a body: device preamble + the tuned base prose. The action's
+    JSON shape is delivered separately as the tool schema (BrainAction, see decide), so the
+    prompt no longer embeds a schema block."""
+    return _device_preamble(caps) + _BASE_PROMPT
 
 
 # Back-compat: the default (full desktop) prompt, still importable as SYSTEM_PROMPT.
@@ -217,109 +274,80 @@ def _load_key():
     return os.environ.get("OPENROUTER_API_KEY", "").strip()
 
 
-def _extract_json(text):
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        m = re.search(r"\{.*\}", text, re.DOTALL)
-        if m:
-            return json.loads(m.group(0))
-        raise
-
-
 def decide(goal, observation, history=None, *, caps=None, model=None, effort="high",
            timeout=60, retries=2, escalation=None):
-    """Return the next action as a dict: {thought, action, target?, text?, key?, focus?}.
+    """Return the next action as a dict: {thought, action, target?, text?, key?, visual_focus?}.
 
-    `effort` sets DeepSeek V4's thinking mode via OpenRouter's `reasoning.effort`
-    ("high" = Think High, proven needed for reliable decisions). Pass None/"" to
-    disable reasoning for a purely mechanical decider.
+    Structured output (ADR-005): the Brain answers by filling a FORCED tool-call whose schema
+    is `BrainAction`, and we VALIDATE the result through Pydantic here — so a malformed or
+    incomplete reply cannot slip through; it becomes a StructuredError we retry on (up to
+    `retries` extra attempts). Validity does NOT depend on the provider enforcing the schema.
 
-    Retries on a malformed / empty JSON reply (a reasoning model occasionally emits
-    invalid JSON — e.g. an unescaped quote inside a string) instead of crashing the
-    whole run; the retry asks explicitly for one strict JSON object.
+    `effort` sets the reasoning level via OpenRouter's `reasoning.effort` ("high" = Think High,
+    proven needed for reliable decisions; pass None/"" for a purely mechanical decider).
     """
-    model = model or MODEL
-    system_prompt = build_system_prompt(caps)      # device-aware: verbs from caps
-    valid_actions = set(_actions_for(caps))
+    primary = model or MODEL
+    system_prompt = build_system_prompt(caps)      # device-aware behavioral prose
+    valid_actions = _actions_for(caps)             # ordered; also the injected `action` enum
     key = _load_key()
     if not key:
         raise RuntimeError("OPENROUTER_API_KEY not found (check BRYES/.env)")
 
     hist_txt = "\n".join(f"- {h}" for h in (history or [])) or "(none yet)"
     escalation_block = f"\n\n{escalation}" if escalation else ""
-    user_base = (f"GOAL:\n{goal}\n\n"
-                 f"OBSERVATION (what is on screen now):\n{observation}\n\n"
-                 f"HISTORY (actions you have already taken):\n{hist_txt}"
-                 f"{escalation_block}\n\n"
-                 f"Decide the single next action as JSON.")
+    user = (f"GOAL:\n{goal}\n\n"
+            f"OBSERVATION (what is on screen now):\n{observation}\n\n"
+            f"HISTORY (actions you have already taken):\n{hist_txt}"
+            f"{escalation_block}\n\n"
+            f"Decide the single next action and return it by calling decide_action.")
+    messages = [{"role": "system", "content": system_prompt},
+                {"role": "user", "content": user}]
+    reasoning = {"effort": effort} if effort else {"enabled": False}
+
+    def inject_enum(schema):               # constrain `action` to THIS body's verbs
+        props = schema.get("properties", {})
+        if "action" in props:
+            props["action"]["enum"] = valid_actions
+        return schema
 
     last_err = None
     for attempt in range(retries + 1):
-        user = user_base
-        if attempt:                       # a previous try returned unparseable JSON
-            user += ("\n\nYOUR PREVIOUS REPLY WAS NOT VALID JSON. Reply with exactly ONE "
-                     "strict JSON object and nothing else. Do NOT put unescaped quotation "
-                     "marks inside any string value.")
-        body = {
-            "model": model,
-            "temperature": 0,
-            # v4 is a reasoning model. Think High is enabled (effort="high") — proven
-            # needed for reliable next-action decisions. Reasoning tokens are hidden but
-            # count against max_tokens, so the ceiling is raised to leave room for the
-            # trace + the JSON; too low re-introduces the content:null truncation.
-            # (Use the single nested `reasoning` form — reasoning_effort AND
-            #  reasoning.effort together is an HTTP 400.)
-            "reasoning": {"effort": effort} if effort else {"enabled": False},
-            "max_tokens": 8192,
-            "response_format": {"type": "json_object"},
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user},
-            ],
-        }
-        req = urllib.request.Request(
-            OPENROUTER_URL,
-            data=json.dumps(body).encode(),
-            headers={
-                "Authorization": f"Bearer {key}",
-                "Content-Type": "application/json",
-                "HTTP-Referer": "https://github.com/alvseek/BRYES",
-                "X-Title": "BRYES",
-            },
-            method="POST",
-        )
+        # Try the primary for its allotted attempts; the LAST attempt ESCAPES to the backup
+        # model (ADR-005) — different weights + 18 providers, so it survives a primary
+        # degeneration or a sick provider that retrying the primary would just re-trigger.
+        use_model = primary
+        if attempt == retries and BACKUP_MODEL and BACKUP_MODEL != primary:
+            use_model = BACKUP_MODEL
         try:
-            data = json.loads(urllib.request.urlopen(req, timeout=timeout).read())
-        except urllib.error.HTTPError as e:
-            raise RuntimeError(f"OpenRouter HTTP {e.code}: {e.read().decode()[:400]}")
-        except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
-            # Network stall / timeout / reset on the Brain call. Unlike ContainerDevice this
-            # had NO retry, so a dropped or timed-out connection hung/crashed the whole loop
-            # (observed 2026-07-16: a step stalled in decide, after describe completed). Back
-            # off and retry via the outer loop instead. (A genuinely slow-but-alive reasoning
-            # response is a latency matter, not this error path.)
+            act_obj, usage = structured_call(
+                BrainAction, messages, model=use_model, api_key=key, reasoning=reasoning,
+                max_tokens=8192, timeout=timeout, tool_name="decide_action",
+                tool_description="Return the single next action for the computer-use agent.",
+                schema_transform=inject_enum,
+                headers={"HTTP-Referer": "https://github.com/alvseek/BRYES", "X-Title": "BRYES"})
+        except StructuredError as e:
+            # Capture the raw provider body (carries a provider `finish_reason=error`, a
+            # validation failure, etc.) so a recurring fault can be root-caused, then retry.
             last_err = e
-            time.sleep(1.0 * (attempt + 1))
+            if runlog:
+                runlog.record("decide-error",
+                              f"attempt {attempt + 1}/{retries + 1} ({use_model}): {e}",
+                              e.body if e.body is not None else str(e))
             continue
 
-        choice = data["choices"][0]
-        content = choice["message"].get("content")
-        try:
-            if not content:
-                raise ValueError(
-                    f"empty content (finish_reason={choice.get('finish_reason')})")
-            action = _extract_json(content)
-            if action.get("action") not in valid_actions:
-                raise ValueError(f"invalid action in {content!r}")
-        except (json.JSONDecodeError, ValueError) as e:
-            last_err = e
-            continue                       # retry with the strict-JSON nudge
+        action = act_obj.model_dump(exclude_none=True)
+        if action.get("action") not in valid_actions:      # our guard on the injected enum
+            last_err = f"action {action.get('action')!r} not in {valid_actions}"
+            if runlog:
+                runlog.record("decide-error",
+                              f"attempt {attempt + 1}/{retries + 1}: {last_err}", action)
+            continue
 
         if runlog:
-            runlog.record("decide", user, content, usage=data.get("usage"))
-        action["_usage"] = data.get("usage")
+            runlog.record("decide", user, json.dumps(action, ensure_ascii=False),
+                          usage=usage, model=use_model)
+        action["_usage"] = usage
         return action
 
     raise RuntimeError(
-        f"Brain failed to return valid JSON after {retries + 1} attempts: {last_err}")
+        f"Brain failed to return a valid action after {retries + 1} attempts: {last_err}")

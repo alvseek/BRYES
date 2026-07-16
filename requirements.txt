@@ -1,0 +1,3 @@
+# BRYES agent-side deps (the Brain/Eyes/Loop; the Screen container has its own in screen/).
+pydantic>=2          # structured LLM output: schema definition + validation guard (ADR-005)
+Pillow>=10           # the Eyes: screenshot decode, downscale, and crop

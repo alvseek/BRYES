@@ -2,11 +2,11 @@
 
 Chains the four pieces into one autonomous cycle:
 
-    screenshot -> Eyes.describe(focus) -> Brain.decide -> Eyes.locate -> Hands act -> repeat
+    screenshot -> Eyes.describe(visual_focus) -> Brain.decide -> Eyes.locate -> Hands act -> repeat
                                                         until "done"/"fail"/step-limit
 
 Phase-5 change-feedback in the loop:
-  - The Brain predicts a checkable `expect` with each action; the loop rides it into the
+  - The Brain predicts a checkable `visual_expectation` with each action; the loop rides it into the
     next describe(), where the Eyes REPORT the actual state of that thing ("VERIFICATION:
     ...") — grounded perception, NOT a verdict; the Brain compares it to what it expected
     (Layer 2, the primary change-feedback: Eyes perceive, Brain judges). A screen-wide pixel
@@ -14,7 +14,7 @@ Phase-5 change-feedback in the loop:
     can't be regionally cropped (UI-TARS only points) — so this is the VLM's job, not a pixel
     metric. (The VLM is asked to REPORT, not judge, because its binary verdicts were noisy —
     whitespace nitpicks, self-contradictions — while its descriptions are accurate.)
-  - The Brain steers the Eyes via a `focus` region, carried into the next describe().
+  - The Brain steers the Eyes via a `visual_focus` region, carried into the next describe().
   - When stuck, the Brain can request an EXPENSIVE 2-image diff (request_diff) of the
     before/after frames for a precise account of what changed (Layer 3).
   - Recovery lives in the Brain (it rethinks off the accurate VERIFICATION report). The loop
@@ -28,9 +28,10 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import runlog  # noqa: E402
-from devices import ContainerDevice, ALL_VERBS  # noqa: E402
-from eyes.client import describe, locate, diff as vlm_diff, DESCRIBE_PROMPT, GROUND_PROMPT  # noqa: E402
-from brain.client import decide, build_system_prompt  # noqa: E402
+from brain.client import build_system_prompt, decide  # noqa: E402
+from devices import ALL_VERBS, ContainerDevice  # noqa: E402
+from eyes.client import DESCRIBE_PROMPT, GROUND_PROMPT, describe, locate  # noqa: E402
+from eyes.client import diff as vlm_diff
 
 # The Screen+Hands+shell transport now lives behind the Device abstraction (ADR-002):
 # ContainerDevice is the default body; PhoneDevice / a future WindowsDevice slot in the
@@ -63,6 +64,14 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
     """
     device = device if device is not None else ContainerDevice()
 
+    # VLM describe/decide text can contain non-ASCII (UI glyphs like the dropdown triangle,
+    # em-dashes, etc.) that crash the default Windows console (cp1252). Make console output
+    # lossy-but-safe so a stray glyph never kills a run. (The transcript file is UTF-8 already.)
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
+
     def log(*a):
         if verbose:
             print(*a)
@@ -74,8 +83,8 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
     rundir = runlog.start(goal, static=static, tag=tag)
     log(f"(transcript -> {rundir})\n")
     history = []
-    focus = None
-    expect = None                # the Brain's prediction for THIS step (set last step)
+    visual_focus = None
+    visual_expectation = None    # the Brain's prediction for THIS step (set last step)
     want_diff = False            # did the last action ask for an expensive 2-image diff?
     want_recheck = False         # did the last action ask for a careful 72B re-read? (recheck rung)
     captures = 0
@@ -100,14 +109,15 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
             runlog.save_image(f"step-{step:02d}.png", shot)
 
             if want_recheck:
-                log("         [recheck] re-reading the focused region on the 72B (careful)")
+                log("         [recheck] re-reading the visual_focus region on the 72B (careful)")
             t = time.perf_counter()
-            # Eyes: what's on screen. describe() picks its mode (ADR-004): no focus -> a
-            # downscaled OVERVIEW gist; focus set -> TRIM (72B box -> crop -> fast describe).
-            # It also REPORTs the actual state of what the Brain set in `expect` ("VERIFICATION:
-            # ...") for the Brain to compare — the Eyes perceive; the Brain judges. careful=
-            # want_recheck routes the crop describe to the 72B (the recheck rung of the ladder).
-            observation = describe(shot, focus=focus, expect=expect, careful=want_recheck)
+            # Eyes: what's on screen. describe() picks its mode (ADR-004): no visual_focus -> a
+            # downscaled OVERVIEW gist; visual_focus set -> TRIM (72B box -> crop -> fast describe).
+            # It also REPORTs the actual state of what the Brain set in `visual_expectation`
+            # ("VERIFICATION: ...") for the Brain to compare — the Eyes perceive; the Brain judges.
+            # careful=want_recheck routes the crop describe to the 72B (the recheck rung of the ladder).
+            observation = describe(shot, visual_focus=visual_focus,
+                                   visual_expectation=visual_expectation, careful=want_recheck)
             t_describe = time.perf_counter() - t
 
             # Layer 3 (Phase 5): if the LAST action requested it, run the EXPENSIVE 2-image
@@ -115,7 +125,7 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
             # "what changed" account to the observation the Brain is about to read. Gated
             # by the Brain (request_diff) — never automatic.
             if want_diff and prev_shot is not None:
-                changes = vlm_diff(prev_shot, shot, focus=focus)
+                changes = vlm_diff(prev_shot, shot, visual_focus=visual_focus)
                 observation += "\n\nCHANGES SINCE YOUR LAST ACTION:\n" + changes
                 log(f"         [diff] {changes[:100].strip()}...")
 
@@ -150,8 +160,8 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
             action.pop("_usage", None)
             act = action.get("action")
             thought = action.get("thought", "")
-            focus = action.get("focus") or focus          # Brain steers the Eyes next step
-            expect = action.get("expect")                  # verified next step (not sticky)
+            visual_focus = action.get("visual_focus") or visual_focus   # Brain steers the Eyes next step
+            visual_expectation = action.get("visual_expectation")   # verified next step (not sticky)
             want_diff = bool(action.get("request_diff"))   # 2-image diff next step (not sticky)
             want_recheck = bool(action.get("recheck"))     # careful 72B re-read next step (not sticky)
             # Track repeated identical actions for the advisory runaway guard above.
@@ -165,8 +175,8 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
                       or action.get("command") or "")
             log(f"         brain: {thought}")
             log(f"         -> {act} {detail}".rstrip())
-            if focus:
-                log(f"         focus: {focus}")
+            if visual_focus:
+                log(f"         visual_focus: {visual_focus}")
 
             if act == "done":
                 log("\n[OK] Brain reports the goal is complete.")

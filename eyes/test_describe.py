@@ -11,8 +11,9 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from PIL import Image                                    # noqa: E402
-import eyes.client as ec                                 # noqa: E402
+from PIL import Image  # noqa: E402
+
+import eyes.client as ec  # noqa: E402
 
 
 def _png(w, h):
@@ -61,23 +62,24 @@ def test_describe_modes():
         return "FAKE"
     ec._ask = fake_ask
 
-    ec.describe(frame)                                   # OVERVIEW (no focus/expect)
+    ec.describe(frame)                                   # OVERVIEW (no visual_focus/visual_expectation)
     assert seen["size"] == (640, 400) and seen["prompt"] == ec.OVERVIEW_PROMPT
     assert seen["model"] == ec.DESCRIBE_MODEL and seen["reasoning"] == ec.NO_THINK
 
     ec.box = lambda img, tgt, *, timeout=60: (100, 100, 300, 200)
-    ec.describe(frame, focus="the field")                # TRIM -> crop
+    ec.describe(frame, visual_focus="the field")         # TRIM -> crop
     assert seen["size"] != (1280, 800) and "cropped region" in seen["prompt"]
 
     ec.box = lambda img, tgt, *, timeout=60: None
-    ec.describe(frame, focus="ghost")                    # box miss -> full frame + FOCUS
-    assert seen["size"] == (1280, 800) and "FOCUS" in seen["prompt"]
+    out = ec.describe(frame, visual_focus="ghost")       # box miss -> VISUAL_FOCUS FAILED + overview
+    assert seen["size"] == (640, 400) and seen["prompt"] == ec.OVERVIEW_PROMPT
+    assert "VISUAL_FOCUS FAILED" in out
 
-    ec.describe(frame, expect="the app is open")         # expect w/o focus -> full + verify
+    ec.describe(frame, visual_expectation="the app is open")   # w/o visual_focus -> full + verify
     assert seen["size"] == (1280, 800) and "VERIFICATION" in seen["prompt"]
 
     ec.box = lambda img, tgt, *, timeout=60: (100, 100, 300, 200)
-    ec.describe(frame, focus="f", expect="e", careful=True)   # careful -> 72B
+    ec.describe(frame, visual_focus="f", visual_expectation="e", careful=True)   # careful -> 72B
     assert seen["model"] == ec.CAREFUL_MODEL and "VERIFICATION" in seen["prompt"]
     print("PASS: describe() routes overview / trim / box-miss / expect-no-focus / careful")
 
