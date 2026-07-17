@@ -157,7 +157,19 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 - **last_verified**: "2026-07-17"
 - **verified_by**: "claude-software-architect"
 - **update_trigger**: "when the structured-output mechanism (structured.py / BrainAction / response_format json_schema), the model primary/backup, or the format-enforcement standard changes"
-- **notes**: "ADR-005 (amended 2026-07-17) — structured LLM output: formats are enforced by OUR schema + Pydantic validation, not the AI. LLM JSON goes through a Pydantic model -> response_format json_schema (strict:false) -> OUR Pydantic validation (structured.py); NO tool-calling, never json_object free-text; validity never depends on the provider. Model: deepseek-v4-flash primary + gemini-2.5-flash-lite backup (different weights; decide's last attempt escapes). qwen3.6-flash dropped: its thinking mode mis-applies a json_schema grammar / forced tool_choice to the reasoning stream and degenerates (documented Qwen bug). Validated live: Tokopedia done in 12 steps, deepseek carried it, zero fallback. Also: box() NOT_FOUND -> VISUAL_FOCUS FAILED + overview; focus->visual_focus, expect->visual_expectation."
+- **notes**: "ADR-005 (amended TWICE 2026-07-17) — structured LLM output: formats are enforced by OUR schema + Pydantic validation, not the AI. Mechanism RE-REVERTED to FORCED TOOL-CALLING (Amendment 2): Pydantic model -> forced tool-call -> OUR Pydantic validation (structured.py); never json_object free-text; validity never depends on the provider. (json_schema strict:false was tried in Amendment 1 but let reasoning models drop OPTIONAL fields — visual_expectation 89%->0%, Phase-5 verify silently died — so reverted; qwen, the only reason we'd left tool-calling, was already dropped.) Model: deepseek-v4-flash primary + gemini-2.5-flash-lite backup (both re-emit visual_expectation under tool-calling; gemini does NOT degenerate). Also: box() NOT_FOUND -> VISUAL_FOCUS FAILED + overview; focus->visual_focus, expect->visual_expectation."
+
+### `docs/adr/2026-07-17-embodiment-selection.md`
+
+- **type**: adr
+- **scope**: shared
+- **roles**: []
+- **status**: useful
+- **tags**: [adr, embodiment, device-selection, profiles, catalog, answer-only, architecture]
+- **last_verified**: "2026-07-17"
+- **verified_by**: "claude-software-architect"
+- **update_trigger**: "when embodiment selection (select_embodiment / Embodiment / resolve_embodiment / _ROOT_DEVICE / the run() selection stage / profiles/index.md) or the answer-only path changes"
+- **notes**: "ADR-006 — the agent SELF-SELECTS its embodiment at task start: before the loop (text-only, no screenshot yet) the Brain reads the catalog profiles/index.md and returns Embodiment{device, profiles, reason} — which BODY (android->PhoneDevice, linux->ContainerDevice; ONE body per run) + which app profiles, or device=None -> answer(goal) directly (no loop). load_profiles(list) merges + de-dups multiple profile chains, LABELLED per-profile (HOW ANDROID/WHATSAPP WORKS -> Brain, ...LOOKS -> Eyes). Explicit run(device=/profile=) overrides the pick. Builds on ADR-002 (Device) + ADR-005 (structured output). Validated live: answer-only + WhatsApp self-select on the real phone (self-picked android+android/whatsapp)."
 
 ### `docs/quality-standard.md`
 
@@ -166,10 +178,10 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 - **roles**: []
 - **status**: useful
 - **tags**: [quality-standard, conventions, structured-output, ruff, analyze-code-quality]
-- **last_verified**: "2026-07-16"
+- **last_verified**: "2026-07-17"
 - **verified_by**: "claude-software-architect"
 - **update_trigger**: "when a project convention changes (error handling, efficiency, security, tooling/ruff, or a project-specific rule) or a new dimension is added"
-- **notes**: "The project quality standard — 9 dimensions filled from code (error handling degrades-not-crashes, model tiering, .env secrets, ASCII console, module-per-role, ruff, conventional-commits). Dimension 9 headline: FORMATS ARE ENFORCED BY TOOLS, NOT THE AI (ADR-005). State/UX dims marked N/A (no UI). Consumed by /analyze-code-quality Dimension 8."
+- **notes**: "The project quality standard — 9 dimensions filled from code (error handling degrades-not-crashes, model tiering, .env secrets, ASCII console, module-per-role, ruff, conventional-commits). Dimension 9 headline: FORMATS ARE ENFORCED BY TOOLS, NOT THE AI — mechanism = forced tool-calling (ADR-005 Amendment 2). State/UX dims marked N/A (no UI). Consumed by /analyze-code-quality Dimension 8."
 
 ---
 

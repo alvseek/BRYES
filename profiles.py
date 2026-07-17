@@ -10,14 +10,16 @@ at the top. Each profile.md has up to three sections:
   ## Visual          how to READ the screen  -> the Eyes (describe)
   ## Operating       how to OPERATE the app   -> the Brain (decide)
 
-load_profile("android/whatsapp") returns {"visual": ..., "operating": ...} where
-  visual    = Terms & Vocab + every Visual section down the chain
-  operating = Terms & Vocab + every Operating section down the chain
+load_profiles(["android/whatsapp"]) returns {"visual": ..., "operating": ...} where each half is
+the shared UI-ELEMENTS glossary (merged Terms & Vocab) + a PER-PROFILE labelled section — e.g.
+"HOW ANDROID WORKS" then "HOW WHATSAPP WORKS" (operating) / "HOW ANDROID LOOKS" then "HOW WHATSAPP
+LOOKS" (visual) — so the Brain and Eyes see which knowledge is the OS's and which is the app's.
 """
 import re
 from pathlib import Path
 
 PROFILES_DIR = Path(__file__).resolve().parent / "profiles"
+INDEX_FILE = PROFILES_DIR / "index.md"    # the catalog fed to the Brain's embodiment pick
 
 
 def _parse_sections(text):
@@ -36,25 +38,70 @@ def _parse_sections(text):
     return out
 
 
-def load_profile(path):
-    """Load profiles/<path>/profile.md AND every ancestor profile.md (OS base first, leaf last).
-    Returns {"visual": str, "operating": str}; either may be "" if the chain has nothing for it.
-    Unknown/missing segments are skipped silently, so a partial path still loads what exists."""
+def _iter_profile_files(path):
+    """Yield each existing profile.md down `path` (OS base first, leaf last).
+    Missing segments are skipped silently, so a partial path still yields what exists."""
     parts = [p for p in str(path or "").strip("/").split("/") if p]
-    terms, visual, operating = [], [], []
     accum = PROFILES_DIR
     for part in parts:
         accum = accum / part
         f = accum / "profile.md"
-        if not f.exists():
-            continue
+        if f.exists():
+            yield f
+
+
+def load_profiles(paths):
+    """Load AND MERGE several profile paths into one {"visual": str, "operating": str}, with the
+    Visual/Operating halves LABELLED PER PROFILE so the Brain and Eyes see which knowledge is the
+    OS's and which is the app's — e.g. "HOW ANDROID WORKS" then "HOW WHATSAPP WORKS" (operating),
+    "HOW ANDROID LOOKS" then "HOW WHATSAPP LOOKS" (visual). The label is the profile's own folder
+    name (profiles/android/whatsapp/profile.md -> WHATSAPP).
+
+    Each path contributes its own inheritance chain (OS base -> ... -> leaf); across ALL paths
+    every profile.md is included exactly ONCE, in order — so a shared ancestor (the OS base) is a
+    single labelled section, not one per path. The `Terms & Vocab` glossaries merge into one shared
+    "UI ELEMENTS" head. Either half may be "" if nothing fills it; `load_profile` is the single-path
+    special case."""
+    seen, files = set(), []
+    for path in paths or []:
+        for f in _iter_profile_files(path):
+            if f not in seen:
+                seen.add(f)
+                files.append(f)
+
+    terms = []
+    visual, operating = [], []            # each: list of (LABEL, body)
+    for f in files:
+        label = f.parent.name.upper()     # profiles/android/whatsapp/profile.md -> "WHATSAPP"
         secs = _parse_sections(f.read_text(encoding="utf-8"))
-        for key, bucket in (("Terms & Vocab", terms), ("Visual", visual), ("Operating", operating)):
-            if secs.get(key):
-                bucket.append(secs[key])
+        if secs.get("Terms & Vocab"):
+            terms.append(secs["Terms & Vocab"])
+        if secs.get("Visual"):
+            visual.append((label, secs["Visual"]))
+        if secs.get("Operating"):
+            operating.append((label, secs["Operating"]))
 
-    def _join(sections):
+    def _join(labelled, verb):
         head = ("UI ELEMENTS:\n" + "\n".join(terms) + "\n\n") if terms else ""
-        return (head + "\n\n".join(sections)).strip()
+        blocks = "\n\n".join(f"HOW {label} {verb}:\n{body}" for label, body in labelled)
+        return (head + blocks).strip()
 
-    return {"visual": _join(visual), "operating": _join(operating)}
+    return {"visual": _join(visual, "LOOKS"), "operating": _join(operating, "WORKS")}
+
+
+def load_profile(path):
+    """Back-compat single-path loader: profiles/<path>/profile.md AND every ancestor
+    (OS base first, leaf last). Delegates to load_profiles([path])."""
+    return load_profiles([path] if path else [])
+
+
+def read_catalog():
+    """The catalog text (profiles/index.md) fed to the Brain's embodiment pick, or "" if
+    the catalog file is missing."""
+    return INDEX_FILE.read_text(encoding="utf-8") if INDEX_FILE.exists() else ""
+
+
+def profile_exists(path):
+    """True if profiles/<path>/profile.md exists — used to validate a picked profile path."""
+    parts = [p for p in str(path or "").strip("/").split("/") if p]
+    return bool(parts) and (PROFILES_DIR.joinpath(*parts) / "profile.md").exists()

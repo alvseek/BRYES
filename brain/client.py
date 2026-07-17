@@ -41,6 +41,9 @@ MODEL = "deepseek/deepseek-v4-flash"
 # glm / hunyuan. (Reasoning-capable, so it still decides WELL on the rare step it drives.)
 BACKUP_MODEL = "google/gemini-2.5-flash-lite"
 
+# Standard OpenRouter attribution headers, sent on every structured call.
+_OR_HEADERS = {"HTTP-Referer": "https://github.com/alvseek/BRYES", "X-Title": "BRYES"}
+
 _BASE_PROMPT = """You are the Brain of a computer-use agent. You have more than one way
 to act, and you pick the most DIRECT one that fits each task:
 - SHELL (a real terminal inside the machine): the "shell" action runs a command line.
@@ -332,7 +335,7 @@ def decide(goal, observation, history=None, *, caps=None, model=None, effort="hi
     escalation_block = f"\n\n{escalation}" if escalation else ""
     # App/OS OPERATING profile (profiles.py): authoritative how-to for the current app, so the
     # Brain knows its conventions (e.g. "in WhatsApp you send by TAPPING the Send button, not Enter").
-    app_block = f"\n\nHOW THIS APP WORKS (authoritative — follow it):\n{context.strip()}" if context else ""
+    app_block = f"\n\nAUTHORITATIVE — how the current device and app WORK (follow this exactly):\n{context.strip()}" if context else ""
     user = (f"GOAL:\n{goal}\n\n"
             f"OBSERVATION (what is on screen now):\n{observation}\n\n"
             f"HISTORY (actions you have already taken):\n{hist_txt}"
@@ -362,7 +365,7 @@ def decide(goal, observation, history=None, *, caps=None, model=None, effort="hi
                 BrainAction, messages, model=use_model, api_key=key, reasoning=reasoning,
                 max_tokens=8192, timeout=timeout, schema_name="decide_action",
                 schema_transform=inject_enum,
-                headers={"HTTP-Referer": "https://github.com/alvseek/BRYES", "X-Title": "BRYES"})
+                headers=_OR_HEADERS)
         except StructuredError as e:
             # Capture the raw provider body (carries a provider `finish_reason=error`, a
             # validation failure, etc.) so a recurring fault can be root-caused, then retry.
@@ -389,3 +392,128 @@ def decide(goal, observation, history=None, *, caps=None, model=None, effort="hi
 
     raise RuntimeError(
         f"Brain failed to return a valid action after {retries + 1} attempts: {last_err}")
+
+
+# ---------------------------------------------------------------------------
+# Embodiment selection + answer-only (ADR-006)
+#
+# Before the loop, the Brain picks its BODY + app PROFILES for a task (or no body, to answer
+# directly). Both calls reuse the ADR-005 structured-output mechanism + the same model-fallback
+# as decide(), factored into _structured_with_fallback so the retry/escape logic lives once.
+# ---------------------------------------------------------------------------
+
+def _structured_with_fallback(model_cls, messages, *, schema_name, reasoning, model=None,
+                              max_tokens=4096, timeout=60, retries=2, err_kind="structured-error"):
+    """Run structured_call with the ADR-005 model-fallback: the primary for its attempts, the
+    LAST attempt escaping to BACKUP_MODEL (different weights → survives a weight-level
+    degeneration). Returns (instance, usage, model_used); raises RuntimeError after all attempts
+    fail. Error bodies are recorded to the transcript under `err_kind` for root-causing."""
+    primary = model or MODEL
+    key = _load_key()
+    if not key:
+        raise RuntimeError("OPENROUTER_API_KEY not found (check BRYES/.env)")
+    last_err = None
+    for attempt in range(retries + 1):
+        use_model = primary
+        if attempt == retries and BACKUP_MODEL and BACKUP_MODEL != primary:
+            use_model = BACKUP_MODEL
+        try:
+            inst, usage = structured_call(
+                model_cls, messages, model=use_model, api_key=key, reasoning=reasoning,
+                max_tokens=max_tokens, timeout=timeout, schema_name=schema_name,
+                headers=_OR_HEADERS)
+            return inst, usage, use_model
+        except StructuredError as e:
+            last_err = e
+            if runlog:
+                runlog.record(err_kind, f"attempt {attempt + 1}/{retries + 1} ({use_model}): {e}",
+                              e.body if e.body is not None else str(e))
+    raise RuntimeError(
+        f"Brain {schema_name} call failed after {retries + 1} attempts: {last_err}")
+
+
+class Embodiment(BaseModel):
+    """The Brain's upfront embodiment choice for a task (ADR-006): which BODY to inhabit and
+    which app PROFILES to load — or NO body at all (answer the goal directly). Elicited via
+    response_format json_schema (ADR-005) and validated here through Pydantic. Semantic
+    validation (device known, profiles under the device) happens in the loop's resolver."""
+
+    device: str | None = Field(
+        None, description="Which BODY to inhabit for this task: 'android' (a real Android "
+                          "phone) or 'linux' (the Linux desktop container). Use null ONLY when "
+                          "the task needs NO on-screen action and can be answered directly.")
+    profiles: list[str] = Field(
+        default_factory=list,
+        description="Zero or more profile paths to load as knowledge, e.g. ['android/whatsapp']. "
+                    "EVERY path must be under the chosen device (same first segment). An empty "
+                    "list is fine (no extra app knowledge).")
+    reason: str = Field(
+        description="A brief English reason for this body + profile choice.")
+
+
+class Answer(BaseModel):
+    """A direct textual answer to a goal that needs no on-screen action (ADR-006)."""
+
+    answer: str = Field(description="The answer to the GOAL, in clear English prose.")
+
+
+_PICK_PROMPT = """You are the Brain of a computer-use agent, choosing HOW to embody a task
+BEFORE you start. You cannot see any screen yet — you have only the GOAL and a CATALOG of the
+available bodies and app profiles.
+
+Choose:
+- device: which BODY to inhabit for this GOAL — a body name from the catalog's `##` sections
+  (e.g. "android" for the phone, "linux" for the desktop). Choose null ONLY when the GOAL is a
+  pure question you can answer directly with NO on-screen action.
+- profiles: zero or more profile paths from UNDER the chosen body's section (e.g.
+  "android/whatsapp"). They give app knowledge to your Eyes and reasoning. Pick the ones
+  relevant to the GOAL; an empty list is fine.
+- reason: one short sentence on why.
+
+Rules:
+- Pick exactly ONE body (or null). EVERY profile must sit under that one body — never mix
+  bodies (e.g. an "android/..." and a "linux/..." together).
+- If the goal names an app that has a profile, pick that profile (prefer the most specific).
+- Choose device=null ONLY when NO on-screen action is needed at all — a fact or answer you can
+  give directly. If the task involves opening, tapping, typing, browsing, or messaging, pick a body.
+- Return a SINGLE JSON object matching the embodiment schema — only the JSON, no prose, no markdown.
+"""
+
+_ANSWER_PROMPT = """You are answering a question directly — no computer, no screen, just your
+own knowledge and reasoning. Give a clear, correct, concise answer to the GOAL. Return a SINGLE
+JSON object matching the answer schema — only the JSON, no prose, no markdown."""
+
+
+def select_embodiment(goal, catalog, *, model=None, timeout=60, retries=2):
+    """Pick the task's embodiment (ADR-006): return an `Embodiment` (device + profiles + reason).
+
+    Text-only — the GOAL plus the CATALOG (profiles/index.md), before any screenshot. Reuses the
+    structured-output + model-fallback discipline (last attempt escapes to BACKUP_MODEL). Raises
+    RuntimeError if no attempt yields a valid Embodiment. Semantic validity (device known,
+    profiles under it) is the loop resolver's job, not this call's."""
+    user = (f"GOAL:\n{goal}\n\n"
+            f"CATALOG (available bodies and profiles):\n{catalog}\n\n"
+            f"Choose the embodiment and return it as a JSON object matching the embodiment schema.")
+    messages = [{"role": "system", "content": _PICK_PROMPT},
+                {"role": "user", "content": user}]
+    emb, usage, used = _structured_with_fallback(
+        Embodiment, messages, schema_name="embodiment", reasoning={"effort": "high"},
+        model=model, timeout=timeout, retries=retries, err_kind="embodiment-error")
+    if runlog:
+        runlog.record("embodiment", user,
+                      json.dumps(emb.model_dump(), ensure_ascii=False), usage=usage, model=used)
+    return emb
+
+
+def answer(goal, *, model=None, timeout=60, retries=2):
+    """Answer a no-body goal directly (ADR-006): one reasoned text answer, no loop. Reuses the
+    structured transport with a trivial one-field schema (so it gets the same model-fallback);
+    strict:false keeps it safe on reasoning models. Returns the answer string."""
+    messages = [{"role": "system", "content": _ANSWER_PROMPT},
+                {"role": "user", "content": f"GOAL:\n{goal}"}]
+    ans, usage, used = _structured_with_fallback(
+        Answer, messages, schema_name="answer", reasoning={"effort": "high"},
+        model=model, timeout=timeout, retries=retries, err_kind="answer-error")
+    if runlog:
+        runlog.record("answer", goal, ans.answer, usage=usage, model=used)
+    return ans.answer

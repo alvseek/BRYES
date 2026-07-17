@@ -1,8 +1,29 @@
 # ADR-005: Structured LLM Output — Pydantic Validation (formats are enforced by our schema + validation, not the AI)
 
-**Date**: 2026-07-16 (amended 2026-07-17)
+**Date**: 2026-07-16 (amended twice 2026-07-17)
 
-**Status**: Accepted — mechanism amended 2026-07-17 (forced tool-calling → `response_format: json_schema`)
+**Status**: Accepted — mechanism **re-reverted 2026-07-17 to forced tool-calling** (json_schema strict:false regressed optional-field emission; qwen already dropped)
+
+---
+
+## Amendment 2 (2026-07-17, later): reverted `response_format: json_schema` → forced tool-calling
+
+Amendment 1 switched to `json_schema` to keep **qwen** alive — but qwen was then **dropped entirely**
+(deepseek primary + gemini backup). And `json_schema` with **strict:false let reasoning models be TERSE
+and drop OPTIONAL fields**: `visual_expectation` emission fell from ~89% (07-16, tool-calling) to **0%**
+across 07-17 runs — Phase-5 verify-and-recover silently died — and `clear_first` was dropped the same way.
+Tool-call *arguments* carry stronger structural pressure (models fill them completely), so we **reverted to
+forced tool-calling**. The only reason we had left it — qwen's `tool_choice`-in-thinking `400` — no longer
+applies.
+
+**Measured (2026-07-17), not guessed:** under forced tool-calling + thinking, **both** `deepseek-v4-flash`
+and `gemini-2.5-flash-lite` return valid actions AND **re-emit `visual_expectation`** (0/11 under json_schema
+→ present again on both, first probe). gemini does NOT degenerate under tool-calling (the one risk, checked).
+
+**Net:** the enduring principle is UNCHANGED — Pydantic model + OUR validation is the guard; only the
+elicitation mechanism swapped back. `structured.py` uses `tools` + forced `tool_choice`; `schema_name` names
+the virtual (never-executed) function. **Supersedes Amendment 1's** "json_schema / no tool-calling" mechanism
+(the model change — deepseek + gemini — stands).
 
 ---
 

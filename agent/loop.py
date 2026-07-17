@@ -28,11 +28,11 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import runlog  # noqa: E402
-from brain.client import build_system_prompt, decide  # noqa: E402
-from devices import ALL_VERBS, ContainerDevice  # noqa: E402
+from brain.client import answer, build_system_prompt, decide, select_embodiment  # noqa: E402
+from devices import ALL_VERBS, ContainerDevice, PhoneDevice  # noqa: E402
 from eyes.client import DESCRIBE_PROMPT, GROUND_PROMPT, describe, locate  # noqa: E402
 from eyes.client import diff as vlm_diff
-from profiles import load_profile  # noqa: E402
+from profiles import load_profiles, profile_exists, read_catalog  # noqa: E402
 
 # The Screen+Hands+shell transport now lives behind the Device abstraction (ADR-002):
 # ContainerDevice is the default body; PhoneDevice / a future WindowsDevice slot in the
@@ -56,6 +56,64 @@ _REPEAT_LIMIT = 2   # consecutive identical actions before an advisory "you're r
 _FAILURE_LIMIT = 3  # consecutive action-execution FAILURES before a "reconsider or fail" nudge
 
 
+# Embodiment selection (ADR-006): a profile path's top-level (OS) segment names the BODY it
+# belongs to, so the Brain's pick of a profile path also picks the device. One body per run.
+_ROOT_DEVICE = {"android": PhoneDevice, "linux": ContainerDevice}
+
+
+def _make_device(root):
+    """Instantiate the body for an OS root, failing CLEARLY if it can't be reached (e.g. the
+    phone is unplugged/locked) — we never silently substitute a different body (ADR-006)."""
+    try:
+        return _ROOT_DEVICE[root]()
+    except Exception as e:
+        raise RuntimeError(f"chose body {root!r} but it's unavailable: {e}") from e
+
+
+def _first_seg(path):
+    """The top-level (OS/body) segment of a profile path, or "" if the path is empty."""
+    stripped = str(path).strip("/")
+    return stripped.split("/")[0] if stripped else ""
+
+
+def _root_of(paths):
+    """The shared top-level (OS) segment of profile paths — the one body they all belong to.
+    Raises if the list is empty or the paths span more than one body (that would be two bodies)."""
+    roots = {seg for p in paths if (seg := _first_seg(p))}
+    if not roots:
+        raise RuntimeError("no profile paths to derive a body from")
+    if len(roots) > 1:
+        raise RuntimeError(f"profiles span multiple bodies {sorted(roots)} — one body per run")
+    return roots.pop()
+
+
+def _validate_under(root, paths):
+    """Every path must sit under `root` (same first segment) AND resolve to a real profile.md.
+    Raises RuntimeError on the first offender (the ef253360 one-body-per-run constraint)."""
+    for p in paths:
+        if _first_seg(p) != root:
+            raise RuntimeError(f"profile {p!r} is not under body {root!r}")
+        if not profile_exists(p):
+            raise RuntimeError(f"profile {p!r} has no profiles/{p}/profile.md")
+
+
+def resolve_embodiment(goal, *, picker, catalog_reader):
+    """PURE embodiment decision — no device instantiation, no loop. Ask the injected `picker`
+    for an Embodiment, then classify it. Returns one of:
+      {"mode": "answer", "reason": str}                                   -> no body; answer the goal
+      {"mode": "loop", "root": str, "profiles": list[str], "reason": str} -> inhabit `root`, load profiles
+    Raises RuntimeError on an unknown body or an incoherent (mixed/invalid) profile set.
+    Injecting `picker`/`catalog_reader` keeps this unit-testable without a live model."""
+    emb = picker(goal, catalog_reader())
+    if emb.device is None:
+        return {"mode": "answer", "reason": emb.reason}
+    root = emb.device
+    if root not in _ROOT_DEVICE:
+        raise RuntimeError(f"picked unknown body {root!r}; known: {sorted(_ROOT_DEVICE)}")
+    _validate_under(root, emb.profiles)
+    return {"mode": "loop", "root": root, "profiles": list(emb.profiles), "reason": emb.reason}
+
+
 def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=None,
         device=None, profile=None):
     """Drive the loop until the Brain says done/fail or steps run out.
@@ -64,20 +122,44 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
     screenshot are preserved to a transcript under artifacts/runs/ (see runlog); `tag`
     names that run folder.
     """
-    device = device if device is not None else ContainerDevice()
-    # App/OS profile (profiles.py): the VISUAL half primes the Eyes, the OPERATING half the Brain,
-    # so both know the current app's UI + conventions (e.g. profile="android/whatsapp"). None = off.
-    prof = load_profile(profile)
-    prof_visual = prof["visual"] or None
-    prof_operating = prof["operating"] or None
-
-    # VLM describe/decide text can contain non-ASCII (UI glyphs like the dropdown triangle,
-    # em-dashes, etc.) that crash the default Windows console (cp1252). Make console output
-    # lossy-but-safe so a stray glyph never kills a run. (The transcript file is UTF-8 already.)
+    # VLM describe/decide text (and an answer-only reply) can contain non-ASCII that crashes the
+    # default Windows console (cp1252). Make console output lossy-but-safe FIRST so a stray glyph
+    # never kills a run. (The transcript file is UTF-8 already.)
     try:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     except (AttributeError, ValueError):
         pass
+
+    # Embodiment selection (ADR-006): if the caller forced NEITHER a device NOR a profile, the
+    # Brain picks the body + profiles for this goal — or picks NO body and we answer directly.
+    # An explicit `device`/`profile` is an override (testing / direct control): no pick then.
+    profile_paths = []
+    if device is None and profile is None:
+        plan = resolve_embodiment(goal, picker=select_embodiment, catalog_reader=read_catalog)
+        if plan["mode"] == "answer":
+            ans = answer(goal)
+            if verbose:
+                print(f"GOAL: {goal}\n\n[ANSWER-ONLY] {plan['reason']}\n{ans}\n")
+            return {"status": "answered", "answer": ans, "reason": plan["reason"]}
+        device = _make_device(plan["root"])            # instantiate the chosen body (fail clearly)
+        profile_paths = plan["profiles"]
+        embodiment_note = f"picked body={plan['root']} profiles={profile_paths} - {plan['reason']}"
+    elif profile is not None:
+        # Forced profile(s): accept a str or a list; derive + validate the body from the root.
+        profile_paths = [profile] if isinstance(profile, str) else list(profile)
+        root = _root_of(profile_paths)
+        _validate_under(root, profile_paths)
+        device = device or _make_device(root)
+        embodiment_note = f"forced profiles={profile_paths} on body={root}"
+    else:
+        # Forced device instance, no profile.
+        embodiment_note = f"forced device={device.caps.name}"
+
+    # App/OS profile (profiles.py): the VISUAL half primes the Eyes, the OPERATING half the Brain,
+    # so both know the current app's UI + conventions. Merges multiple profiles (ADR-006).
+    prof = load_profiles(profile_paths)
+    prof_visual = prof["visual"] or None
+    prof_operating = prof["operating"] or None
 
     def log(*a):
         if verbose:
@@ -86,8 +168,13 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
     log(f"GOAL: {goal}\n")
     static = {"eyes.DESCRIBE_PROMPT": DESCRIBE_PROMPT,
               "eyes.GROUND_PROMPT": GROUND_PROMPT,
-              "brain.SYSTEM_PROMPT": build_system_prompt(device.caps)}
+              "brain.SYSTEM_PROMPT": build_system_prompt(device.caps),
+              # The injected app/OS profile context — logged so a run's transcript SHOWS exactly
+              # what visual/operating help the Eyes and Brain were given (else it's invisible).
+              "profile.visual (-> Eyes)": prof_visual or "(none)",
+              "profile.operating (-> Brain)": prof_operating or "(none)"}
     rundir = runlog.start(goal, static=static, tag=tag)
+    runlog.note(f"embodiment - {embodiment_note}")
     log(f"(transcript -> {rundir})\n")
     history = []
     visual_focus = None
