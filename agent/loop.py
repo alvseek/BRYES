@@ -178,13 +178,14 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
             want_diff = bool(action.get("request_diff"))   # 2-image diff next step (not sticky)
             want_recheck = bool(action.get("recheck"))     # careful 72B re-read next step (not sticky)
             # Track repeated identical actions for the advisory runaway guard above.
-            sig = (act, action.get("target") or action.get("text")
-                   or action.get("key") or "")
+            sig = (act, action.get("target") or action.get("text") or action.get("type_text")
+                   or action.get("click_target") or action.get("key") or "")
             repeat_streak = repeat_streak + 1 if sig == last_sig else 0
             last_sig = sig
 
             log(f"[step {step}] eyes: {observation[:100].strip()}...")
-            detail = (action.get("target") or action.get("text") or action.get("key")
+            detail = (action.get("target") or action.get("text") or action.get("type_text")
+                      or action.get("click_target") or action.get("key")
                       or action.get("command") or "")
             log(f"         brain: {thought}")
             log(f"         -> {act} {detail}".rstrip())
@@ -257,6 +258,26 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
                         did += f"; err: {err}"
                     if res.get("timed_out"):
                         did += " [TIMED OUT]"
+                elif act == "type_into":
+                    # Field-entry combo. The loop owns PERCEPTION: ground the optional
+                    # click_target to a pixel here (the device has no Eyes). Then hand the whole
+                    # click? -> clear? -> type -> Enter? gesture to the BODY, which knows how to
+                    # perform it (desktop ctrl+a clear + Return; a phone its own idiom). One
+                    # Brain decision, one device gesture. A failing sub-step raises and is caught
+                    # by the outer handler (non-fatal), aborting the rest of the gesture.
+                    text = action.get("type_text", "")
+                    click_target = action.get("click_target")
+                    click_xy = None
+                    if click_target:
+                        loc = timed_locate(shot, click_target)     # Eyes: where the field is
+                        click_xy = (loc["x"], loc["y"])
+                    device.type_into(text, click_xy=click_xy,
+                                     clear_first=bool(action.get("clear_first")),
+                                     press_enter=bool(action.get("press_enter_after")))
+                    did = ("typed '" + text + "' into "
+                           + (f"'{click_target}'" if click_target else "the focused field")
+                           + (" (cleared first)" if action.get("clear_first") else "")
+                           + (" then pressed Enter" if action.get("press_enter_after") else ""))
                 elif act == "type":
                     # type sends text to whatever is FOCUSED — it must NOT click first, or it
                     # would drop the cursor/selection the Brain just set up (e.g. a Ctrl+A
@@ -278,7 +299,8 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
                 # history note so it adapts next step (Phase-5: problems become observations the
                 # Brain judges). The step still advances; _FAILURE_LIMIT guards a failure storm.
                 action_failures += 1
-                detail = (action.get("target") or action.get("text") or action.get("key")
+                detail = (action.get("target") or action.get("text") or action.get("type_text")
+                          or action.get("click_target") or action.get("key")
                           or action.get("command") or "")
                 code = getattr(e, "code", None)      # HTTPError carries the status code
                 cause = f"HTTP {code}" if code else f"{type(e).__name__}: {str(e)[:80]}"

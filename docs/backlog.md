@@ -21,16 +21,19 @@ in [../roadmap.md](../roadmap.md); this is the finer-grained "what's left right 
       `visual_focus` fix kept it out of the overview-trap. **Residual:** the gemini backup is probe-verified
       (3/3) but has not fired in a live run (deepseek never failed) — a forced-primary-failure shakeout is
       still owed.
-- [ ] **Make a failed action non-fatal (Fix #3)** — an action that throws (bad key, unlocatable target,
-      container hiccup) currently crashes the whole run (a `key "Enter"` 400 killed a 20-step run today
-      before the key-alias fix). The loop should catch it, feed it back to the Brain as history
-      (`action X FAILED — try a different action`), and continue. Small `loop.py` refactor + design choice
-      (does it count toward the step limit / repeat-guard). **Queued for `/quick-wizard`.**
-- [ ] **Design the macro/combo input action** (harness-level batching) — a composite the Brain
-      issues in ONE shot, e.g. `type "1024*8096/112" → Enter`, built from the atomic primitives and
-      sequenced above them (not baked into a single primitive). **Strongly motivated this session**:
-      batching cut a 16-step calc run to 4, and the Brain's degeneration loop was it *straining to plan
-      a multi-step sequence* under the one-action-at-a-time contract — a combo action relieves both.
+- [x] **Make a failed action non-fatal (Fix #3)** ✅ **DONE (2026-07-17)** — a failing action (bad key,
+      unlocatable target, container hiccup) no longer crashes the run: the loop catches it, feeds it back
+      to the Brain as a history note (`action X FAILED — try a different action`), and continues; a
+      3-strike failure-storm guard nudges the Brain to change tack or `fail`. Validated live (the Brain
+      routed around a dead Hands via the Tier-2 shell on its own).
+- [x] **Design the macro/combo input action** ✅ **DONE (2026-07-17)** — shipped as **`type_into`**: one
+      Brain action performing the whole *[click? → clear? → type → Enter?]* text-entry gesture. Fields:
+      `type_text` (required) + optional `click_target` (field to focus first), `clear_first` (replace vs
+      append), `press_enter_after` (submit). It's a **device capability** (`device.type_into`, composed
+      from the atomics via `default_type_into`) — the loop only grounds `click_target`; each body owns its
+      gesture (desktop ctrl+a clear + Return; phone's clear deferred). Covers all 5 combos incl.
+      click→clear→type→Enter (replace-and-submit / the WhatsApp send pattern). **Constraint:** ≤1 click,
+      first (grounding is per-frame). Model-free test `devices/test_type_into.py` (11 checks).
 - [ ] **Give BRYES a WhatsApp messaging task** (Alvi's vision — the next big goal): chat with /
       help anyone who messages its number. The **`PhoneDevice` body now exists** (a real Android over
       adb/USB), so WhatsApp *on the real phone* is now an option alongside WhatsApp Web — but the
@@ -58,6 +61,8 @@ in [../roadmap.md](../roadmap.md); this is the finer-grained "what's left right 
 - **Container image can go stale** — `docker compose up -d` reuses the existing image, so an edited
   `screen/server/app.py` isn't picked up without `--build` (today the running container returned `400`
   where the on-disk server returns `500` for a bad key). Rebuild when the server changes; low-risk otherwise.
+  (Refreshed 2026-07-17 via `compose up -d --build` — the `/exec`-missing + 400/500 drift is cleared, `/exec`
+  re-verified live; the standing caveat remains for the next server edit.)
 - **Doc-sync incomplete (the visual_focus/visual_expectation renames)** — `architecture-overview.md`
   and `agent-loop-flow.md` still use the old `focus`/`expect` names; context-index / backlog /
   orientation-map were synced at the 2026-07-16 wrap-up, the two prose docs deferred.

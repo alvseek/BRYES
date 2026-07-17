@@ -127,13 +127,17 @@ Narration, keyed to [`agent/loop.py`](../agent/loop.py):
 2. **`describe`** it → a text observation for the Brain.
 3. **`decide`** from `goal + observation + history` → one JSON action.
 4. If the action is `done`/`fail`, return. Otherwise it is a **point action**
-   (`click`/`double_click`/`right_click`/`hover`/`scroll`/`drag`), `type`, `key`,
+   (`click`/`double_click`/`right_click`/`hover`/`scroll`/`drag`), `type_into` (the one-shot
+   text-entry combo — see step 5), `type`, `key`,
    `wait` (pause `seconds` for a loading screen — no UI touch), `screenshot` (save the
    current frame as a deliverable `capture-NN.png` — no UI touch), or `shell` (run a command
    via `POST /exec` — no locate, no UI touch; the exit code + output thread into HISTORY).
 5. For a point action, **`locate`** the named `target` on the *same* screenshot → `(x,y)`
    (a `drag` also locates its `destination`), then **Hands** execute it. `type`/`key` go
    straight to the Hands (no locate — `type` hits whatever the Brain already focused).
+   **`type_into`** grounds its optional `click_target` here (if present), then hands the whole
+   *[click? → clear? → type → Enter?]* gesture to the body (`device.type_into`) — one Brain
+   decision, one device-composed gesture (≤1 click, first, since grounding is per-frame).
 6. **Append to history** a string describing the *attempted* action, then settle and loop.
 
 ---

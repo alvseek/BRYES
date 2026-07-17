@@ -129,7 +129,7 @@ CROP_PROMPT = (
     "Do NOT infer, compute, complete, or guess anything not literally visible. Report only what is there."
 )
 
-OVERVIEW_SCALE = 0.5   # downscale factor for the OVERVIEW gist (calibrated in Step 2.3)
+OVERVIEW_SCALE = 0.375  # downscale factor for the OVERVIEW gist (0.5 -> 0.375, 2026-07-17: a coarse gist needs no acuity)
 CROP_PAD = 0.15        # TRIM crop padding: +15% of the box per side (clip-safety)
 
 

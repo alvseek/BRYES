@@ -11,6 +11,7 @@ adds Back/Home, uses portrait coordinates and an Android shell. The Brain reads 
 ACTIVE device's Capabilities to assemble its action vocabulary, so it is only ever
 offered verbs the current body can actually perform.
 """
+import time
 from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
 
@@ -59,6 +60,21 @@ class Device(Protocol):
         The verb is always one the device advertised in `caps.verbs`."""
         ...
 
+    def clear_field(self) -> None:
+        """Clear the currently-focused text field. Device-specific gesture: a desktop does
+        select-all + delete (ctrl+a, Delete); a phone uses its own idiom. May raise
+        NotImplementedError on a body whose clear gesture isn't built yet."""
+        ...
+
+    def type_into(self, text: str, *, click_xy: tuple[int, int] | None = None,
+                  clear_first: bool = False, press_enter: bool = False) -> None:
+        """Enter text as ONE hand gesture: optionally click `click_xy` to focus, optionally
+        clear_field() first, type `text`, optionally press Enter after. `click_xy` is ALREADY
+        grounded by the loop (the device has no Eyes — it never sees a description). Most
+        bodies delegate to `default_type_into`; a body whose gesture genuinely differs (e.g.
+        a send-button submit instead of Enter) implements this itself."""
+        ...
+
     def shell(self, command: str, timeout: int | None = None,
               stdin: str | None = None) -> dict:
         """Run a NON-interactive shell command (Tier-2) and return
@@ -70,3 +86,25 @@ class Device(Protocol):
         """Current pointer (x, y) for model-free test assertions, or None if the body
         has no queryable pointer (a touchscreen doesn't)."""
         ...
+
+
+_FOCUS_SETTLE = 0.15   # seconds to let a click land focus before typing into the field
+
+
+def default_type_into(device, text, *, click_xy=None, clear_first=False, press_enter=False):
+    """The standard 'type into a field' gesture, composed from a body's own atomic
+    primitives (`act` + `clear_field`). ContainerDevice and PhoneDevice both delegate here;
+    a body whose gesture genuinely differs overrides `type_into` instead.
+
+    The per-body differences stay where they belong: `act` maps the click/type/key to the
+    body's transport (and normalizes the Enter key — X `Return`, Android `KEYCODE_ENTER`),
+    and `clear_field` owns the body's clear idiom. `click_xy` is pre-grounded by the loop.
+    """
+    if click_xy is not None:
+        device.act({"type": "click", "x": click_xy[0], "y": click_xy[1]})
+        time.sleep(_FOCUS_SETTLE)              # let focus land before typing
+    if clear_first:
+        device.clear_field()
+    device.act({"type": "type", "text": text})
+    if press_enter:
+        device.act({"type": "key", "key": "Enter"})    # each body's act() maps Enter for it

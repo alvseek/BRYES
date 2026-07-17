@@ -106,7 +106,12 @@ offered verbs the current body can do (a phone never sees `right_click`). Pure A
 - **Hands primitives are atomic:** `type` just sends text to the FOCUSED field — it does
   NOT click first (a click deselects a Ctrl+A selection → text appends instead of replaces,
   which broke browser URL-bar entry). The Brain focuses via an explicit `click`, then
-  optionally `key` ctrl+a, then `type`. Composition (macros) belongs ABOVE the primitives.
+  optionally `key` ctrl+a, then `type`. Composition (macros) belongs ABOVE the primitives:
+  **`type_into`** is that layer — one Brain action doing the whole *[click? → clear? → type →
+  Enter?]* text-entry gesture. It's a **device capability** (`device.type_into`, composed from the
+  atomics via `default_type_into` in [devices/base.py](../devices/base.py)); the loop only grounds
+  its `click_target`, and each body owns its gesture (desktop = ctrl+a `clear_field` + Return; the
+  phone's clear is deferred). Prefer it for text entry; the atomics remain for finer control.
   The full natural pointer set is `click` / `double_click` / `right_click` / `hover` /
   `scroll` (`direction` up|down) / `drag` (`target`→`destination`) — each is ONE atomic
   xdotool call with no hidden action. Movement is regression-tested (`test_hands.py` +
@@ -124,7 +129,7 @@ offered verbs the current body can do (a phone never sees `right_click`). Pure A
   pattern is named so later channels (http/mcp/email/phone) inherit it. Beyond the Hands, the
   Brain also has loop-level `wait` (pause N Brain-chosen seconds, clamped 0.5–30s) and
   `screenshot` (save a `capture-NN.png` deliverable). Full Brain action set: click /
-  double_click / right_click / hover / scroll / drag / type / key / wait / screenshot /
+  double_click / right_click / hover / scroll / drag / type / **type_into** / key / wait / screenshot /
   **shell** / done / fail.
 - **Real browser = Google Chrome from the .deb:** apt `chromium`/`chromium-browser` on
   Ubuntu 24.04 is a *snap transitional* that won't run in a container. Chrome is installed

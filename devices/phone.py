@@ -15,7 +15,7 @@ import subprocess
 from dataclasses import replace
 from pathlib import Path
 
-from .base import Capabilities
+from .base import Capabilities, default_type_into
 
 try:                       # optional transcript logger (no-op when a run isn't logging)
     import runlog
@@ -96,7 +96,7 @@ class PhoneDevice:
         try:
             out = self._run("shell", "wm", "size").stdout or ""
             # "Physical size: 1080x2400"  (may also show "Override size:")
-            line = [l for l in out.splitlines() if "size:" in l][-1]
+            line = [ln for ln in out.splitlines() if "size:" in ln][-1]
             w, h = line.split(":")[1].strip().split("x")
             return int(w), int(h)
         except Exception:
@@ -130,6 +130,21 @@ class PhoneDevice:
             raise ValueError(f"PhoneDevice: unsupported action {t!r}")
         if runlog:
             runlog.record("action", action, "executed")
+
+    def clear_field(self):
+        # Follow-up: Android has no ctrl+a select-all; clearing a field needs a different
+        # gesture (long-press -> Select all -> Delete, or an ADBKeyboard clear). Deferred —
+        # phone text tasks are gated. type_into WITHOUT clear_first works today (tap/type/Enter).
+        raise NotImplementedError(
+            "PhoneDevice.clear_field: Android clear gesture not built yet "
+            "(long-press -> select all -> delete); use type_into without clear_first for now")
+
+    def type_into(self, text, *, click_xy=None, clear_first=False, press_enter=False):
+        """One-gesture text entry via the shared composition. tap-to-focus, type, and
+        Enter (act() maps it to KEYCODE_ENTER) all work today; clear_first raises until the
+        Android clear gesture lands (see clear_field)."""
+        default_type_into(self, text, click_xy=click_xy, clear_first=clear_first,
+                          press_enter=press_enter)
 
     def shell(self, command, timeout=None, stdin=None):
         try:

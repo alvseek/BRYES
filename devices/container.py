@@ -12,7 +12,7 @@ import time
 import urllib.error
 import urllib.request
 
-from .base import ALL_VERBS, Capabilities
+from .base import ALL_VERBS, Capabilities, default_type_into
 
 try:                       # optional transcript logger (no-op when a run isn't logging)
     import runlog
@@ -87,6 +87,18 @@ class ContainerDevice:
         self._open(req)
         if runlog:
             runlog.record("action", action, "executed")
+
+    def clear_field(self):
+        """Clear the focused text field the X-desktop way: select-all, then delete."""
+        self.act({"type": "key", "key": "ctrl+a"})
+        self.act({"type": "key", "key": "Delete"})
+
+    def type_into(self, text, *, click_xy=None, clear_first=False, press_enter=False):
+        """One-gesture text entry (click? -> clear? -> type -> Enter?) via the shared
+        composition; the desktop specifics (ctrl+a clear, Enter->Return) live in
+        clear_field() and act()'s key normalization."""
+        default_type_into(self, text, click_xy=click_xy, clear_first=clear_first,
+                          press_enter=press_enter)
 
     def shell(self, command, timeout=None, stdin=None):
         payload = {"command": command}

@@ -131,17 +131,21 @@ Rules:
   set "request_diff": true. Next step you will receive a precise "CHANGES SINCE YOUR LAST
   ACTION" account. It costs a SLOW, EXPENSIVE extra vision pass, so use it sparingly —
   only when genuinely stuck, never as a routine check.
-- TEXT ENTRY: the "type" action sends text to whatever field is currently FOCUSED — it
-  does NOT move focus. To enter text: first "click" the field to focus it, then "type".
-  To REPLACE a field's existing contents (e.g. an address bar with a URL in it): "click"
-  it, then "key" with ctrl+a to select all, then "type" — the typed text replaces the
-  selection. To append at the cursor, just "type".
+- TEXT ENTRY: prefer "type_into" — ONE action that enters text into a field. Set "type_text"
+  (required); optionally add "click_target" (a field to click/focus FIRST — omit to type into
+  the field that is already focused), "clear_first": true (REPLACE the field's existing contents
+  instead of appending), and "press_enter_after": true (submit a search box / send a chat
+  message). It performs the whole click -> clear -> type -> Enter gesture in one step, so reach
+  for it for search boxes, address bars, forms, and chat inputs. The atomic pieces still exist
+  for finer control: "type" sends text to the CURRENTLY-FOCUSED field only (it does NOT move
+  focus), "click" focuses a field, and "key" with ctrl+a selects-all.
 - PICK THE RIGHT ACTION. Point actions name a "target" by description (the Eyes turn it
   into pixels): "click" (left-click), "double_click" (open/activate an item), "right_click"
   (open a context menu), "hover" (move the pointer ONTO a target to reveal a menu/tooltip,
   without clicking), "scroll" (wheel-scroll at a target — set "direction" to "up" or "down",
   e.g. to bring off-screen content into view), "drag" (press on "target" and release on
-  "destination" — for sliders, moving items). Plus "type", "key", "wait", "screenshot", "shell", "done", "fail".
+  "destination" — for sliders, moving items). Plus "type_into" (one-shot field entry, PREFERRED
+  for typing), "type", "key", "wait", "screenshot", "shell", "done", "fail".
 - WAIT FOR LOADING, DON'T GUESS. If the screen is still loading (a spinner, or a blank/partial
   page with content not yet rendered), do NOT act on it or finish — use action "wait" and set
   "seconds" to how long to pause before looking again (e.g. 2-4s for a heavy web page, more if
@@ -190,6 +194,20 @@ class BrainAction(BaseModel):
         None, description="Text to type into the CURRENTLY-FOCUSED field; required for type.")
     key: str | None = Field(
         None, description="Key name like Return, Escape, Tab; required when action is key.")
+    click_target: str | None = Field(
+        None, description="For type_into: description of the field to CLICK (focus) before "
+                          "typing (the Eyes ground it to a pixel, like target); OMIT to type "
+                          "into the field that is already focused.")
+    clear_first: bool | None = Field(
+        None, description="For type_into: if true, clear the field's existing contents "
+                          "(select-all + delete) before typing — use it to REPLACE a value "
+                          "rather than append.")
+    type_text: str | None = Field(
+        None, description="For type_into: the text to type into the field. Required for type_into.")
+    press_enter_after: bool | None = Field(
+        None, description="For type_into: if true, press Enter after typing (submits a search "
+                          "box, sends a chat message). It only presses Enter — not a separate "
+                          "on-screen submit button.")
     command: str | None = Field(
         None, description="The full shell command line to run; required for shell.")
     timeout: int | None = Field(
@@ -234,6 +252,8 @@ def _actions_for(caps):
     verbs = _FULL_VERBS if caps is None else caps.verbs
     has_shell = True if caps is None else caps.has_shell
     acts = [v for v in _VERB_ORDER if v in verbs]
+    if {"click", "type", "key"} <= verbs:
+        acts.append("type_into")      # loop-grounded, device-composed field-entry combo
     acts += ["wait", "screenshot"]
     if has_shell:
         acts.append("shell")
