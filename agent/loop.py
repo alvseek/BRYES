@@ -32,6 +32,7 @@ from brain.client import build_system_prompt, decide  # noqa: E402
 from devices import ALL_VERBS, ContainerDevice  # noqa: E402
 from eyes.client import DESCRIBE_PROMPT, GROUND_PROMPT, describe, locate  # noqa: E402
 from eyes.client import diff as vlm_diff
+from profiles import load_profile  # noqa: E402
 
 # The Screen+Hands+shell transport now lives behind the Device abstraction (ADR-002):
 # ContainerDevice is the default body; PhoneDevice / a future WindowsDevice slot in the
@@ -56,7 +57,7 @@ _FAILURE_LIMIT = 3  # consecutive action-execution FAILURES before a "reconsider
 
 
 def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=None,
-        device=None):
+        device=None, profile=None):
     """Drive the loop until the Brain says done/fail or steps run out.
 
     Every step's prompts and raw replies (describe / decide / locate / action) plus the
@@ -64,6 +65,11 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
     names that run folder.
     """
     device = device if device is not None else ContainerDevice()
+    # App/OS profile (profiles.py): the VISUAL half primes the Eyes, the OPERATING half the Brain,
+    # so both know the current app's UI + conventions (e.g. profile="android/whatsapp"). None = off.
+    prof = load_profile(profile)
+    prof_visual = prof["visual"] or None
+    prof_operating = prof["operating"] or None
 
     # VLM describe/decide text can contain non-ASCII (UI glyphs like the dropdown triangle,
     # em-dashes, etc.) that crash the default Windows console (cp1252). Make console output
@@ -119,7 +125,8 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
             # ("VERIFICATION: ...") for the Brain to compare — the Eyes perceive; the Brain judges.
             # careful=want_recheck routes the crop describe to the 72B (the recheck rung of the ladder).
             observation = describe(shot, visual_focus=visual_focus,
-                                   visual_expectation=visual_expectation, careful=want_recheck)
+                                   visual_expectation=visual_expectation, careful=want_recheck,
+                                   context=prof_visual)
             t_describe = time.perf_counter() - t
 
             # Layer 3 (Phase 5): if the LAST action requested it, run the EXPENSIVE 2-image
@@ -165,7 +172,8 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
 
             t = time.perf_counter()
             action = decide(goal, observation, history, caps=device.caps,
-                            model=brain_model, escalation=escalation)  # device-aware decide
+                            model=brain_model, escalation=escalation,
+                            context=prof_operating)  # device- + app-aware decide
             t_decide = time.perf_counter() - t
             totals["screen"] += t_screen
             totals["describe"] += t_describe
@@ -178,13 +186,13 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
             want_diff = bool(action.get("request_diff"))   # 2-image diff next step (not sticky)
             want_recheck = bool(action.get("recheck"))     # careful 72B re-read next step (not sticky)
             # Track repeated identical actions for the advisory runaway guard above.
-            sig = (act, action.get("target") or action.get("text") or action.get("type_text")
+            sig = (act, action.get("target") or action.get("text")
                    or action.get("click_target") or action.get("key") or "")
             repeat_streak = repeat_streak + 1 if sig == last_sig else 0
             last_sig = sig
 
             log(f"[step {step}] eyes: {observation[:100].strip()}...")
-            detail = (action.get("target") or action.get("text") or action.get("type_text")
+            detail = (action.get("target") or action.get("text")
                       or action.get("click_target") or action.get("key")
                       or action.get("command") or "")
             log(f"         brain: {thought}")
@@ -265,7 +273,7 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
                     # perform it (desktop ctrl+a clear + Return; a phone its own idiom). One
                     # Brain decision, one device gesture. A failing sub-step raises and is caught
                     # by the outer handler (non-fatal), aborting the rest of the gesture.
-                    text = action.get("type_text", "")
+                    text = action.get("text", "")   # same field as `type` — no separate type_text
                     click_target = action.get("click_target")
                     click_xy = None
                     if click_target:
@@ -299,7 +307,7 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
                 # history note so it adapts next step (Phase-5: problems become observations the
                 # Brain judges). The step still advances; _FAILURE_LIMIT guards a failure storm.
                 action_failures += 1
-                detail = (action.get("target") or action.get("text") or action.get("type_text")
+                detail = (action.get("target") or action.get("text")
                           or action.get("click_target") or action.get("key")
                           or action.get("command") or "")
                 code = getattr(e, "code", None)      # HTTPError carries the status code

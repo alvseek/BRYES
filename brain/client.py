@@ -131,21 +131,37 @@ Rules:
   set "request_diff": true. Next step you will receive a precise "CHANGES SINCE YOUR LAST
   ACTION" account. It costs a SLOW, EXPENSIVE extra vision pass, so use it sparingly —
   only when genuinely stuck, never as a routine check.
-- TEXT ENTRY: prefer "type_into" — ONE action that enters text into a field. Set "type_text"
-  (required); optionally add "click_target" (a field to click/focus FIRST — omit to type into
-  the field that is already focused), "clear_first": true (REPLACE the field's existing contents
-  instead of appending), and "press_enter_after": true (submit a search box / send a chat
-  message). It performs the whole click -> clear -> type -> Enter gesture in one step, so reach
-  for it for search boxes, address bars, forms, and chat inputs. The atomic pieces still exist
-  for finer control: "type" sends text to the CURRENTLY-FOCUSED field only (it does NOT move
-  focus), "click" focuses a field, and "key" with ctrl+a selects-all.
-- PICK THE RIGHT ACTION. Point actions name a "target" by description (the Eyes turn it
-  into pixels): "click" (left-click), "double_click" (open/activate an item), "right_click"
-  (open a context menu), "hover" (move the pointer ONTO a target to reveal a menu/tooltip,
-  without clicking), "scroll" (wheel-scroll at a target — set "direction" to "up" or "down",
-  e.g. to bring off-screen content into view), "drag" (press on "target" and release on
-  "destination" — for sliders, moving items). Plus "type_into" (one-shot field entry, PREFERRED
-  for typing), "type", "key", "wait", "screenshot", "shell", "done", "fail".
+- ACTIONS — choose ONE "action", then fill ONLY the fields listed for it (each is `field: what to put in it`):
+    type          — type into whatever is CURRENTLY focused (does NOT move focus)
+        required:  text: the text to type
+    type_into     — enter text into a field; PREFER this for text entry (does click -> clear -> type -> Enter in one step)
+        required:  text: the text to type
+        optional:  click_target: a field to click/focus first (omit to type into the already-focused field)
+                   clear_first: true to clear the field's existing contents before typing (replace, not append)
+                   press_enter_after: true to press Enter after typing (submit a search box / send a chat message)
+    click         — left-click / tap
+        required:  target: the element to click
+    double_click  — open / activate an item
+        required:  target: the element to double-click
+    right_click   — open a context menu
+        required:  target: the element to right-click
+    hover         — reveal a menu/tooltip without clicking
+        required:  target: the element to hover over
+    scroll        — bring off-screen content into view
+        required:  target: where to scroll  |  direction: "up" or "down"
+    drag          — sliders, moving items
+        required:  target: element to press on  |  destination: where to release
+    key           — press a key or chord
+        required:  key: e.g. Return, Escape, Tab, ctrl+a
+    wait          — let a loading screen settle before looking again
+        required:  seconds: how long to pause
+    shell         — run a NON-interactive command (see SHELL below)
+        required:  command: the command line to run
+        optional:  timeout: seconds (default 30, max 300)  |  stdin: text for the command's standard input
+    screenshot    — save the current frame as a requested deliverable (no fields)
+    done          — the goal is already satisfied (no fields)
+    fail          — truly stuck, or the goal is impossible (no fields)
+  On ANY acting action you MAY also set the perception controls: visual_focus, visual_expectation, recheck, request_diff (see above).
 - WAIT FOR LOADING, DON'T GUESS. If the screen is still loading (a spinner, or a blank/partial
   page with content not yet rendered), do NOT act on it or finish — use action "wait" and set
   "seconds" to how long to pause before looking again (e.g. 2-4s for a heavy web page, more if
@@ -173,8 +189,8 @@ class BrainAction(BaseModel):
     """The Brain's single next action (ADR-005: returned via response_format json_schema and
     VALIDATED here through Pydantic — the guard is ours, not the provider's). `action`'s allowed
     values are injected per-body at call time (see decide); every other field is optional and
-    applies only to specific actions.
-    Field descriptions ARE the schema the model sees — keep them instructive."""
+    applies only to specific actions (the system prompt's ACTIONS spec lists which fields each
+    action uses). Each field description says what the field IS — not which actions use it."""
 
     thought: str = Field(
         description="Your reasoning in English: what the screen shows now, progress vs the "
@@ -182,38 +198,29 @@ class BrainAction(BaseModel):
     action: str = Field(
         description="The single next action to take (must be one of the allowed action names).")
     target: str | None = Field(
-        None, description="Element description; required for click/double_click/right_click/"
-                          "hover/scroll, and the START point of a drag.")
+        None, description="An on-screen element, described so the Eyes can locate it.")
     destination: str | None = Field(
-        None, description="Element description; the drop point, required for drag.")
+        None, description="An on-screen element, described so the Eyes can locate it (a drop point).")
     direction: str | None = Field(
-        None, description="'up' or 'down'; required for scroll.")
+        None, description="A direction: 'up' or 'down'.")
     seconds: float | None = Field(
-        None, description="Number of seconds to pause; required for wait.")
+        None, description="A number of seconds to pause.")
     text: str | None = Field(
-        None, description="Text to type into the CURRENTLY-FOCUSED field; required for type.")
+        None, description="The text to type.")
     key: str | None = Field(
-        None, description="Key name like Return, Escape, Tab; required when action is key.")
+        None, description="A key or chord to press, e.g. Return, Escape, Tab, ctrl+a.")
     click_target: str | None = Field(
-        None, description="For type_into: description of the field to CLICK (focus) before "
-                          "typing (the Eyes ground it to a pixel, like target); OMIT to type "
-                          "into the field that is already focused.")
+        None, description="An on-screen field to click (focus) before typing, described for the Eyes.")
     clear_first: bool | None = Field(
-        None, description="For type_into: if true, clear the field's existing contents "
-                          "(select-all + delete) before typing — use it to REPLACE a value "
-                          "rather than append.")
-    type_text: str | None = Field(
-        None, description="For type_into: the text to type into the field. Required for type_into.")
+        None, description="Whether to clear the field's existing contents (select-all + delete) first.")
     press_enter_after: bool | None = Field(
-        None, description="For type_into: if true, press Enter after typing (submits a search "
-                          "box, sends a chat message). It only presses Enter — not a separate "
-                          "on-screen submit button.")
+        None, description="Whether to press Enter after typing.")
     command: str | None = Field(
-        None, description="The full shell command line to run; required for shell.")
+        None, description="A shell command line to run.")
     timeout: int | None = Field(
-        None, description="Optional seconds for shell, up to 300; default 30.")
+        None, description="A timeout in seconds (default 30, max 300).")
     stdin: str | None = Field(
-        None, description="Optional text to feed the shell command's standard input.")
+        None, description="Text to feed the command's standard input.")
     visual_expectation: str | None = Field(
         None, description="The specific target-state you predict you'll SEE after this action, "
                           "phrased ABSOLUTE/nameable (e.g. 'the display shows 1024', 'the "
@@ -303,7 +310,7 @@ def _load_key():
 
 
 def decide(goal, observation, history=None, *, caps=None, model=None, effort="high",
-           timeout=60, retries=2, escalation=None):
+           timeout=60, retries=2, escalation=None, context=None):
     """Return the next action as a dict: {thought, action, target?, text?, key?, visual_focus?}.
 
     Structured output (ADR-005): the Brain answers by filling a FORCED tool-call whose schema
@@ -323,10 +330,13 @@ def decide(goal, observation, history=None, *, caps=None, model=None, effort="hi
 
     hist_txt = "\n".join(f"- {h}" for h in (history or [])) or "(none yet)"
     escalation_block = f"\n\n{escalation}" if escalation else ""
+    # App/OS OPERATING profile (profiles.py): authoritative how-to for the current app, so the
+    # Brain knows its conventions (e.g. "in WhatsApp you send by TAPPING the Send button, not Enter").
+    app_block = f"\n\nHOW THIS APP WORKS (authoritative — follow it):\n{context.strip()}" if context else ""
     user = (f"GOAL:\n{goal}\n\n"
             f"OBSERVATION (what is on screen now):\n{observation}\n\n"
             f"HISTORY (actions you have already taken):\n{hist_txt}"
-            f"{escalation_block}\n\n"
+            f"{escalation_block}{app_block}\n\n"
             f"Decide the single next action and return it as a JSON object matching the "
             f"decide_action schema.")
     messages = [{"role": "system", "content": system_prompt},

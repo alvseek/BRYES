@@ -15,9 +15,12 @@ q3-8b is faithful ONLY on trimmed crops (a small clean crop has little to halluc
 72B stays the authoritative Eyes for boxing + careful re-reads + diffs. Latency is
 output-length-bound, so describe says less about less (ADR-004). Thinking off on describe/box.
 
-Coordinate conventions: locate (UI-TARS) returns coords in the `smart_resize` space (sides
-rounded to multiples of 28, area clamped) -> converted back: actual = model*orig/resized.
-box (Qwen2.5-VL) returns ABSOLUTE pixels at any resolution (validated to 4M px) -> used as-is.
+Coordinate conventions (the two models DIFFER — proven live at 1080x2400 and 2560x1600/4M px):
+locate (UI-TARS-1.5) returns ABSOLUTE pixels -> used as-is. box (Qwen2.5-VL) returns coords in
+its INTERNALLY-RESIZED grid -> box() rescales them to absolute (x orig/resized via smart_resize).
+Both were masked on the 1280x800 container (under the pixel clamp the resize ~= identity) and
+only surfaced above the clamp: locate was over-scaled (a conversion it shouldn't have had), box
+was under-scaled (a conversion it lacked). Fixed 2026-07-17.
 """
 import base64
 import io
@@ -53,9 +56,12 @@ BOX_MODEL = "qwen/qwen2.5-vl-72b-instruct"
 # q3-8b read is doubted (a visual_expectation mismatch). Same model as BOX_MODEL, distinct role.
 CAREFUL_MODEL = "qwen/qwen2.5-vl-72b-instruct"
 
+# Qwen2.5-VL preprocessing constants — used by smart_resize() to convert box()'s coords (which
+# come back in the model's internally-resized grid) to absolute pixels. See box() and smart_resize().
 IMAGE_FACTOR = 28
 MIN_PIXELS = 3136
 MAX_PIXELS = 2_116_800
+
 
 GROUND_PROMPT = (
     "You are a precise GUI grounding model. Look at the screenshot and locate the "
@@ -145,7 +151,9 @@ def _load_key():
 
 def smart_resize(height, width, factor=IMAGE_FACTOR,
                  min_pixels=MIN_PIXELS, max_pixels=MAX_PIXELS):
-    """Return (resized_height, resized_width) the model actually sees."""
+    """The (h, w) Qwen2.5-VL internally resizes an image to before reading it: each side a
+    multiple of `factor`, area clamped to [min_pixels, max_pixels]. box()'s coordinates come back
+    in THIS resized grid, so box() rescales them to absolute via width/w_bar, height/h_bar."""
     h_bar = max(factor, round(height / factor) * factor)
     w_bar = max(factor, round(width / factor) * factor)
     if h_bar * w_bar > max_pixels:
@@ -257,7 +265,8 @@ def _expect_block(visual_expectation):
     )
 
 
-def describe(image_bytes, visual_focus=None, visual_expectation=None, *, careful=False, timeout=60):
+def describe(image_bytes, visual_focus=None, visual_expectation=None, *, careful=False,
+             context=None, timeout=60):
     """A text report of what is on screen, for the Brain to reason over. Two modes (ADR-004,
     foveal vision): describe latency is output-length-bound, so we say less about less.
 
@@ -277,10 +286,13 @@ def describe(image_bytes, visual_focus=None, visual_expectation=None, *, careful
     Defensive: `visual_expectation` without `visual_focus` violates the contract -> full frame + verify.
     """
     model = CAREFUL_MODEL if careful else DESCRIBE_MODEL
+    # App/OS VISUAL profile (profiles.py), prepended so the Eyes read a known app's screen right
+    # (e.g. "this is WhatsApp"; "the word strip above the keyboard is autocorrect, not typed text").
+    ctx = f"CONTEXT (how to read this app's screen):\n{context.strip()}\n\n" if context else ""
 
     if not visual_focus and not visual_expectation:
         # OVERVIEW — downscaled gist.
-        result = _ask(OVERVIEW_PROMPT, _downscale(image_bytes, OVERVIEW_SCALE),
+        result = _ask(ctx + OVERVIEW_PROMPT, _downscale(image_bytes, OVERVIEW_SCALE),
                       model=model, max_tokens=1024, timeout=timeout, reasoning=NO_THINK)
         mode = f"overview x{OVERVIEW_SCALE:g}"
     elif visual_focus:
@@ -291,7 +303,7 @@ def describe(image_bytes, visual_focus=None, visual_expectation=None, *, careful
             # wrong region or silently full-frame — tell the Brain the region isn't visible and
             # give a whole-screen OVERVIEW so it can re-orient (drop visual_focus, or act to
             # bring the target into view). This is what stops the Eyes fabricating a crop.
-            overview = _ask(OVERVIEW_PROMPT, _downscale(image_bytes, OVERVIEW_SCALE),
+            overview = _ask(ctx + OVERVIEW_PROMPT, _downscale(image_bytes, OVERVIEW_SCALE),
                             model=model, max_tokens=1024, timeout=timeout, reasoning=NO_THINK)
             head = f"VISUAL_FOCUS FAILED: nothing matching '{visual_focus}' is visible on screen"
             if visual_expectation:
@@ -306,7 +318,7 @@ def describe(image_bytes, visual_focus=None, visual_expectation=None, *, careful
             if runlog:
                 runlog.save_image(f"step-{runlog.current_step():02d}-crop"
                                   f"{'-careful' if careful else ''}.png", img)
-            prompt = CROP_PROMPT + f"\n\nThis crop is the region: {visual_focus}."
+            prompt = ctx + CROP_PROMPT + f"\n\nThis crop is the region: {visual_focus}."
             if visual_expectation:
                 prompt += _expect_block(visual_expectation)
             result = _ask(prompt, img, model=model, max_tokens=1024, timeout=timeout,
@@ -315,7 +327,7 @@ def describe(image_bytes, visual_focus=None, visual_expectation=None, *, careful
     else:
         # Defensive: visual_expectation set WITHOUT visual_focus (contract violation) — full
         # frame + the verify block so the prediction still gets a report.
-        prompt = DESCRIBE_PROMPT + _expect_block(visual_expectation)
+        prompt = ctx + DESCRIBE_PROMPT + _expect_block(visual_expectation)
         result = _ask(prompt, image_bytes, model=model, max_tokens=1024, timeout=timeout,
                       reasoning=NO_THINK)
         mode = "full(expect-no-focus)"
@@ -353,7 +365,6 @@ def diff(prev_bytes, cur_bytes, visual_focus=None, *, timeout=60):
 def locate(image_bytes, instruction, *, timeout=60):
     """Locate a UI element. Returns dict with pixel x/y plus diagnostics."""
     width, height = Image.open(io.BytesIO(image_bytes)).size
-    rh, rw = smart_resize(height, width)
     content = _ask(GROUND_PROMPT.format(instruction=instruction),
                    image_bytes, model=GROUND_MODEL, max_tokens=128, timeout=timeout)
 
@@ -365,12 +376,16 @@ def locate(image_bytes, instruction, *, timeout=60):
     else:
         mx, my = nums[0], nums[1]
 
-    ax = max(0, min(width - 1, round(mx * width / rw)))
-    ay = max(0, min(height - 1, round(my * height / rh)))
+    # UI-TARS-1.5 returns ABSOLUTE pixel coords in the ORIGINAL image space — NOT resized-space
+    # (UNLIKE box/Qwen2.5-VL, which IS resized-space and gets rescaled — see box()). Proven at
+    # 1080x2400 AND 2560x1600/4M px: a raw x can EXCEED the internally-downscaled width, and a
+    # raw-coord tap lands dead-on. Take as-is; the old `* orig/resized` rescale was a masked bug
+    # (~1.0 no-op under the pixel clamp on the 1280x800 container, +13-40% off above it). (2026-07-17)
+    ax = max(0, min(width - 1, round(mx)))
+    ay = max(0, min(height - 1, round(my)))
     result = {
         "x": ax, "y": ay,
         "raw_model_coord": [mx, my],
-        "resized_dims_wh": [rw, rh],
         "original_dims_wh": [width, height],
         "content": content,
     }
@@ -388,11 +403,11 @@ def box(image_bytes, target, *, timeout=60):
     the 72B general VLM (BOX_MODEL) — the ONLY model that boxed reliably in the bake-off,
     including small targets (UI-TARS and the small VLMs only point / mislocate).
 
-    Coordinate convention: Qwen2.5-VL emits ABSOLUTE pixel coordinates (unlike UI-TARS'
-    resized-space, which is why locate() rescales via smart_resize), so we take them as-is.
-    VALIDATED at BOTH 1280x800 and 2560x1600 (4.1M px, above the model's ~2.1M-px clamp):
-    raw coords land dead-on at both — the model returns absolute even when it internally
-    downscales, so NO smart_resize conversion or pre-scale is needed. (Step 1.2, 2026-07-16.)
+    Coordinate convention: Qwen2.5-VL returns box coords in its INTERNALLY-RESIZED grid, NOT
+    absolute — so we rescale them to absolute pixels (x orig/resized via smart_resize) below.
+    Proven on the phone (1080x2400): raw box was a consistent ~0.87x of the true position, so
+    crops landed up-left until rescaled. (UNLIKE locate()/UI-TARS-1.5, which IS absolute.) Both
+    were masked under the pixel clamp on the 1280x800 container (resize ~= identity). Fixed 2026-07-17.
 
     Returns None (not an exception) when the target is NOT_FOUND (the model says it isn't
     visible — no guessing), or on an unparseable / non-rectangular reply. describe()'s TRIM
@@ -415,11 +430,18 @@ def box(image_bytes, target, *, timeout=60):
     nums = [int(n) for n in re.findall(r"-?\d+", content)]
     result = None
     if len(nums) >= 4:
-        x1, y1, x2, y2 = nums[:4]
-        x1, x2 = sorted((x1, x2))
-        y1, y2 = sorted((y1, y2))
-        x1 = max(0, min(width - 1, x1)); x2 = max(1, min(width, x2))
-        y1 = max(0, min(height - 1, y1)); y2 = max(1, min(height, y2))
+        # Qwen2.5-VL returns box coords in its INTERNALLY-RESIZED grid, NOT absolute — proven on the
+        # phone: raw box was a consistent ~0.87x of the true position, so crops landed up-left.
+        # Rescale to absolute pixels by the resize ratio (orig/resized). Under the pixel clamp the
+        # ratio is ~1.0, which is why this was invisible on the 1280x800 container. (2026-07-17)
+        rh, rw = smart_resize(height, width)
+        sx, sy = width / rw, height / rh
+        x1, x2 = sorted((nums[0] * sx, nums[2] * sx))
+        y1, y2 = sorted((nums[1] * sy, nums[3] * sy))
+        x1 = max(0, min(width - 1, round(x1)))
+        x2 = max(1, min(width, round(x2)))
+        y1 = max(0, min(height - 1, round(y1)))
+        y2 = max(1, min(height, round(y2)))
         if x2 > x1 and y2 > y1:            # a valid rectangle (not zero/inverted)
             result = (x1, y1, x2, y2)
     if runlog:
