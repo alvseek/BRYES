@@ -153,11 +153,11 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 - **scope**: shared
 - **roles**: []
 - **status**: useful
-- **tags**: [adr, structured-output, pydantic, tool-calling, validation, format-enforcement, model-fallback, architecture]
-- **last_verified**: "2026-07-16"
+- **tags**: [adr, structured-output, pydantic, json-schema, validation, format-enforcement, model-fallback, architecture]
+- **last_verified**: "2026-07-17"
 - **verified_by**: "claude-software-architect"
-- **update_trigger**: "when the structured-output mechanism (structured.py / BrainAction / tool-calling), the model primary/backup, or the format-enforcement standard changes"
-- **notes**: "ADR-005 — structured LLM output: formats are enforced by TOOLS, not the AI. LLM JSON goes through a Pydantic model -> forced tool-call -> OUR Pydantic validation (structured.py), never response_format:json_object free-text; validity never depends on provider enforcement. Eliminates the malformed-JSON class (old crash was a reasoning-loop degeneration under json_object). brain/decide() refactored onto it (BrainAction model). Model: qwen3.6-flash primary + deepseek-v4-flash backup (decide's last attempt escapes — 18 providers vs qwen's 1). Also: box() NOT_FOUND -> VISUAL_FOCUS FAILED + overview (no fabricated crops); focus->visual_focus, expect->visual_expectation."
+- **update_trigger**: "when the structured-output mechanism (structured.py / BrainAction / response_format json_schema), the model primary/backup, or the format-enforcement standard changes"
+- **notes**: "ADR-005 (amended 2026-07-17) — structured LLM output: formats are enforced by OUR schema + Pydantic validation, not the AI. LLM JSON goes through a Pydantic model -> response_format json_schema (strict:false) -> OUR Pydantic validation (structured.py); NO tool-calling, never json_object free-text; validity never depends on the provider. Model: deepseek-v4-flash primary + gemini-2.5-flash-lite backup (different weights; decide's last attempt escapes). qwen3.6-flash dropped: its thinking mode mis-applies a json_schema grammar / forced tool_choice to the reasoning stream and degenerates (documented Qwen bug). Validated live: Tokopedia done in 12 steps, deepseek carried it, zero fallback. Also: box() NOT_FOUND -> VISUAL_FOCUS FAILED + overview; focus->visual_focus, expect->visual_expectation."
 
 ### `docs/quality-standard.md`
 

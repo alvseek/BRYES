@@ -34,7 +34,7 @@ Two transports, two homes:
 | **Screen** | local Docker container | HTTP `:8000` | `GET /screenshot` |
 | **Hands** | *same* container (not a separate service) | HTTP `:8000` | `POST /action` (runs `xdotool`) |
 | **Eyes** | rented, OpenRouter — Qwen2.5-VL-72B (`describe`) + UI-TARS-1.5-7B (`locate`) | HTTPS | `describe()`, `locate()` |
-| **Brain** | rented, OpenRouter (`qwen3.6-flash`, swappable) | HTTPS | `decide()` |
+| **Brain** | rented, OpenRouter (`deepseek-v4-flash`, swappable; backup `gemini-2.5-flash-lite`) | HTTPS | `decide()` |
 
 ```mermaid
 graph TD
@@ -47,7 +47,7 @@ graph TD
 
     subgraph openrouter["OpenRouter (HTTPS)"]
         Eyes["Eyes<br/>describe(png): Qwen2.5-VL-72B<br/>locate(png, target): UI-TARS-1.5-7B"]
-        Brain["Brain — qwen3.6-flash<br/>decide(goal, obs, history)"]
+        Brain["Brain — deepseek-v4-flash<br/>decide(goal, obs, history)"]
     end
 
     Loop -->|"GET /screenshot"| Screen
@@ -104,7 +104,7 @@ sequenceDiagram
     participant L as Loop
     participant S as Screen/Hands (:8000)
     participant E as Eyes (UI-TARS)
-    participant B as Brain (qwen3.6-flash)
+    participant B as Brain (deepseek-v4-flash)
 
     L->>S: GET /screenshot
     S-->>L: PNG
@@ -269,7 +269,9 @@ heuristic onto a mechanical decider.
   the Brain focuses via an explicit `click`. Primitives stay dumb; composition belongs above.
 - **Generalized to a browser + Brain chosen by bake-off.** The stack drove Google Chrome to
   search "who am I". A 5-model bake-off picked **`qwen/qwen3.6-flash`** as the default Brain
-  (beat v4-pro and minimax-m3 on cost AND capability once the harness was fixed).
+  (beat v4-pro and minimax-m3 on cost AND capability once the harness was fixed). *(Later
+  replaced by `deepseek-v4-flash` — qwen degenerates under our json_schema standard in thinking
+  mode; [ADR-005](adr/2026-07-16-structured-output-standard.md), 2026-07-17.)*
 - **Hands primitive audit → full natural set.** Audited all primitives: `type`/`key` clean-
   atomic, `click` naturally-composite-and-safe (move-then-click clobbers nothing), `move`
   renamed to `hover` and wired to the Brain. No second `type`-class bug. Added the missing

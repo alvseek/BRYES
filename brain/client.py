@@ -25,18 +25,21 @@ try:                       # optional transcript logger (no-op when a run isn't 
 except ImportError:
     runlog = None
 
-# qwen3.6-flash: best value in the 5-model browser-search bake-off (4 steps, clean done,
-# ~$0.19/$1.13 per M, 1M context). Beat v4-pro AND minimax-m3 on both cost and capability
-# once the harness was fixed (VLM describe + type-just-types + actions-only history).
-# (Do NOT use legacy deepseek-chat / deepseek-reasoner — retire 2026-07-24.)
-MODEL = "qwen/qwen3.6-flash"
+# deepseek-v4-flash: the primary Brain. It returns clean, schema-valid JSON under our
+# response_format json_schema standard WITH thinking on (verified 3/3 live), is served by 18
+# providers, and is cheap. It replaced qwen3.6-flash (the old bake-off winner): qwen's
+# Alibaba endpoint mis-applies a json_schema grammar / forced tool_choice to its THINKING
+# stream and degenerates (content:null / finish_reason=error) — a documented, ecosystem-wide
+# Qwen reasoning-model bug, not a provider outage. See ADR-005.
+MODEL = "deepseek/deepseek-v4-flash"
 
-# Backup Brain (ADR-005): if the primary fails on its allotted tries (e.g. a provider
-# degeneration / finish_reason=error), decide()'s LAST attempt escapes to this model. Chosen
-# for RESILIENCE — deepseek-v4-flash is served by 18 providers (vs qwen's single Alibaba
-# endpoint) AND is different model weights, so it escapes both a sick provider and a
-# weight-level reasoning-loop. Cheaper too. Swapping to a same-provider model wouldn't help.
-BACKUP_MODEL = "deepseek/deepseek-v4-flash"
+# Backup Brain (ADR-005): if the primary fails its allotted tries (a provider degeneration /
+# finish_reason=error), decide()'s LAST attempt escapes to this model. Chosen for RESILIENCE
+# — gemini-2.5-flash-lite is DIFFERENT weights (Google), so it escapes a weight-level
+# reasoning-loop the primary can't; and it was verified to return clean schema-valid JSON
+# under json_schema+thinking (3/3 live) WITHOUT the reasoning-stream bug that breaks qwen /
+# glm / hunyuan. (Reasoning-capable, so it still decides WELL on the rare step it drives.)
+BACKUP_MODEL = "google/gemini-2.5-flash-lite"
 
 _BASE_PROMPT = """You are the Brain of a computer-use agent. You have more than one way
 to act, and you pick the most DIRECT one that fits each task:
@@ -77,7 +80,8 @@ Rules:
 - RE-READ A DOUBTFUL REPORT (RECHECK): the visual_focus region is read by a FAST model, which
   can occasionally MISREAD a small crop. If a VERIFICATION report contradicts what you expected
   and you cannot tell whether your ACTION failed OR the Eyes simply misread that region, set
-  "recheck": true. Next step the SAME visual_focus region is re-read by a slower, higher-fidelity
+  "recheck": true AND re-state the same "visual_focus" (it is per-step now). Next step that
+  region is re-read by a slower, higher-fidelity
   model — use that to confirm the real state BEFORE you conclude the action failed or change
   course. It is cheaper than a full diff. Escalate to "request_diff" only if a careful
   re-read still leaves you unable to tell what happened. Do NOT set "recheck" routinely — only
@@ -102,8 +106,10 @@ Rules:
   Verification is ALWAYS about the display/result CONTENT: after ANY press — a digit OR an
   operator (x, /, +, -) — the change shows in the DISPLAY (e.g. "1024x"), never by a key
   lighting up; so aim the Eyes at the display/result, never at a key. The tighter and more
-  contextual the region, the more accurately the Eyes report the state. Keep it on the
-  relevant area across steps, moving it only when the task moves to a new area.
+  contextual the region, the more accurately the Eyes report the state. "visual_focus" is
+  PER-STEP and does NOT persist — it applies only to your NEXT observation: to keep watching
+  the same region across steps, RE-STATE it each step; omit it on any step to get a
+  whole-screen overview instead.
 - GET YOUR BEARINGS WITH AN OVERVIEW: leave "visual_focus" EMPTY to receive a whole-screen
   OVERVIEW — a gist of everything on screen (apps, windows, what stands out). Use it to orient
   when you are unsure what is shown. If an OBSERVATION begins "VISUAL_FOCUS FAILED", the region
@@ -155,13 +161,15 @@ Rules:
 - Choose exactly ONE next action that makes real progress toward the goal.
 - If the OBSERVATION shows the goal is already satisfied, use action "done".
 - If you are truly stuck or the goal is impossible, use action "fail".
-- Provide your decision by CALLING the decide_action function — do not write prose or JSON yourself.
+- Return your decision as a SINGLE JSON object matching the decide_action schema — only the
+  JSON object, no prose, no markdown fences.
 """
 
 class BrainAction(BaseModel):
-    """The Brain's single next action (ADR-005: the JSON is a FORCED tool-call validated
-    here, not a hand-built string). `action`'s allowed values are injected per-body at call
-    time (see decide); every other field is optional and applies only to specific actions.
+    """The Brain's single next action (ADR-005: returned via response_format json_schema and
+    VALIDATED here through Pydantic — the guard is ours, not the provider's). `action`'s allowed
+    values are injected per-body at call time (see decide); every other field is optional and
+    applies only to specific actions.
     Field descriptions ARE the schema the model sees — keep them instructive."""
 
     thought: str = Field(
@@ -299,7 +307,8 @@ def decide(goal, observation, history=None, *, caps=None, model=None, effort="hi
             f"OBSERVATION (what is on screen now):\n{observation}\n\n"
             f"HISTORY (actions you have already taken):\n{hist_txt}"
             f"{escalation_block}\n\n"
-            f"Decide the single next action and return it by calling decide_action.")
+            f"Decide the single next action and return it as a JSON object matching the "
+            f"decide_action schema.")
     messages = [{"role": "system", "content": system_prompt},
                 {"role": "user", "content": user}]
     reasoning = {"effort": effort} if effort else {"enabled": False}
@@ -313,16 +322,15 @@ def decide(goal, observation, history=None, *, caps=None, model=None, effort="hi
     last_err = None
     for attempt in range(retries + 1):
         # Try the primary for its allotted attempts; the LAST attempt ESCAPES to the backup
-        # model (ADR-005) — different weights + 18 providers, so it survives a primary
-        # degeneration or a sick provider that retrying the primary would just re-trigger.
+        # model (ADR-005) — different weights (Google, not DeepSeek), so it survives a
+        # weight-level degeneration that retrying the primary would just re-trigger.
         use_model = primary
         if attempt == retries and BACKUP_MODEL and BACKUP_MODEL != primary:
             use_model = BACKUP_MODEL
         try:
             act_obj, usage = structured_call(
                 BrainAction, messages, model=use_model, api_key=key, reasoning=reasoning,
-                max_tokens=8192, timeout=timeout, tool_name="decide_action",
-                tool_description="Return the single next action for the computer-use agent.",
+                max_tokens=8192, timeout=timeout, schema_name="decide_action",
                 schema_transform=inject_enum,
                 headers={"HTTP-Referer": "https://github.com/alvseek/BRYES", "X-Title": "BRYES"})
         except StructuredError as e:

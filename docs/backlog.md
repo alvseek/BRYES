@@ -12,10 +12,20 @@ in [../roadmap.md](../roadmap.md); this is the finer-grained "what's left right 
 
 ## Next steps (do these next)
 
-- [ ] **TEST the shipped structured-output work live** (2026-07-16, [ADR-005](adr/2026-07-16-structured-output-standard.md)):
-      the **model-fallback is UNEXERCISED** (qwen→deepseek escape wired + unit-verified, never actually
-      fired); focus-failure recovery + the `BOX_PROMPT` recalibration were only **targeted-tested**, not
-      re-validated in a fresh full run. Run the calc/browser tasks, force a primary failure, confirm.
+- [x] **TEST the shipped structured-output work live** ✅ **DONE (2026-07-17)** — and it paid off: the
+      test exposed that **qwen (the then-primary) had been `400`-ing on EVERY decide since ADR-005 landed**,
+      silently masked by the fallback (a documented Qwen thinking-mode + structured-output bug). Fixed by
+      switching the mechanism to **`response_format: json_schema`** (no tool-calling) and the models to
+      **`deepseek-v4-flash` primary + `gemini-2.5-flash-lite` backup** (ADR-005 amended). Re-validated live:
+      Tokopedia done in 12 steps, deepseek carried it, **zero fallback, zero JSON errors**; the non-sticky
+      `visual_focus` fix kept it out of the overview-trap. **Residual:** the gemini backup is probe-verified
+      (3/3) but has not fired in a live run (deepseek never failed) — a forced-primary-failure shakeout is
+      still owed.
+- [ ] **Make a failed action non-fatal (Fix #3)** — an action that throws (bad key, unlocatable target,
+      container hiccup) currently crashes the whole run (a `key "Enter"` 400 killed a 20-step run today
+      before the key-alias fix). The loop should catch it, feed it back to the Brain as history
+      (`action X FAILED — try a different action`), and continue. Small `loop.py` refactor + design choice
+      (does it count toward the step limit / repeat-guard). **Queued for `/quick-wizard`.**
 - [ ] **Design the macro/combo input action** (harness-level batching) — a composite the Brain
       issues in ONE shot, e.g. `type "1024*8096/112" → Enter`, built from the atomic primitives and
       sequenced above them (not baked into a single primitive). **Strongly motivated this session**:
@@ -33,17 +43,21 @@ in [../roadmap.md](../roadmap.md); this is the finer-grained "what's left right 
 - [ ] **Confirm the remaining app-level hands behavior** — `scroll` is now confirmed app-level
       (Tokopedia results scrolled through distinct screenfuls, 2026-07-14). Still eyeball-only:
       `double_click` selects, `right_click` context menu, `drag` on a draggable surface.
-- [ ] **Validate `qwen3.6-flash` on the calculator suite** (`1550×3÷4`, `128+47`, `512−137`,
-      `7÷8`, `12+34+56` on clutter) before fully trusting it as the default Brain — it was
-      only crowned on ONE task (browser search).
+- [ ] **Validate the default Brain (`deepseek-v4-flash`) on the calculator suite** (`1550×3÷4`,
+      `128+47`, `512−137`, `7÷8`, `12+34+56` on clutter) — it carried the Tokopedia browser task cleanly
+      (12 steps, 2026-07-17) but hasn't been run on the multi-digit calc suite. *(qwen3.6-flash was
+      dropped as Brain, so its old calc-validation item is obsolete — see [ADR-005](adr/2026-07-16-structured-output-standard.md).)*
 - [x] **Phase 5 — verify-and-recover** ✅ **DONE (2026-07-16, [ADR-003](adr/2026-07-16-change-feedback-verify-and-recover.md)).** Shipped as **Layer 2 (`expect` verified in the VLM) as the primary change-feedback** + Layer 3 (Brain-requested 2-image diff) + a recovery backstop (same-action-and-failing → escalate). **The original screen-wide pixel "Layer 1" was dropped** after measurement: a single typed digit (~0.02–0.09 mean-diff) sits below the idle noise floor (~0.25), and UI-TARS can't box a region to crop → "did my action work?" is a regional/semantic question the VLM answers, not a pixel metric. `framediff.py` is kept & parked (see Recently resolved + the describe-speed lever above).
 
 ## Tech debts (known gaps / risks)
 
-- **Model-fallback UNEXERCISED live** — `decide()`'s qwen→`deepseek-v4-flash` last-attempt escape
-  ([ADR-005](adr/2026-07-16-structured-output-standard.md)) is wired + unit-verified but has never
-  actually fired in a run; focus-failure recovery + the `BOX_PROMPT` recalibration were only
-  targeted-tested. Needs a live shakeout (a forced primary failure).
+- **Model-fallback UNEXERCISED live** — `decide()`'s `deepseek-v4-flash`→`gemini-2.5-flash-lite`
+  last-attempt escape ([ADR-005](adr/2026-07-16-structured-output-standard.md)) is wired + probe-verified
+  (gemini 3/3 under json_schema) but has never actually *fired* in a run — deepseek carried the live
+  Tokopedia task with zero fallback. Needs a forced-primary-failure shakeout.
+- **Container image can go stale** — `docker compose up -d` reuses the existing image, so an edited
+  `screen/server/app.py` isn't picked up without `--build` (today the running container returned `400`
+  where the on-disk server returns `500` for a bad key). Rebuild when the server changes; low-risk otherwise.
 - **Doc-sync incomplete (the visual_focus/visual_expectation renames)** — `architecture-overview.md`
   and `agent-loop-flow.md` still use the old `focus`/`expect` names; context-index / backlog /
   orientation-map were synced at the 2026-07-16 wrap-up, the two prose docs deferred.

@@ -1,8 +1,45 @@
-# ADR-005: Structured LLM Output — Pydantic + Forced Tool-Calling (formats are enforced by tools, not the AI)
+# ADR-005: Structured LLM Output — Pydantic Validation (formats are enforced by our schema + validation, not the AI)
 
-**Date**: 2026-07-16
+**Date**: 2026-07-16 (amended 2026-07-17)
 
-**Status**: Accepted
+**Status**: Accepted — mechanism amended 2026-07-17 (forced tool-calling → `response_format: json_schema`)
+
+---
+
+## Amendment (2026-07-17): forced tool-calling → `response_format: json_schema`; qwen → deepseek + gemini
+
+The **enduring decision is the principle**: structured LLM output is defined by a Pydantic model
+and **validated by OUR Pydantic on our side** — validity never depends on the provider. That is
+the user's load-bearing point and it is unchanged. What changed is the **mechanism** (how the JSON
+is *elicited*), which is a swappable implementation detail:
+
+- **Mechanism: forced tool-calling → `response_format: {type: json_schema}` (strict:false).** The schema
+  GUIDES generation; our Pydantic validates + retries. `strict:false` (not true) is deliberate: a hard
+  grammar / forced tool-call constrains a *reasoning* model's thinking stream and makes it degenerate,
+  and it keeps our optional fields optional (no schema surgery). No tool-calling anywhere.
+- **Model: primary `qwen3.6-flash` → `deepseek-v4-flash`; backup `deepseek-v4-flash` → `gemini-2.5-flash-lite`.**
+
+**Why the original Path A (forced tool-calling) was wrong for us:**
+- It **broke qwen outright.** Alibaba's endpoint rejects a forced/object `tool_choice` *in thinking mode*
+  (`HTTP 400`), and qwen also mis-applies a `json_schema` grammar to its **reasoning stream** →
+  `content:null` / `finish_reason=error` degeneration. This is a **documented, ecosystem-wide Qwen
+  reasoning-model bug** (vLLM, SGLang, LM Studio, DashScope) — not our code, not a provider outage.
+- **The bug was masked, not absent.** Live testing on 2026-07-17 found qwen had been `400`-ing on
+  *every* decide since this ADR landed — the deepseek fallback silently absorbed all of it, so runs
+  "looked fine." The original *"tool-calling verified 1/1 on qwen"* probe hadn't included thinking mode
+  → a false green. (Lesson: verify the *real* request shape, and read the transcript.)
+- **Forced tool-calling was never the user's decision** — it was an implementation choice bundled into
+  this ADR under the validation principle. Removing it *restores* the original intent.
+
+**What we measured (2026-07-17), not guessed:** under `json_schema` + thinking, `deepseek-v4-flash` = 3/3
+clean (primary), `gemini-2.5-flash-lite` = 3/3, different weights, no reasoning-stream bug (backup);
+qwen / glm / hunyuan / gpt-5-nano all failed (reasoning-stream degeneration or omitted fields). Our
+Pydantic validation + retry + backup remain the guard regardless. **Validated live:** the Tokopedia
+task completed in 12 steps on deepseek alone — zero fallback, zero JSON errors.
+
+**Supersedes below:** every "forced tool-call / Path A / 18-vs-13 providers" rationale in the original
+body is retained for history but no longer describes the mechanism. `json_object` free-text + no guard
+is still forbidden; the guard is still ours. See `structured.py` / `brain/client.py` for the live shape.
 
 ---
 

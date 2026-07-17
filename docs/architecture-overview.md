@@ -21,7 +21,7 @@ GitHub: **github.com/alvseek/BRYES** (remote named `alvseek`, commit identity
 | **Screen** | disposable Ubuntu desktop (Xvfb + fluxbox): screenshots + input, plus a sandboxed **shell** (`/exec`) | local Docker container, `screen/` |
 | **Hands** | `xdotool` click/double-click/right-click/hover/scroll/drag/type/key inside that container | same container |
 | **Eyes** | **qwen3-vl-8b** *describes* (two-mode foveal, [ADR-004](adr/2026-07-16-foveal-describe-trim.md)), **Qwen2.5-VL-72B** *boxes* a focus region + does careful re-reads, **UI-TARS-1.5-7B** *locates* elements (grounding → coordinates) | rented, OpenRouter, `eyes/` |
-| **Brain** | `qwen3.6-flash` (default, swappable) — state → next action (reasoning) | rented, OpenRouter, `brain/` |
+| **Brain** | `deepseek-v4-flash` (default, swappable; backup `gemini-2.5-flash-lite`) — state → next action (reasoning) | rented, OpenRouter, `brain/` |
 
 **Two rules from the roadmap:** rent everything until it hurts (local GPU 3060 Ti 8GB
 is a last resort, Phase 6); prove ONE real task end-to-end before generalizing.
@@ -71,10 +71,13 @@ offered verbs the current body can do (a phone never sees `right_click`). Pure A
   OpenRouter. $0.10/M in, $0.20/M out, images free. UI-TARS is Qwen2.5-VL-7B tuned for
   grounding: great at pointing, but the fine-tune degraded description — which is why
   describe moved to a general VLM (above).
-- **Brain / reasoning:** `qwen/qwen3.6-flash` (default, ~$0.19/$1.13 per M, 1M ctx,
-  text-only) — won a 5-model browser-search bake-off (4 steps, clean, cheap). `brain_model`
-  is swappable per `run()`; fallbacks `tencent/hy3` (256k ctx) or `deepseek/deepseek-v4-flash`
-  (cheapest). Text-only → the Brain can't see; it reasons over the VLM `describe` text.
+- **Brain / reasoning:** `deepseek/deepseek-v4-flash` (default, text-only) — returns clean
+  schema-valid JSON under our `response_format: json_schema` standard with thinking on (18
+  providers, cheap). `brain_model` is swappable per `run()`; backup `google/gemini-2.5-flash-lite`
+  (different weights, no reasoning-stream bug — the LAST decide attempt escapes to it). Text-only
+  → the Brain can't see; it reasons over the VLM `describe` text. (qwen3.6-flash — the old
+  bake-off winner — was dropped: it degenerates under a json_schema/tool_choice constraint in
+  thinking mode, a documented Qwen bug; see [ADR-005](adr/2026-07-16-structured-output-standard.md).)
   `deepseek-v4-pro` and `minimax/minimax-m3` LOST the bake-off (pricier, no better — M3 also
   failed to recognize completion on a generic goal). Avoid legacy `deepseek-chat`/
   `deepseek-reasoner` (retire 2026-07-24).
@@ -148,4 +151,4 @@ offered verbs the current body can do (a phone never sees `right_click`). Pure A
 ([ADR-003](adr/2026-07-16-change-feedback-verify-and-recover.md) — `expect`/`VERIFICATION`,
 Brain-judged) · describe-speed then solved via the two-mode foveal describe
 ([ADR-004](adr/2026-07-16-foveal-describe-trim.md), describe 5–16s → ~2s) ·
-6 Hosting ⬜ (only if forced). **Brain default: `qwen3.6-flash`** (bake-off winner).
+6 Hosting ⬜ (only if forced). **Brain default: `deepseek-v4-flash`** (clean under json_schema+thinking; backup `gemini-2.5-flash-lite`, [ADR-005](adr/2026-07-16-structured-output-standard.md)).

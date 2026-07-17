@@ -160,7 +160,7 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
             action.pop("_usage", None)
             act = action.get("action")
             thought = action.get("thought", "")
-            visual_focus = action.get("visual_focus") or visual_focus   # Brain steers the Eyes next step
+            visual_focus = action.get("visual_focus")   # per-step, NOT sticky: set -> TRIM there, omit -> OVERVIEW
             visual_expectation = action.get("visual_expectation")   # verified next step (not sticky)
             want_diff = bool(action.get("request_diff"))   # 2-image diff next step (not sticky)
             want_recheck = bool(action.get("recheck"))     # careful 72B re-read next step (not sticky)

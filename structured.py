@@ -3,18 +3,18 @@
 Every structured reply we need from an LLM goes through here. The contract:
 
   1. Define the shape as a Pydantic model (typed fields + Field(description=...)).
-  2. Call structured_call(Model, messages, ...): it asks the model via TOOL-CALLING —
-     the provider fills a function whose parameters ARE the model's JSON schema, and
-     tool_choice FORCES the call — then VALIDATES the returned arguments back through
-     the Pydantic model.
+  2. Call structured_call(Model, messages, ...): it asks the model via response_format
+     json_schema (the provider is handed the model's JSON schema and replies with JSON in
+     message.content), then VALIDATES that reply back through the Pydantic model.
   3. You get a validated Model instance (+ usage), or a StructuredError carrying the
      raw provider body for root-causing.
 
-Why tool-calling + OUR OWN validation (ADR-005): `response_format: json_object` is loose
-(the model hand-builds a JSON string it can malform) and strict provider-side enforcement
-is a per-model capability we cannot rely on. Tool-calling constrains the shape where the
-provider supports it, and the Pydantic validation is OUR guard — so validity does NOT
-depend on the provider being able (or willing) to enforce the schema.
+Why response_format json_schema + OUR OWN validation (ADR-005): the shape is elicited with
+response_format — NOT tool-calling, NOT loose `json_object` free-text — and the Pydantic
+validation is OUR guard, so validity does NOT depend on the provider enforcing the schema.
+We keep strict=False (the schema GUIDES, we validate) because a hard grammar / forced
+tool-call constrains a reasoning model's THINKING stream and makes it degenerate (the qwen
+failure); loose elicitation + our validation is both safer and portable across providers.
 
 Transport only (OpenRouter, OpenAI-compatible). Retry / model-fallback policy lives in the
 caller, which catches StructuredError and decides what to do next.
@@ -30,7 +30,7 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 
 class StructuredError(RuntimeError):
-    """A structured call failed: transport, no tool-call/content, unparseable args, or
+    """A structured call failed: transport, empty content, unparseable JSON, or
     schema validation. `.body` holds the raw provider response (dict) when there was one —
     that is what carries the real cause (e.g. a provider `finish_reason=error`)."""
 
@@ -40,10 +40,9 @@ class StructuredError(RuntimeError):
 
 
 def structured_call(schema_model, messages, *, model, api_key, reasoning=None,
-                    max_tokens=4096, timeout=60, tool_name="respond",
-                    tool_description="Return the result.", schema_transform=None,
-                    headers=None):
-    """Force the model to return an instance of `schema_model` via tool-calling; validate it.
+                    max_tokens=4096, timeout=60, schema_name="respond",
+                    schema_transform=None, headers=None):
+    """Ask the model for an instance of `schema_model` via response_format json_schema; validate it.
 
     Returns (instance, usage_dict). Raises StructuredError (with .body) on any failure.
 
@@ -58,13 +57,14 @@ def structured_call(schema_model, messages, *, model, api_key, reasoning=None,
         "temperature": 0,
         "messages": messages,
         "max_tokens": max_tokens,
-        "tools": [{
-            "type": "function",
-            "function": {"name": tool_name, "description": tool_description,
-                         "parameters": schema},
-        }],
-        # FORCE the call — the model must answer by filling this function, not free text.
-        "tool_choice": {"type": "function", "function": {"name": tool_name}},
+        # Ask for the shape via response_format json_schema (NOT tool-calling): the provider
+        # takes `schema` as the JSON Schema for the reply, returned in message.content.
+        # strict=False -> the schema GUIDES generation, and OUR Pydantic validation (below) is
+        # the real guard — so validity never depends on provider enforcement, and it stays
+        # portable across providers (a hard grammar / forced tool-call breaks some reasoning
+        # models by constraining their thinking stream). See ADR-005.
+        "response_format": {"type": "json_schema", "json_schema": {
+            "name": schema_name, "strict": False, "schema": schema}},
     }
     if reasoning is not None:
         body["reasoning"] = reasoning
@@ -83,14 +83,12 @@ def structured_call(schema_model, messages, *, model, api_key, reasoning=None,
 
     choice = (data.get("choices") or [{}])[0]
     msg = choice.get("message") or {}
-    tool_calls = msg.get("tool_calls") or []
-    if tool_calls:
-        raw_args = tool_calls[0].get("function", {}).get("arguments")
-    else:
-        raw_args = msg.get("content")     # fallback: a model that ignored tool_choice
+    raw_args = msg.get("content")     # response_format returns the JSON reply in content
     if not raw_args:
+        # Empty content = a reasoning model that spiralled/degenerated (finish_reason=error)
+        # or a provider hiccup — the caller retries / escapes to the backup model.
         raise StructuredError(
-            f"no tool-call or content (finish_reason={choice.get('finish_reason')})",
+            f"empty content (finish_reason={choice.get('finish_reason')})",
             body=data)
 
     args = _loads_lenient(raw_args)
@@ -106,8 +104,8 @@ def structured_call(schema_model, messages, *, model, api_key, reasoning=None,
 
 
 def _loads_lenient(raw):
-    """Parse tool-call arguments. Provider-enforced args are already valid JSON; the regex
-    fallback only rescues a stray-prose wrapper from a model that ignored tool_choice."""
+    """Parse the JSON reply. Well-formed content is already valid JSON; the regex fallback
+    only rescues a stray-prose wrapper from a model that wrapped its JSON in text."""
     if isinstance(raw, (dict, list)):
         return raw
     if not isinstance(raw, str):

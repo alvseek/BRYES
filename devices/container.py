@@ -21,9 +21,29 @@ except ImportError:
 
 SCREEN = "http://localhost:8000"
 
+# The Brain names keys naturally; xdotool wants X keysyms. Most already match (Return, Escape,
+# Tab, ctrl+a, single letters, modifiers), but models reach for synonyms — map those so a
+# natural "Enter"/"Esc" doesn't 400. Device-specific translation (ADR-002): the phone body
+# maps to Android keyevents instead. Unknown tokens (real keysyms, letters, modifiers) pass through.
+_KEY_ALIASES = {
+    "enter": "Return", "esc": "Escape", "del": "Delete", "ins": "Insert",
+    "pgup": "Prior", "pageup": "Prior", "pgdn": "Next", "pagedown": "Next",
+    "bksp": "BackSpace", "backspace": "BackSpace", "spacebar": "space",
+    "up": "Up", "down": "Down", "left": "Left", "right": "Right",
+}
+
+
+def _normalize_key(key):
+    """Map a semantic key/chord to xdotool keysyms: 'Enter' -> 'Return',
+    'ctrl+Enter' -> 'ctrl+Return'. Each '+'-separated token is mapped independently;
+    tokens not in the alias table (letters, modifiers, real keysyms) pass through unchanged."""
+    return "+".join(_KEY_ALIASES.get(p.strip().lower(), p.strip())
+                    for p in str(key).split("+"))
+
 # The container's Xvfb desktop is SCREEN_RESOLUTION=1280x800x24 (screen/scripts/entrypoint.sh).
-# A full desktop body: every pointer verb, a bash shell, X-style key names (xdotool takes
-# X keysyms/chords directly — Return, Escape, ctrl+a — so no key remapping is needed).
+# A full desktop body: every pointer verb, a bash shell, X keysyms/chords via xdotool
+# (Return, Escape, ctrl+a). The Brain names keys semantically, so common natural synonyms are
+# normalized to the keysym before sending (see _KEY_ALIASES) — else a plain "Enter" 400s.
 DESKTOP_CAPS = Capabilities(
     name="docker-desktop",
     width=1280,
@@ -59,6 +79,8 @@ class ContainerDevice:
         return self._open(self._base + "/screenshot")
 
     def act(self, action):
+        if action.get("type") == "key" and action.get("key"):
+            action = {**action, "key": _normalize_key(action["key"])}
         req = urllib.request.Request(
             self._base + "/action", data=json.dumps(action).encode(),
             headers={"Content-Type": "application/json"}, method="POST")
