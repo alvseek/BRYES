@@ -213,7 +213,7 @@ def _ask(prompt, images, *, model, max_tokens, timeout, reasoning=None):
     try:
         data = json.loads(urllib.request.urlopen(req, timeout=timeout).read())
     except urllib.error.HTTPError as e:
-        raise RuntimeError(f"OpenRouter HTTP {e.code}: {e.read().decode()[:400]}")
+        raise RuntimeError(f"OpenRouter HTTP {e.code}: {e.read().decode()[:400]}") from e
     # A rate-limit / provider error can come back as HTTP 200 with an {"error": ...} body
     # (no "choices"). Surface it as a RuntimeError instead of a bare KeyError, so callers
     # that degrade on RuntimeError (box() -> full-frame fallback) handle it cleanly.
@@ -245,8 +245,10 @@ def _crop(image_bytes, box_xyxy, pad):
     x1, y1, x2, y2 = box_xyxy
     dx = (x2 - x1) * pad
     dy = (y2 - y1) * pad
-    x1 = max(0, int(x1 - dx)); y1 = max(0, int(y1 - dy))
-    x2 = min(w, int(x2 + dx)); y2 = min(h, int(y2 + dy))
+    x1 = max(0, int(x1 - dx))
+    y1 = max(0, int(y1 - dy))
+    x2 = min(w, int(x2 + dx))
+    y2 = min(h, int(y2 + dy))
     buf = io.BytesIO()
     im.crop((x1, y1, x2, y2)).save(buf, format="PNG")
     return buf.getvalue()
@@ -288,7 +290,7 @@ def describe(image_bytes, visual_focus=None, visual_expectation=None, *, careful
     model = CAREFUL_MODEL if careful else DESCRIBE_MODEL
     # App/OS VISUAL profile (profiles.py), prepended so the Eyes read a known app's screen right
     # (e.g. "this is WhatsApp"; "the word strip above the keyboard is autocorrect, not typed text").
-    ctx = f"CONTEXT (how to read this app's screen):\n{context.strip()}\n\n" if context else ""
+    ctx = f"AUTHORITATIVE — how the current device and app LOOK; use this to read the screen:\n{context.strip()}\n\n" if context else ""
 
     def _overview_img():
         # Downscale to the OVERVIEW gist AND persist the exact downscaled frame the Eyes read
