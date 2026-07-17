@@ -52,6 +52,7 @@ _POINT_VERB = {
 # so exploration is safe; a legitimately-repeating action like scrolling just gets a nudge it
 # can ignore). Real recovery lives in the Brain, off the accurate report.
 _REPEAT_LIMIT = 2   # consecutive identical actions before an advisory "you're repeating" nudge
+_FAILURE_LIMIT = 3  # consecutive action-execution FAILURES before a "reconsider or fail" nudge
 
 
 def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=None,
@@ -91,6 +92,7 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
     prev_shot = None             # last step's frame — kept for the Layer-3 2-image diff
     last_sig = None              # signature of the previous action
     repeat_streak = 0            # consecutive identical actions (advisory runaway guard)
+    action_failures = 0          # consecutive action-execution failures (non-fatal-action guard)
     totals = {"screen": 0.0, "describe": 0.0, "decide": 0.0, "locate": 0.0, "act": 0.0}
     _loc = {"s": 0.0}      # per-step locate accumulator; timed_locate() adds into it
 
@@ -150,6 +152,17 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
                 log(f"         [escalation] same action x{repeat_streak + 1} -> nudging Brain"
                     + (" (suggest diff)" if repeat_streak >= _REPEAT_LIMIT + 1 else ""))
 
+            # Failure-storm guard: unlike the repeat-guard (same action), this catches a run
+            # where DIFFERENT actions keep failing to EXECUTE (bad targets, a sick body). After
+            # _FAILURE_LIMIT consecutive failures, nudge the Brain to change tack or give up.
+            if action_failures >= _FAILURE_LIMIT:
+                storm = (f"SYSTEM ALERT: {action_failures} actions in a row FAILED to execute "
+                         "(see the FAILED notes in your history). Your current approach is not "
+                         "working — choose a genuinely DIFFERENT action, or use 'fail' if the "
+                         "goal cannot be reached.")
+                escalation = (escalation + " " + storm) if escalation else storm
+                log(f"         [escalation] {action_failures} consecutive failures -> nudging Brain")
+
             t = time.perf_counter()
             action = decide(goal, observation, history, caps=device.caps,
                             model=brain_model, escalation=escalation)  # device-aware decide
@@ -187,76 +200,94 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
 
             _loc["s"] = 0.0
             t = time.perf_counter()
-            if act in ALL_VERBS and act not in device.caps.verbs:
-                # Defensive: the Brain's vocab is built from caps (Phase 2), so this
-                # shouldn't happen — but if a verb this body can't do slips through, skip
-                # it rather than error.
-                did = f"skipped '{act}': not supported by {device.caps.name}"
-            elif act == "shell" and not device.caps.has_shell:
-                did = f"skipped 'shell': {device.caps.name} has no shell channel"
-            elif act in _POINT_VERB:
-                # point-and-do: the Eyes locate the named target, the Hands act at that pixel
-                target = action.get("target", "")
-                loc = timed_locate(shot, target)                       # Eyes: where
-                device.act({"type": act, "x": loc["x"], "y": loc["y"]})  # Hands: do
-                did = f"{_POINT_VERB[act]} '{target}' at ({loc['x']},{loc['y']})"
-            elif act == "scroll":
-                target = action.get("target", "")
-                direction = (action.get("direction") or "down").lower()
-                loc = timed_locate(shot, target)
-                device.act({"type": "scroll", "x": loc["x"], "y": loc["y"], "direction": direction})
-                did = f"scrolled {direction} at '{target}' ({loc['x']},{loc['y']})"
-            elif act == "drag":
-                target = action.get("target", "")
-                dest = action.get("destination", "")
-                a = timed_locate(shot, target)                         # Eyes: start point
-                b = timed_locate(shot, dest)                      # Eyes: drop point
-                device.act({"type": "drag", "x": a["x"], "y": a["y"], "x2": b["x"], "y2": b["y"]})
-                did = f"dragged '{target}' ({a['x']},{a['y']}) -> '{dest}' ({b['x']},{b['y']})"
-            elif act == "wait":
-                # Let a loading screen settle. No UI interaction — just pause and re-observe.
-                # The Brain chooses the duration; clamp to a sane range.
-                try:
-                    secs = float(action.get("seconds", 2))
-                except (TypeError, ValueError):
-                    secs = 2.0
-                secs = max(0.5, min(secs, 30.0))    # 30s ceiling ~ standard API timeout
-                time.sleep(secs)
-                did = f"waited {secs:g}s for the screen to settle"
-            elif act == "screenshot":
-                # Capture the current screen as a deliverable (distinct from the per-step
-                # diagnostic frames). Reuses this step's frame — exactly what the Brain saw.
-                captures += 1
-                runlog.save_image(f"capture-{captures:02d}.png", shot)
-                did = f"captured screenshot #{captures} (capture-{captures:02d}.png)"
-            elif act == "shell":
-                # Tier-2 effector: run a command directly instead of driving the GUI. The
-                # result is invisible on screen, so thread exit + output into HISTORY —
-                # that's how the Brain sees what happened (vision uses the next screenshot).
-                cmd = action.get("command", "")
-                res = device.shell(cmd, timeout=action.get("timeout"),
-                                   stdin=action.get("stdin"))
-                out = (res.get("stdout") or "").strip()
-                did = f"ran shell '{cmd}' -> exit {res.get('exit_code')}; out: {out or '(empty)'}"
-                err = (res.get("stderr") or "").strip()
-                if not res.get("ok") and err:
-                    did += f"; err: {err}"
-                if res.get("timed_out"):
-                    did += " [TIMED OUT]"
-            elif act == "type":
-                # type sends text to whatever is FOCUSED — it must NOT click first, or it
-                # would drop the cursor/selection the Brain just set up (e.g. a Ctrl+A
-                # select-all before a replace). The Brain focuses fields with explicit
-                # click actions; type just types.
-                text = action.get("text", "")
-                device.act({"type": "type", "text": text})
-                did = f"typed '{text}'"
-            elif act == "key":
-                k = action.get("key", "")
-                device.act({"type": "key", "key": k})
-                did = f"pressed key '{k}'"
-            else:
-                did = f"unknown action skipped: {action}"
+            try:
+                if act in ALL_VERBS and act not in device.caps.verbs:
+                    # Defensive: the Brain's vocab is built from caps (Phase 2), so this
+                    # shouldn't happen — but if a verb this body can't do slips through, skip
+                    # it rather than error.
+                    did = f"skipped '{act}': not supported by {device.caps.name}"
+                elif act == "shell" and not device.caps.has_shell:
+                    did = f"skipped 'shell': {device.caps.name} has no shell channel"
+                elif act in _POINT_VERB:
+                    # point-and-do: the Eyes locate the named target, the Hands act at that pixel
+                    target = action.get("target", "")
+                    loc = timed_locate(shot, target)                       # Eyes: where
+                    device.act({"type": act, "x": loc["x"], "y": loc["y"]})  # Hands: do
+                    did = f"{_POINT_VERB[act]} '{target}' at ({loc['x']},{loc['y']})"
+                elif act == "scroll":
+                    target = action.get("target", "")
+                    direction = (action.get("direction") or "down").lower()
+                    loc = timed_locate(shot, target)
+                    device.act({"type": "scroll", "x": loc["x"], "y": loc["y"], "direction": direction})
+                    did = f"scrolled {direction} at '{target}' ({loc['x']},{loc['y']})"
+                elif act == "drag":
+                    target = action.get("target", "")
+                    dest = action.get("destination", "")
+                    a = timed_locate(shot, target)                         # Eyes: start point
+                    b = timed_locate(shot, dest)                      # Eyes: drop point
+                    device.act({"type": "drag", "x": a["x"], "y": a["y"], "x2": b["x"], "y2": b["y"]})
+                    did = f"dragged '{target}' ({a['x']},{a['y']}) -> '{dest}' ({b['x']},{b['y']})"
+                elif act == "wait":
+                    # Let a loading screen settle. No UI interaction — just pause and re-observe.
+                    # The Brain chooses the duration; clamp to a sane range.
+                    try:
+                        secs = float(action.get("seconds", 2))
+                    except (TypeError, ValueError):
+                        secs = 2.0
+                    secs = max(0.5, min(secs, 30.0))    # 30s ceiling ~ standard API timeout
+                    time.sleep(secs)
+                    did = f"waited {secs:g}s for the screen to settle"
+                elif act == "screenshot":
+                    # Capture the current screen as a deliverable (distinct from the per-step
+                    # diagnostic frames). Reuses this step's frame — exactly what the Brain saw.
+                    captures += 1
+                    runlog.save_image(f"capture-{captures:02d}.png", shot)
+                    did = f"captured screenshot #{captures} (capture-{captures:02d}.png)"
+                elif act == "shell":
+                    # Tier-2 effector: run a command directly instead of driving the GUI. The
+                    # result is invisible on screen, so thread exit + output into HISTORY —
+                    # that's how the Brain sees what happened (vision uses the next screenshot).
+                    cmd = action.get("command", "")
+                    res = device.shell(cmd, timeout=action.get("timeout"),
+                                       stdin=action.get("stdin"))
+                    out = (res.get("stdout") or "").strip()
+                    did = f"ran shell '{cmd}' -> exit {res.get('exit_code')}; out: {out or '(empty)'}"
+                    err = (res.get("stderr") or "").strip()
+                    if not res.get("ok") and err:
+                        did += f"; err: {err}"
+                    if res.get("timed_out"):
+                        did += " [TIMED OUT]"
+                elif act == "type":
+                    # type sends text to whatever is FOCUSED — it must NOT click first, or it
+                    # would drop the cursor/selection the Brain just set up (e.g. a Ctrl+A
+                    # select-all before a replace). The Brain focuses fields with explicit
+                    # click actions; type just types.
+                    text = action.get("text", "")
+                    device.act({"type": "type", "text": text})
+                    did = f"typed '{text}'"
+                elif act == "key":
+                    k = action.get("key", "")
+                    device.act({"type": "key", "key": k})
+                    did = f"pressed key '{k}'"
+                else:
+                    did = f"unknown action skipped: {action}"
+                action_failures = 0    # the action executed cleanly — reset the failure streak
+            except Exception as e:
+                # A Hands/Eyes/shell call FAILED (bad key, unlocatable target, a container or
+                # network hiccup). Do NOT crash the run — turn the failure into a Brain-visible
+                # history note so it adapts next step (Phase-5: problems become observations the
+                # Brain judges). The step still advances; _FAILURE_LIMIT guards a failure storm.
+                action_failures += 1
+                detail = (action.get("target") or action.get("text") or action.get("key")
+                          or action.get("command") or "")
+                code = getattr(e, "code", None)      # HTTPError carries the status code
+                cause = f"HTTP {code}" if code else f"{type(e).__name__}: {str(e)[:80]}"
+                did = (f"action '{act}'" + (f" '{detail}'" if detail else "")
+                       + f" FAILED ({cause}); the screen is unchanged — try a genuinely "
+                       "DIFFERENT action, or use 'fail' if you cannot proceed")
+                log(f"         [action-error] {did}")
+                if runlog:
+                    runlog.record("action-error", {"action": action}, cause)
 
             t_locate = _loc["s"]
             t_act = (time.perf_counter() - t) - t_locate
