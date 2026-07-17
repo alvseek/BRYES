@@ -290,9 +290,18 @@ def describe(image_bytes, visual_focus=None, visual_expectation=None, *, careful
     # (e.g. "this is WhatsApp"; "the word strip above the keyboard is autocorrect, not typed text").
     ctx = f"CONTEXT (how to read this app's screen):\n{context.strip()}\n\n" if context else ""
 
+    def _overview_img():
+        # Downscale to the OVERVIEW gist AND persist the exact downscaled frame the Eyes read
+        # (same tracing rationale as the crop save below): a suspect overview read can then be
+        # traced to what q3-8b actually saw at OVERVIEW_SCALE (e.g. whether 0.375 dropped detail).
+        small = _downscale(image_bytes, OVERVIEW_SCALE)
+        if runlog:
+            runlog.save_image(f"step-{runlog.current_step():02d}-overview.png", small)
+        return small
+
     if not visual_focus and not visual_expectation:
         # OVERVIEW — downscaled gist.
-        result = _ask(ctx + OVERVIEW_PROMPT, _downscale(image_bytes, OVERVIEW_SCALE),
+        result = _ask(ctx + OVERVIEW_PROMPT, _overview_img(),
                       model=model, max_tokens=1024, timeout=timeout, reasoning=NO_THINK)
         mode = f"overview x{OVERVIEW_SCALE:g}"
     elif visual_focus:
@@ -303,7 +312,7 @@ def describe(image_bytes, visual_focus=None, visual_expectation=None, *, careful
             # wrong region or silently full-frame — tell the Brain the region isn't visible and
             # give a whole-screen OVERVIEW so it can re-orient (drop visual_focus, or act to
             # bring the target into view). This is what stops the Eyes fabricating a crop.
-            overview = _ask(ctx + OVERVIEW_PROMPT, _downscale(image_bytes, OVERVIEW_SCALE),
+            overview = _ask(ctx + OVERVIEW_PROMPT, _overview_img(),
                             model=model, max_tokens=1024, timeout=timeout, reasoning=NO_THINK)
             head = f"VISUAL_FOCUS FAILED: nothing matching '{visual_focus}' is visible on screen"
             if visual_expectation:
