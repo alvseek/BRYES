@@ -53,11 +53,13 @@ to act, and you pick the most DIRECT one that fits each task:
   element you name, and the Hands can click, double-click, right-click, hover, scroll,
   drag, type, and press keys. Use this for graphical apps and web pages — things that
   only exist on screen.
-Given the GOAL, a text description of what is currently on screen (OBSERVATION), and the
-HISTORY of prior steps, decide the SINGLE next action.
+Given the GOAL, your CURRENT CONDITION (your last action, what it produced, and the current
+screen), your CONFIRMED FINDINGS (facts you have already established), and the HISTORY of prior
+actions, decide the SINGLE next action.
 
-The HISTORY lists the actions you have ALREADY taken (most recent last). Judge the
-current situation from the OBSERVATION — not from memory of past screens.
+Judge the current SCREEN from CURRENT CONDITION — never from memory of a past screen (screens
+change). But TRUST your CONFIRMED FINDINGS and HISTORY: those are facts you already read or
+computed, not stale screen-memory — do NOT re-verify a confirmed finding.
 
 Rules:
 - WRITE IN ENGLISH: reason and fill EVERY field of your reply in English only,
@@ -69,13 +71,21 @@ Rules:
   If a task genuinely needs an INTERACTIVE terminal (a REPL like python, an ssh session, a
   program that prompts mid-run), do NOT use "shell" — open a terminal window (xterm) and
   drive it with vision instead.
-- FOLLOW THE OBSERVED STATE: your understanding of what is on screen right now MUST come
-  from the current OBSERVATION, read EXACTLY as written — never from memory, assumption,
-  or what you expected your last action to produce. Before choosing an action, evaluate
-  three things in order: (a) what the OBSERVATION shows right now, (b) what you have
-  already done (HISTORY), and (c) what still remains to reach the GOAL. Decide from that
-  comparison. If the OBSERVATION contradicts what you expected, trust the OBSERVATION.
-- COMPARE THE VERIFICATION REPORT: when the OBSERVATION begins with "VERIFICATION:", that
+- FOLLOW THE OBSERVED STATE: what is on screen right now MUST come from the Current screen in
+  CURRENT CONDITION, read EXACTLY as written — never from memory of a past screen or what you
+  expected your last action to produce. Before choosing an action, evaluate: (a) the Current
+  screen, (b) your CONFIRMED FINDINGS + HISTORY (what you have established / done), and (c) what
+  remains to reach the GOAL. If the Current screen contradicts what you expected, trust the
+  screen. If a CONFIRMED FINDING already answers part of the GOAL, USE it — do not re-read it.
+- BANK WHAT YOU LEARN (FINDINGS): the moment you READ or COMPUTE a fact you will need later (a
+  price, a count, a verified state, a result), put it in "findings". It is saved to CONFIRMED
+  FINDINGS and stays visible every future step, so you never re-read or re-derive it. Record a
+  fact ONLY once you have actually seen or computed it. If a finding was wrong, write a
+  correction in "findings" (e.g. "correction: X is actually Y"). Do NOT re-search for, or delay
+  "done" over, data you have ALREADY banked — read it from CONFIRMED FINDINGS.
+- EXPLAIN EACH ACTION (NOTE): put a short one-line reason for this action in "note"; it is saved
+  to your HISTORY so future steps see WHY you did each thing, not just the raw action.
+- COMPARE THE VERIFICATION REPORT: when the Current screen begins with "VERIFICATION:", that
   is the Eyes reporting the ACTUAL state of what you set in "visual_expectation" (a grounded reading of
   the pixels, not a verdict). Compare it to what you expected. If it differs, your action
   MAYBE didn't do what you thought — rethink or adapt (re-read the state, try a different
@@ -115,22 +125,23 @@ Rules:
   whole-screen overview instead.
 - GET YOUR BEARINGS WITH AN OVERVIEW: leave "visual_focus" EMPTY to receive a whole-screen
   OVERVIEW — a gist of everything on screen (apps, windows, what stands out). Use it to orient
-  when you are unsure what is shown. If an OBSERVATION begins "VISUAL_FOCUS FAILED", the region
+  when you are unsure what is shown. If the Current screen begins "VISUAL_FOCUS FAILED", the region
   you named is NOT visible (it may be closed, minimized, off-screen, or behind another window) —
   do NOT keep asking the Eyes for it. Take an overview (omit visual_focus) to re-orient, then
   act to bring the target into view (e.g. reopen or raise the window) before focusing on it again.
+  (This "VISUAL_FOCUS FAILED" report arrives as the Current screen in CURRENT CONDITION.)
 - PREDICT WHAT YOU'LL SEE (VISUAL_EXPECTATION): whenever you take an action that SHOULD change
   the screen, set "visual_expectation" to the state you predict will be TRUE right afterward,
   phrased as an ABSOLUTE, NAMEABLE target-state (e.g. "the Settings app is open", "the address
   bar shows example.com") — NOT a relative one ("something new appeared"). Next step the Eyes
-  REPORT the actual state of that thing back to you (the OBSERVATION begins "VERIFICATION: ..."),
+  REPORT the actual state of that thing back to you (the Current screen begins "VERIFICATION: ..."),
   for you to compare against what you expected. Set "visual_expectation" ONLY together with
   "visual_focus", and point "visual_focus" at the region where that change will be VISIBLE — the
   result/display area, NOT the button you pressed. The Eyes crop to it, read it closely, and
   REPORT its actual state. (After typing a digit, verifying it means looking at the DISPLAY, not
   the key you clicked.) A "visual_expectation" without a "visual_focus" cannot be verified precisely.
 - WHEN STUCK, ASK FOR A DIFF (EXPENSIVE): if you cannot tell what your last action did —
-  the OBSERVATION is ambiguous, or the VERIFICATION report doesn't match what you expected —
+  the Current screen is ambiguous, or the VERIFICATION report doesn't match what you expected —
   set "request_diff": true. Next step you will receive a precise "CHANGES SINCE YOUR LAST
   ACTION" account. It costs a SLOW, EXPENSIVE extra vision pass, so use it sparingly —
   only when genuinely stuck, never as a routine check.
@@ -182,7 +193,7 @@ Rules:
   "timeout" to the seconds you expect, up to 300. For a very long job, start it in the
   background with "&" and check on it later. Put the full command line in "command".
 - Choose exactly ONE next action that makes real progress toward the goal.
-- If the OBSERVATION shows the goal is already satisfied, use action "done".
+- If the Current screen OR your CONFIRMED FINDINGS show the goal is already satisfied, use action "done".
 - If you are truly stuck or the goal is impossible, use action "fail".
 - Return your decision as a SINGLE JSON object matching the decide_action schema — only the
   JSON object, no prose, no markdown fences.
@@ -198,6 +209,18 @@ class BrainAction(BaseModel):
     thought: str = Field(
         description="Your reasoning in English: what the screen shows now, progress vs the "
                     "GOAL, and why this is the next action.")
+    note: str | None = Field(
+        None, description="A COMPACT one-line reason for THIS action (why you're taking it now), "
+                          "recorded in your action HISTORY so later steps see your intent, not "
+                          "just the raw action. Keep it to one short clause.")
+    findings: str | None = Field(
+        None, description="NEW confirmed fact(s) to BANK durably this step — a value you just "
+                          "READ or COMPUTED that you will need later (a price, a count, a verified "
+                          "state). It is appended to the CONFIRMED FINDINGS ledger and stays "
+                          "visible every future step, so you never re-read or re-derive it. Write "
+                          "a fact ONLY once you have actually SEEN or COMPUTED it (not a guess or "
+                          "a plan). To fix an earlier wrong finding, write a correction here "
+                          "(e.g. 'correction: MX3 card-3 price is Rp1.136.350, not 1.130.000').")
     action: str = Field(
         description="The single next action to take (must be one of the allowed action names).")
     target: str | None = Field(
@@ -312,8 +335,55 @@ def _load_key():
     return os.environ.get("OPENROUTER_API_KEY", "").strip()
 
 
-def decide(goal, observation, history=None, *, caps=None, model=None, effort="high",
-           timeout=60, retries=2, escalation=None, context=None):
+def _build_decide_prompt(goal, *, last_action=None, last_result=None, current_visual=None,
+                         visual_unchanged=False, findings=None, history=None,
+                         context=None, escalation=None, observation=None):
+    """Compose the Brain's per-step user prompt as priority-ordered, labelled blocks (ADR-007):
+    GOAL / CURRENT CONDITION / CONFIRMED FINDINGS / HISTORY / PROFILES MANUAL / <escalation> / TODO.
+
+    PURE + string-only, so it is unit-testable without a model. CURRENT CONDITION is
+    channel-aware: `last_result` is whatever the last action produced (a shell action's /exec
+    output, or a pointer to the screen for a visual action); the 'Current screen' line is the
+    fresh observation, marked UNCHANGED when the last action did not touch the screen.
+    `observation` is a back-compat fallback — when the structured condition fields are absent it
+    fills 'Current screen' so old callers keep working."""
+    la = last_action or "(none - this is the first step)"
+    lr = last_result or ("(nothing yet)" if last_action is None else "(see Current screen below)")
+    screen = current_visual if current_visual is not None else observation
+    screen = "(not read)" if screen is None else screen
+    if visual_unchanged:
+        screen = f"(UNCHANGED since your last action)\n{screen}"
+    condition = ("CURRENT CONDITION (your primary input - the present moment):\n"
+                 f"- Your last action: {la}\n"
+                 f"- What resulted from it: {lr}\n"
+                 f"- Current screen: {screen}")
+
+    if isinstance(findings, str):
+        findings_txt = findings.strip() or "(none yet)"
+    else:
+        findings_txt = "\n".join(findings) if findings else "(none yet)"
+    findings_block = ("CONFIRMED FINDINGS (facts you have ESTABLISHED - TRUST these, do not "
+                      f"re-verify):\n{findings_txt}")
+
+    hist_txt = "\n".join(f"- {h}" for h in (history or [])) or "(none yet)"
+    history_block = f"HISTORY OF YOUR ACTIONS (most recent last):\n{hist_txt}"
+
+    blocks = [f"GOAL:\n{goal}", condition, findings_block, history_block]
+    if context:
+        blocks.append("PROFILES MANUAL - how the current device and app WORK (follow this "
+                      f"exactly):\n{context.strip()}")
+    if escalation:
+        blocks.append(escalation.strip())
+    blocks.append('TODO:\nDecide the single next action - including "done" if the GOAL is '
+                  'satisfied, or "fail" if it cannot be reached. Return a JSON object matching '
+                  "the decide_action schema.")
+    return "\n\n".join(blocks)
+
+
+def decide(goal, observation=None, history=None, *, caps=None, model=None, effort="high",
+           timeout=60, retries=2, escalation=None, context=None,
+           last_action=None, last_result=None, current_visual=None, visual_unchanged=False,
+           findings=None):
     """Return the next action as a dict: {thought, action, target?, text?, key?, visual_focus?}.
 
     Structured output (ADR-005): the Brain answers by filling a FORCED tool-call whose schema
@@ -331,17 +401,10 @@ def decide(goal, observation, history=None, *, caps=None, model=None, effort="hi
     if not key:
         raise RuntimeError("OPENROUTER_API_KEY not found (check BRYES/.env)")
 
-    hist_txt = "\n".join(f"- {h}" for h in (history or [])) or "(none yet)"
-    escalation_block = f"\n\n{escalation}" if escalation else ""
-    # App/OS OPERATING profile (profiles.py): authoritative how-to for the current app, so the
-    # Brain knows its conventions (e.g. "in WhatsApp you send by TAPPING the Send button, not Enter").
-    app_block = f"\n\nAUTHORITATIVE — how the current device and app WORK (follow this exactly):\n{context.strip()}" if context else ""
-    user = (f"GOAL:\n{goal}\n\n"
-            f"OBSERVATION (what is on screen now):\n{observation}\n\n"
-            f"HISTORY (actions you have already taken):\n{hist_txt}"
-            f"{escalation_block}{app_block}\n\n"
-            f"Decide the single next action and return it as a JSON object matching the "
-            f"decide_action schema.")
+    user = _build_decide_prompt(
+        goal, last_action=last_action, last_result=last_result, current_visual=current_visual,
+        visual_unchanged=visual_unchanged, findings=findings, history=history,
+        context=context, escalation=escalation, observation=observation)
     messages = [{"role": "system", "content": system_prompt},
                 {"role": "user", "content": user}]
     reasoning = {"effort": effort} if effort else {"enabled": False}

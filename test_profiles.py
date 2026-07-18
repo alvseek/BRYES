@@ -37,6 +37,15 @@ def main():
     ok &= check("visual carries the whatsapp leaf", "Send button" in wa["visual"])
     ok &= check("operating carries the android base", "go back one screen" in wa["operating"])
 
+    # 2b. glossary is labelled PER SOURCE (ADR-007): each profile's Terms & Vocab gets its own
+    #     "<LABEL> UI ELEMENTS:" head, in BOTH halves — never a single undifferentiated blob.
+    ok &= check("visual has ANDROID + WHATSAPP UI ELEMENTS heads",
+                "ANDROID UI ELEMENTS:" in wa["visual"] and "WHATSAPP UI ELEMENTS:" in wa["visual"])
+    ok &= check("operating has ANDROID + WHATSAPP UI ELEMENTS heads",
+                "ANDROID UI ELEMENTS:" in wa["operating"] and "WHATSAPP UI ELEMENTS:" in wa["operating"])
+    ok &= check("no unlabelled 'UI ELEMENTS:' blob head",
+                "\nUI ELEMENTS:" not in ("\n" + wa["visual"]) and not wa["visual"].startswith("UI ELEMENTS:"))
+
     # 3. dedup: android is already in whatsapp's chain, so adding it explicitly is a NO-OP
     #    (the shared base is merged once, not twice)
     merged = p.load_profiles(["android/whatsapp", "android"])

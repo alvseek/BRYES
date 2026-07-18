@@ -47,6 +47,17 @@ _POINT_VERB = {
     "hover": "hovered",
 }
 
+# Which actions leave the SCREEN unchanged (ADR-007): shell + screenshot never touch it, and a
+# FAILED action leaves it as-is. Everything else — INCLUDING `wait`, whose whole purpose is to
+# let content load — may change the screen. Drives the channel-aware CURRENT CONDITION and
+# (Phase 3) lets the loop skip a redundant describe().
+_SCREEN_UNCHANGED_ACTS = frozenset({"shell", "screenshot"})
+
+
+def _changes_screen(act, failed):
+    """True if this action may have changed the screen (so the next observation is worth reading)."""
+    return not failed and act not in _SCREEN_UNCHANGED_ACTS
+
 # Recovery backstop (Phase 5): the Brain now judges progress itself, by comparing the Eyes'
 # VERIFICATION report to what it expected. The loop keeps only a dumb, ADVISORY guard against
 # a runaway — the SAME action repeated many times in a row (different actions never trip it,
@@ -177,6 +188,11 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
     runlog.note(f"embodiment - {embodiment_note}")
     log(f"(transcript -> {rundir})\n")
     history = []
+    findings = []                # ADR-007: append-only CONFIRMED FINDINGS ledger (loop-owned)
+    last_action_desc = None      # CURRENT CONDITION: the previous step's action ...
+    last_result = None           # ... and its channel-aware result (screen-pointer / shell outcome)
+    visual_unchanged = False     # did the last action leave the current screen unchanged?
+    prev_observation = None      # last DESCRIBED observation — reused when the screen didn't change
     visual_focus = None
     visual_expectation = None    # the Brain's prediction for THIS step (set last step)
     want_diff = False            # did the last action ask for an expensive 2-image diff?
@@ -203,18 +219,34 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
             t_screen = time.perf_counter() - t
             runlog.save_image(f"step-{step:02d}.png", shot)
 
-            if want_recheck:
-                log("         [recheck] re-reading the visual_focus region on the 72B (careful)")
-            t = time.perf_counter()
-            # Eyes: what's on screen. describe() picks its mode (ADR-004): no visual_focus -> a
-            # downscaled OVERVIEW gist; visual_focus set -> TRIM (72B box -> crop -> fast describe).
-            # It also REPORTs the actual state of what the Brain set in `visual_expectation`
-            # ("VERIFICATION: ...") for the Brain to compare — the Eyes perceive; the Brain judges.
-            # careful=want_recheck routes the crop describe to the 72B (the recheck rung of the ladder).
-            observation = describe(shot, visual_focus=visual_focus,
-                                   visual_expectation=visual_expectation, careful=want_recheck,
-                                   context=prof_visual)
-            t_describe = time.perf_counter() - t
+            # Phase 3 (ADR-007): if the LAST action left the screen UNCHANGED (shell / screenshot
+            # / a failed action) and the Brain asked for no explicit look (focus / recheck / diff),
+            # SKIP the describe() model call and reuse the prior observation — the Eyes would only
+            # re-read an identical screen. Any explicit perception request is still honored.
+            skip_describe = (visual_unchanged and prev_observation is not None
+                             and not (visual_focus or want_recheck or want_diff))
+            if skip_describe:
+                observation = prev_observation
+                # The reused screen is NOT a fresh verification — drop a stale "VERIFICATION:"
+                # prefix (it referred to an expectation from an earlier step) so it doesn't mislead.
+                if observation.startswith("VERIFICATION:") and "\n\n" in observation:
+                    observation = observation.split("\n\n", 1)[1]
+                t_describe = 0.0
+                log("         [eyes skipped] screen unchanged since a non-visual action")
+            else:
+                if want_recheck:
+                    log("         [recheck] re-reading the visual_focus region on the 72B (careful)")
+                t = time.perf_counter()
+                # Eyes: what's on screen. describe() picks its mode (ADR-004): no visual_focus -> a
+                # downscaled OVERVIEW gist; visual_focus set -> TRIM (72B box -> crop -> fast describe).
+                # It also REPORTs the actual state of what the Brain set in `visual_expectation`
+                # ("VERIFICATION: ...") for the Brain to compare — the Eyes perceive; the Brain judges.
+                # careful=want_recheck routes the crop describe to the 72B (the recheck rung).
+                observation = describe(shot, visual_focus=visual_focus,
+                                       visual_expectation=visual_expectation, careful=want_recheck,
+                                       context=prof_visual)
+                t_describe = time.perf_counter() - t
+            prev_observation = observation
 
             # Layer 3 (Phase 5): if the LAST action requested it, run the EXPENSIVE 2-image
             # diff (prev vs current = the effect of that action) and append a precise
@@ -258,9 +290,12 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
                 log(f"         [escalation] {action_failures} consecutive failures -> nudging Brain")
 
             t = time.perf_counter()
-            action = decide(goal, observation, history, caps=device.caps,
+            action = decide(goal, history=history, caps=device.caps,
                             model=brain_model, escalation=escalation,
-                            context=prof_operating)  # device- + app-aware decide
+                            context=prof_operating,           # device- + app-aware decide
+                            last_action=last_action_desc, last_result=last_result,
+                            current_visual=observation, visual_unchanged=visual_unchanged,
+                            findings=findings)               # ADR-007: channel-aware condition + ledger
             t_decide = time.perf_counter() - t
             totals["screen"] += t_screen
             totals["describe"] += t_describe
@@ -268,6 +303,11 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
             action.pop("_usage", None)
             act = action.get("action")
             thought = action.get("thought", "")
+            note = action.get("note")                     # compact "why" -> HISTORY (ADR-007)
+            new_findings = action.get("findings")         # facts to BANK -> CONFIRMED FINDINGS
+            if new_findings:
+                findings.append(f"[step {step}] {new_findings}")
+                log(f"         findings+: {new_findings[:80].strip()}")
             visual_focus = action.get("visual_focus")   # per-step, NOT sticky: set -> TRIM there, omit -> OVERVIEW
             visual_expectation = action.get("visual_expectation")   # verified next step (not sticky)
             want_diff = bool(action.get("request_diff"))   # 2-image diff next step (not sticky)
@@ -295,6 +335,9 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
                 return {"status": "fail", "steps": step, "history": history}
 
             _loc["s"] = 0.0
+            step_failed = False
+            outcome = None       # non-visual RESULT text for CURRENT CONDITION (shell / failure)
+            gesture = None       # short action label for CURRENT CONDITION (else the full `did`)
             t = time.perf_counter()
             try:
                 if act in ALL_VERBS and act not in device.caps.verbs:
@@ -347,12 +390,14 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
                     res = device.shell(cmd, timeout=action.get("timeout"),
                                        stdin=action.get("stdin"))
                     out = (res.get("stdout") or "").strip()
-                    did = f"ran shell '{cmd}' -> exit {res.get('exit_code')}; out: {out or '(empty)'}"
+                    outcome = f"exit {res.get('exit_code')}; out: {out or '(empty)'}"
                     err = (res.get("stderr") or "").strip()
                     if not res.get("ok") and err:
-                        did += f"; err: {err}"
+                        outcome += f"; err: {err}"
                     if res.get("timed_out"):
-                        did += " [TIMED OUT]"
+                        outcome += " [TIMED OUT]"
+                    did = f"ran shell '{cmd}' -> {outcome}"   # full form -> HISTORY
+                    gesture = f"ran shell: {cmd}"             # short form -> CURRENT CONDITION
                 elif act == "type_into":
                     # Field-entry combo. The loop owns PERCEPTION: ground the optional
                     # click_target to a pixel here (the device has no Eyes). Then hand the whole
@@ -394,6 +439,7 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
                 # history note so it adapts next step (Phase-5: problems become observations the
                 # Brain judges). The step still advances; _FAILURE_LIMIT guards a failure storm.
                 action_failures += 1
+                step_failed = True
                 detail = (action.get("target") or action.get("text")
                           or action.get("click_target") or action.get("key")
                           or action.get("command") or "")
@@ -402,6 +448,8 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
                 did = (f"action '{act}'" + (f" '{detail}'" if detail else "")
                        + f" FAILED ({cause}); the screen is unchanged — try a genuinely "
                        "DIFFERENT action, or use 'fail' if you cannot proceed")
+                gesture = f"tried '{act}'" + (f" '{detail}'" if detail else "")
+                outcome = f"FAILED ({cause}); the screen is unchanged"
                 log(f"         [action-error] {did}")
                 if runlog:
                     runlog.record("action-error", {"action": action}, cause)
@@ -415,11 +463,21 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
             log(f"         {tline}")
             runlog.note(f"step {step} — {tline}")
 
-            # History holds ONLY the actions taken. The Brain judges the current state
-            # from the CURRENT OBSERVATION (an accurate VLM describe), not from a pile of
-            # stale past descriptions — accumulating those blurs the signal, especially
-            # now that describe is verbose.
-            history.append(did)
+            # HISTORY carries the action + a COMPACT note (the Brain's why), so later steps see
+            # intent, not just the raw action (ADR-007). Durable FACTS live in CONFIRMED FINDINGS,
+            # not here; verbose describe text is still kept OUT of history.
+            history.append(did + (f" - {note}" if note else ""))
+
+            # Channel-aware CURRENT CONDITION for the NEXT step (ADR-007): did the action change
+            # the screen? If so, the result shows there; if not (shell/screenshot/failed), the
+            # outcome is the action line itself and the screen is unchanged.
+            changed = _changes_screen(act, step_failed)
+            last_action_desc = gesture or did
+            if changed:
+                last_result = "(the effect shows on the Current screen below)"
+            else:
+                last_result = outcome if outcome is not None else "(no screen change)"
+            visual_unchanged = not changed
 
             # Carry this step's frame forward for the Layer-3 2-image diff: next step's
             # request_diff compares prev_shot (before the action) vs the fresh frame (after).

@@ -94,6 +94,7 @@ Notes that matter for Phase 5:
   an optional `focus` that the loop carries into the *next* `describe`; `history` now
   pairs each step's observation with the action taken; the Brain runs Think High. See
   *First Phase-5 cut* (§6).
+- **(2026-07-18, [ADR-007](adr/2026-07-18-brain-prompt-restructure.md)) The `decide` prompt is now priority-ordered, labelled blocks, and the Brain has a durable memory.** `decide()` composes GOAL / **CURRENT CONDITION** (last action + its channel-aware result + current screen — a `shell` result is its `/exec` output and the screen is marked UNCHANGED) / **CONFIRMED FINDINGS** (an append-only, loop-owned ledger the Brain banks facts into via a `findings` field, and TRUSTS — this closes the "no progress model" half of Seam B: facts it read/computed persist instead of vanishing) / HISTORY (action + a compact `note`) / PROFILES MANUAL / TODO. The loop **skips `describe()`** when the last action left the screen unchanged (shell/screenshot/failed). *(Note: some per-step wiring above — e.g. `decide(goal, obs, history)` signatures and the describe model slug — predates this and is carried doc-sync debt.)*
 
 ---
 

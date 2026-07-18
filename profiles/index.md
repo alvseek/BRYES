@@ -13,3 +13,5 @@ path, so picking `android/whatsapp` also loads `android`.
 
 ## linux — the Linux desktop container (body): Google Chrome, a terminal, a calculator
 - `linux` — base desktop conventions (windows, mouse + keyboard, a shell for command-line tasks)
+- `linux/browser` — browsing the web in Google Chrome (address bar, tabs, on-page search, lazy-loading pages)
+- `linux/browser/tokopedia` — shopping on Tokopedia (search box, product result grid, "Rp" price format)

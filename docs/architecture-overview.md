@@ -20,7 +20,7 @@ GitHub: **github.com/alvseek/BRYES** (remote named `alvseek`, commit identity
 |---|---|---|
 | **Screen** | disposable Ubuntu desktop (Xvfb + fluxbox): screenshots + input, plus a sandboxed **shell** (`/exec`) | local Docker container, `screen/` |
 | **Hands** | `xdotool` click/double-click/right-click/hover/scroll/drag/type/key inside that container | same container |
-| **Eyes** | **qwen3-vl-8b** *describes* (two-mode foveal, [ADR-004](adr/2026-07-16-foveal-describe-trim.md)), **Qwen2.5-VL-72B** *boxes* a focus region + does careful re-reads, **UI-TARS-1.5-7B** *locates* elements (grounding → coordinates) | rented, OpenRouter, `eyes/` |
+| **Eyes** | **qwen3-vl-30b-a3b** *describes* (two-mode foveal, [ADR-004](adr/2026-07-16-foveal-describe-trim.md) + Amend 1; swapped from qwen3-vl-8b 2026-07-18), **Qwen2.5-VL-72B** *boxes* a focus region + does careful re-reads, **UI-TARS-1.5-7B** *locates* elements (grounding → coordinates) | rented, OpenRouter, `eyes/` |
 | **Brain** | `deepseek-v4-flash` (default, swappable; backup `gemini-2.5-flash-lite`) — state → next action (reasoning) | rented, OpenRouter, `brain/` |
 
 **Two rules from the roadmap:** rent everything until it hurts (local GPU 3060 Ti 8GB
@@ -54,7 +54,7 @@ offered verbs the current body can do (a phone never sees `right_click`). Pure A
   action assertions. Live view: noVNC at `http://localhost:6080/vnc.html`; control API on `:8000`.
 - `devices/` — the **Device abstraction** ([ADR-002](adr/2026-07-15-device-interface.md)): `base.py` (`Device` Protocol + `Capabilities`), `container.py` (`ContainerDevice`), `phone.py` (`PhoneDevice`, adb), `test_phone.py` (deterministic smoke). The loop's `run(goal, device=None)` defaults to `ContainerDevice`.
 - `eyes/client.py` — `describe(img, focus?, expect?, careful?)` (two-mode foveal, [ADR-004](adr/2026-07-16-foveal-describe-trim.md): overview gist / boxed-crop trim; q3-8b, 72B for box+careful) + `box(img, target)` (region → bbox, 72B) + `locate(img, instr)` (element → pixel x,y, UI-TARS). Regression: `eyes/test_describe.py`.
-- `brain/client.py` — `decide(goal, observation, history)` → structured JSON action.
+- `brain/client.py` — `decide(...)` composes priority-ordered prompt blocks (GOAL / CURRENT CONDITION / CONFIRMED FINDINGS / HISTORY / PROFILES MANUAL / TODO — [ADR-007](adr/2026-07-18-brain-prompt-restructure.md)) → structured JSON action; the loop banks the Brain's `findings` into a durable, trusted ledger.
 - `agent/loop.py` — `run(goal)` chains screenshot → describe → decide → locate → act.
 - `.env` (gitignored) holds `OPENROUTER_API_KEY` (one key covers Eyes + Brain). Template: `.env.example`.
 

@@ -69,20 +69,25 @@ def load_profiles(paths):
                 seen.add(f)
                 files.append(f)
 
-    terms = []
+    terms = []                            # list of (LABEL, body) — labelled PER SOURCE (ADR-007)
     visual, operating = [], []            # each: list of (LABEL, body)
     for f in files:
         label = f.parent.name.upper()     # profiles/android/whatsapp/profile.md -> "WHATSAPP"
         secs = _parse_sections(f.read_text(encoding="utf-8"))
         if secs.get("Terms & Vocab"):
-            terms.append(secs["Terms & Vocab"])
+            terms.append((label, secs["Terms & Vocab"]))
         if secs.get("Visual"):
             visual.append((label, secs["Visual"]))
         if secs.get("Operating"):
             operating.append((label, secs["Operating"]))
 
     def _join(labelled, verb):
-        head = ("UI ELEMENTS:\n" + "\n".join(terms) + "\n\n") if terms else ""
+        # Glossary labelled PER SOURCE ("ANDROID UI ELEMENTS:" / "WHATSAPP UI ELEMENTS:") so the
+        # Brain + Eyes see which app each element belongs to — disambiguating collisions like
+        # WhatsApp's "Search bar" vs Tokopedia's "Search box" (ADR-007).
+        head = ""
+        if terms:
+            head = "\n\n".join(f"{label} UI ELEMENTS:\n{body}" for label, body in terms) + "\n\n"
         blocks = "\n\n".join(f"HOW {label} {verb}:\n{body}" for label, body in labelled)
         return (head + blocks).strip()
 

@@ -45,6 +45,8 @@ def main():
     for sc in SCENARIOS:
         print(f"--- scenario: {sc['name']} ---")
         print(f"    expectation: {sc['expect']}")
+        # Positional (goal, observation, history) uses decide()'s back-compat path (ADR-007):
+        # `observation` fills the CURRENT CONDITION 'Current screen'. Live-model eyeball test.
         action = decide(GOAL, sc["observation"], sc["history"])
         usage = action.pop("_usage", None)
         print(f"    Brain decided: {action}")

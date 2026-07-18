@@ -43,11 +43,15 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 # locate() — GUI grounding (screenshot -> coordinates). UI-TARS = Qwen2.5-VL-7B tuned
 # for grounding; excellent at pointing, weak at describing.
 GROUND_MODEL = "bytedance/ui-tars-1.5-7b"
-# describe() — DEFAULT crop/overview describer: the fast qwen3-vl-8b. The bake-off proved it
-# faithful on TRIMMED crops (no confab; read Rp759 vs struck Rp799; hard calc crops clean) at
-# ~0.3-1.4s — a small clean crop has little to hallucinate. NOT used on full busy frames
-# (where small VLMs flatten/confabulate); the trim is what keeps it honest.
-DESCRIBE_MODEL = "qwen/qwen3-vl-8b-instruct"
+# describe() — DEFAULT crop/overview describer: qwen3-vl-30b-a3b (MoE, only 3B active -> fast).
+# It REPLACED qwen3-vl-8b (2026-07-18): the 8b SYSTEMATICALLY misread discounted-price digits
+# (read Rp2.105.000 as Rp1.050.000, byte-identical across passes at temperature 0 -> a repeatable
+# perceptual error, NOT sampling noise), while 30b-a3b reads them correctly in ONE ~3.7s forward
+# pass and lists ONLY the current price, not the struck-through original. Thinking stays OFF: on
+# this model thinking is both slower AND less accurate (8b-thinking could read it but took 40-115s;
+# 30b-a3b-thinking degraded to wrong). Faithful on TRIMMED crops (little to hallucinate); NOT for
+# full busy frames (small/mid VLMs flatten there) — the trim keeps it honest.
+DESCRIBE_MODEL = "qwen/qwen3-vl-30b-a3b-instruct"
 # box() — bounding box for a named region (powers describe()'s TRIM mode). The 72B was the
 # ONLY model that boxed reliably in the bake-off, including small targets; UI-TARS and the
 # small VLMs only point / mislocate. Stays on 72B — the authoritative Eyes.
@@ -135,7 +139,7 @@ CROP_PROMPT = (
     "Do NOT infer, compute, complete, or guess anything not literally visible. Report only what is there."
 )
 
-OVERVIEW_SCALE = 0.375  # downscale factor for the OVERVIEW gist (0.5 -> 0.375, 2026-07-17: a coarse gist needs no acuity)
+OVERVIEW_SCALE = 0.5  # downscale factor for the OVERVIEW gist (0.375 -> 0.5, 2026-07-18: 0.375 too coarse to read dense result pages; ADR-007)
 CROP_PAD = 0.15        # TRIM crop padding: +15% of the box per side (clip-safety)
 
 

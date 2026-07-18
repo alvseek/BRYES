@@ -32,9 +32,10 @@
 
 ## 4. Efficiency
 
-- [ ] Model tiering: the fast, cheap model is the default (`describe` = `qwen3-vl-8b`); the expensive 72B is used ONLY for boxing and the `recheck` / `request_diff` escalation rungs.
+- [ ] Model tiering: the fast, cheap model is the default (`describe` = `qwen3-vl-30b-a3b`, an MoE — swapped from `qwen3-vl-8b` 2026-07-18, [ADR-004](adr/2026-07-16-foveal-describe-trim.md) Amendment 1); the expensive 72B is used ONLY for boxing and the `recheck` / `request_diff` escalation rungs.
 - [ ] Foveal describe (ADR-004): describe latency ∝ OUTPUT LENGTH → say less about less. OVERVIEW downscales the frame (×0.5); TRIM crops to a boxed region before describing.
-- [ ] History is actions-only — no accumulation of verbose describe text — to keep the Brain's context tight.
+- [ ] History carries actions + a COMPACT per-action note; durable FACTS live in a separate append-only **CONFIRMED FINDINGS** ledger, and CURRENT CONDITION is channel-aware ([ADR-007](adr/2026-07-18-brain-prompt-restructure.md)). Verbose describe text is still kept OUT of both — the rule guards against context *blur*, not against distilled facts.
+- [ ] The Eyes are SKIPPED when the last action left the screen unchanged (shell / screenshot / a failed action) — no redundant `describe()` model call (ADR-007).
 
 ---
 

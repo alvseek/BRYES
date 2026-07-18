@@ -76,3 +76,20 @@ Extends **ADR-003**: the escalation ladder (`recheck` → `request_diff`) grows 
 ---
 
 **Full context**: [High Wizard plan](../../plans/2026-07-16-bryes-foveal-describe-trim.md) · **Evidence**: `artifacts/bakeoff/`
+
+---
+
+## Amendment 1 (2026-07-18): `DESCRIBE_MODEL` qwen3-vl-8b → qwen3-vl-30b-a3b-instruct
+
+The default crop/overview describer is changed from `qwen/qwen3-vl-8b-instruct` to **`qwen/qwen3-vl-30b-a3b-instruct`** (a Qwen3-VL MoE, ~3B active params). `BOX_MODEL` / `CAREFUL_MODEL` (the 72B authoritative Eyes) are unchanged; thinking stays OFF.
+
+**Why (measured, same-crop 3× at temperature 0):** the 8b **systematically misread discounted Tokopedia price cards** — read `Rp2.105.000` as `Rp1.050.000`, **byte-identical across passes** (a repeatable perceptual error on the struck-original + badge layout, NOT sampling noise) — which silently produced a *wrong* answer even after the [ADR-007](2026-07-18-brain-prompt-restructure.md) convergence fix. Model bake-off on the same crop:
+
+| Model | Discount read | Latency (typ.) | $in/$out per M |
+|---|---|---|---|
+| qwen3-vl-8b (old) | ❌ wrong (2.1M→1.0M) | ~6s | 0.117 / 0.455 |
+| **qwen3-vl-30b-a3b (new)** | ✅ correct 3/3, lists only current | **~3.7s** (occasional 20–30s spike) | 0.130 / 0.520 |
+| qwen3-vl-32b | ✅ correct, slower | ~11s | 0.104 / 0.416 |
+| qwen2.5-vl-72b | ✅ correct | ~9s | 0.800 / 1.000 |
+
+30b-a3b is a **near-strict upgrade**: more accurate on dense/discounted layouts, **faster** than the 8b (MoE), and cleaner (reports only the current price). Thinking was tested and rejected: `8b-thinking` reads correctly but takes 40–115s; `30b-a3b-thinking` *degraded* accuracy — confirming "thinking off" for perception. This obsoletes the [ADR-007](2026-07-18-brain-prompt-restructure.md) "route numeric reads to the 72B" follow-up (a model swap is simpler and covers it). **Validated live**: the exact Tokopedia task now reads MX4 at ~2.1M and lands the correct verdict ("MX4 dearer by Rp378.980"), where every prior run was backwards. *(Latency spikes on 30b-a3b are provider-variance — worth monitoring.)*
