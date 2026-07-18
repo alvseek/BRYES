@@ -171,6 +171,18 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 - **update_trigger**: "when embodiment selection (select_embodiment / Embodiment / resolve_embodiment / _ROOT_DEVICE / the run() selection stage / profiles/index.md) or the answer-only path changes"
 - **notes**: "ADR-006 — the agent SELF-SELECTS its embodiment at task start: before the loop (text-only, no screenshot yet) the Brain reads the catalog profiles/index.md and returns Embodiment{device, profiles, reason} — which BODY (android->PhoneDevice, linux->ContainerDevice; ONE body per run) + which app profiles, or device=None -> answer(goal) directly (no loop). load_profiles(list) merges + de-dups multiple profile chains, LABELLED per-profile (HOW ANDROID/WHATSAPP WORKS -> Brain, ...LOOKS -> Eyes). Explicit run(device=/profile=) overrides the pick. Builds on ADR-002 (Device) + ADR-005 (structured output). Validated live: answer-only + WhatsApp self-select on the real phone (self-picked android+android/whatsapp)."
 
+### `docs/adr/2026-07-18-brain-prompt-restructure.md`
+
+- **type**: adr
+- **scope**: shared
+- **roles**: []
+- **status**: useful
+- **tags**: [adr, brain-prompt, confirmed-findings, current-condition, channel-aware, eyes-skip, convergence, architecture]
+- **last_verified**: "2026-07-18"
+- **verified_by**: "claude-software-architect"
+- **update_trigger**: "when the decide() prompt structure (_build_decide_prompt / CURRENT CONDITION / CONFIRMED FINDINGS / the findings+note fields / the loop findings ledger / _changes_screen / the Eyes-skip) changes"
+- **notes**: "ADR-007 — the Brain's per-step decide() prompt is priority-ordered labelled blocks (GOAL / CURRENT CONDITION [channel-aware: shell result = /exec output, screen marked UNCHANGED] / CONFIRMED FINDINGS [append-only, loop-owned ledger the Brain banks facts into via a `findings` field and TRUSTS] / HISTORY [action + compact `note`] / PROFILES MANUAL / TODO), with an Eyes-skip on non-visual actions. Fixes the re-read/re-doubt non-convergence (the Brain forgot facts because HISTORY was actions-only). Base-prompt trust-split: judge SCREEN from CURRENT CONDITION, TRUST findings/history. Keeps ADR-005 forced tool-calling (findings/note are new fields). Amendment note: ADR-004 Amendment 1 (same session) swapped DESCRIBE_MODEL 8b->30b-a3b to fix the numeric-misread — obsoleting the 'route numeric to 72B' follow-up."
+
 ### `docs/quality-standard.md`
 
 - **type**: other
