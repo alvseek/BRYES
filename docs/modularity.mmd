@@ -1,0 +1,86 @@
+flowchart TB
+%% ---------------------------------------------------------------------------
+%% BRYES — Modularity Map (CURRENT / as-is)
+%% A MODULE-COUPLING lens, distinct from agent-loop-flow.md's per-step data flow:
+%% what the modules ARE today and how the loop couples them. Purely descriptive of
+%% current code. The intended body/brain split lives in modularity-target.mmd.
+%% Colour = module category (Orchestration / Body / Eyes / Brain / Knowledge / infra).
+%% Render:  mmdc -i docs/modularity.mmd -o docs/modularity.svg
+%% ---------------------------------------------------------------------------
+    GOAL(["goal (task)"]) --> LOOP
+
+    subgraph ORCH["Orchestration — agent/loop.py run(goal)"]
+        direction TB
+        LOOP["run(goal): the ONLY coupler<br/>modules never call each other — only the loop calls each"]
+        EMB["embodiment: resolve_embodiment<br/>pick body + profiles, or answer() (no loop)"]
+        LEDGER["CONFIRMED FINDINGS ledger<br/>append-only, trusted"]
+        COND["CURRENT CONDITION (channel-aware) + HISTORY"]
+        VER["verify routing<br/>visual_focus / expectation / recheck / diff + Eyes-skip"]
+        GUARD["repeat + failure guards"]
+        LOOP --- EMB
+        LOOP --- LEDGER
+        LOOP --- COND
+        LOOP --- VER
+        LOOP --- GUARD
+    end
+
+    subgraph BODY["Body — Device abstraction (ADR-002): swappable, transport-private"]
+        direction TB
+        DEV["Device — devices/base.py (Protocol + Capabilities)<br/>screenshot / act / shell / type_into / clear_field / pointer"]
+        CONT["ContainerDevice — HTTP :8000<br/>desktop, bash, 8 verbs"]
+        PHONE["PhoneDevice — adb / USB<br/>Android, no right_click/hover"]
+        DEV --- CONT
+        DEV --- PHONE
+    end
+
+    subgraph EYESG["Eyes — eyes/client.py (rented, OpenRouter)"]
+        EYES["describe (foveal) / locate (UI-TARS) / box / diff"]
+    end
+
+    subgraph BRAIN["Brain — reasoning (rented, OpenRouter)"]
+        direction TB
+        DECIDE["brain/client.py<br/>decide / select_embodiment / answer"]
+        STRUCT["structured.py<br/>forced tool-call + Pydantic validation"]
+        DECIDE --- STRUCT
+    end
+
+    subgraph KNOW["Knowledge / context — supplied to the models"]
+        direction TB
+        OPS["operating know-how — _BASE_PROMPT (in brain/client.py)<br/>name-by-word, aim focus at the EFFECT, channel choice,<br/>verify, bank findings, wait-for-load"]
+        PROF["profiles.py — app/OS manuals<br/>Visual, Operating, Terms glossary, catalog"]
+    end
+
+    OR[("OpenRouter — UI-TARS / qwen-VL / deepseek / gemini")]
+    RUNLOG["runlog.py — transcript (cross-cutting)"]
+
+    %% coupling performed BY the loop (perceive -> decide -> act)
+    LOOP -->|"screenshot / act / shell / type_into"| DEV
+    LOOP -->|"describe / locate"| EYES
+    LOOP -->|"decide(GOAL + condition + findings + history)"| DECIDE
+    EMB -->|"select_embodiment / answer"| DECIDE
+
+    %% knowledge/context fed to the models
+    EMB -->|"read_catalog + load_profiles"| PROF
+    PROF -->|"visual context"| EYES
+    PROF -->|"operating context"| DECIDE
+    OPS -->|"system prompt"| DECIDE
+
+    %% infra
+    EYES --> OR
+    DECIDE --> OR
+    STRUCT --> OR
+    LOOP -.->|"records every step"| RUNLOG
+
+    classDef body fill:#dff5e1,stroke:#2e7d32,color:#111;
+    classDef eyes fill:#e1f5f0,stroke:#00897b,color:#111;
+    classDef brain fill:#e3f0ff,stroke:#1565c0,color:#111;
+    classDef know fill:#fff3d6,stroke:#e08e00,color:#111;
+    classDef orch fill:#f3e8ff,stroke:#7b1fa2,color:#111;
+    classDef ext fill:#eeeeee,stroke:#777,color:#111;
+
+    class DEV,CONT,PHONE body;
+    class EYES eyes;
+    class DECIDE,STRUCT brain;
+    class OPS,PROF know;
+    class LOOP,EMB,LEDGER,COND,VER,GUARD orch;
+    class OR,RUNLOG ext;

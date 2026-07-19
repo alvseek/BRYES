@@ -1,0 +1,67 @@
+flowchart LR
+%% ---------------------------------------------------------------------------
+%% BRYES — Loop Dispatch Map: which Brain action calls which module
+%% Zooms into modularity.mmd's ORCH/LOOP node. Distinct from agent-loop-flow.md
+%% (temporal per-step SEQUENCE); this is the static ACTION -> module relation:
+%% what each Brain action actually needs from which module. Source: agent/loop.py.
+%% Colour = call target (Eyes / Device / Brain / none).
+%% Render:  mmdc -i docs/loop-dispatch.mmd -o docs/loop-dispatch.svg
+%% ---------------------------------------------------------------------------
+
+    %% ---- modules (the call targets) ----
+    EYES["Eyes — eyes/client.py<br/>describe / locate / box / diff"]
+    DEVICE["Device — active body<br/>screenshot / act / shell / type_into"]
+    BRAIN["Brain — brain/client.py<br/>decide / select_embodiment / answer"]
+    NONE["(no module — loop-internal only)"]
+    PROF["profiles.py"]
+
+    %% ---- pre-loop (once, before the step loop) ----
+    PRE["pre-loop (once): embodiment select"] -->|"select_embodiment / answer"| BRAIN
+    PRE -.->|"read_catalog / load_profiles"| PROF
+
+    %% ---- every step, before the action is dispatched ----
+    subgraph STEP["every step (before the action)"]
+        direction TB
+        SHOT["1. screenshot"] --> DESC["2. describe<br/>(SKIPPED if screen unchanged:<br/>after shell / screenshot / failed)"]
+        DESC --> DEC["3. decide"]
+    end
+    SHOT -->|"screenshot"| DEVICE
+    DESC -->|"describe (+ box / diff)"| EYES
+    DEC -->|"decide"| BRAIN
+
+    %% ---- then dispatch the ONE chosen action ----
+    DEC --> DISP{"4. which action?"}
+
+    DISP --> A1["click / double_click /<br/>right_click / hover"]
+    DISP --> A2["scroll"]
+    DISP --> A3["drag"]
+    DISP --> A4["type_into"]
+    DISP --> A5["type / key"]
+    DISP --> A6["shell"]
+    DISP --> A7["wait / screenshot"]
+    DISP --> A8["done / fail"]
+
+    A1 -->|"1. locate"| EYES
+    A1 -->|"2. act"| DEVICE
+    A2 -->|"1. locate"| EYES
+    A2 -->|"2. act"| DEVICE
+    A3 -->|"1. locate x2 (target + destination)"| EYES
+    A3 -->|"2. act"| DEVICE
+    A4 -->|"1. locate (only if click_target)"| EYES
+    A4 -->|"2. type_into"| DEVICE
+    A5 -->|"act (no Eyes)"| DEVICE
+    A6 -->|"shell (no Eyes)"| DEVICE
+    A7 --> NONE
+    A8 -->|"return"| NONE
+
+    classDef eyes fill:#e1f5f0,stroke:#00897b,color:#111;
+    classDef body fill:#dff5e1,stroke:#2e7d32,color:#111;
+    classDef brain fill:#e3f0ff,stroke:#1565c0,color:#111;
+    classDef none fill:#eeeeee,stroke:#777,color:#111;
+    classDef act fill:#ffffff,stroke:#999,color:#111;
+
+    class EYES eyes;
+    class DEVICE body;
+    class BRAIN brain;
+    class NONE,PROF none;
+    class PRE,SHOT,DESC,DEC,DISP,A1,A2,A3,A4,A5,A6,A7,A8 act;

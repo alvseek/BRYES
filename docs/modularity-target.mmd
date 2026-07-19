@@ -1,0 +1,69 @@
+flowchart TB
+%% ---------------------------------------------------------------------------
+%% BRYES — Modularity Map (TARGET / to-be): loop-as-a-service, pluggable decide()
+%% Companion to modularity.mmd (current). The agreed model:
+%%   - The MCP server keeps the WHOLE loop (screenshot / describe / locate / act,
+%%     findings ledger, verify-routing, guards, session state) — unchanged.
+%%   - It only PAUSES at the two Brain decisions (embodiment, per-step decide) and
+%%     asks an EXTERNAL brain across an MCP seam, via two tools: start_task / next.
+%%   - Each decision request carries {system prompt + assembled context + BrainAction
+%%     schema}; the brain returns a BrainAction. => the operating know-how reaches a
+%%     naive external brain FOR FREE (served, not extracted).
+%% Note vs current: the knowledge arrows (OPS/PROF -> loop) DON'T move — the loop
+%% still assembles the decide() context; it just forwards it across the seam. Only
+%% the two decision edges cross an MCP boundary. That's why this is a minimal wrap.
+%% OPEN (break down later): exact start_task / next schemas; session lifecycle
+%% (open/act/close); stateless-vs-conversational brain; where the answer() path sits.
+%% Render:  mmdc -i docs/modularity-target.mmd -o docs/modularity-target.svg
+%% ---------------------------------------------------------------------------
+    subgraph CLIENT["External brain — MCP client (makes ONLY the 2 decisions)"]
+        EXT["opus 4.8 / me / a Telegram-fronted LLM<br/>gets {system prompt + context}, returns a BrainAction"]
+    end
+
+    subgraph SERVER["BRYES MCP server — the loop as a service (tools: start_task / next)"]
+        direction TB
+        LOOP["THE LOOP (unchanged): screenshot -> describe -> DECIDE -> locate -> act<br/>owns: findings ledger, CURRENT CONDITION, verify-routing, guards, session state"]
+        NATIVE["native decide() — deepseek / gemini<br/>(the default brain, still available)"]
+    end
+
+    subgraph BODY["Body — server-side, unchanged"]
+        direction TB
+        DEV["Device — ContainerDevice / PhoneDevice"]
+        EYES["Eyes — describe / locate / box / diff"]
+    end
+
+    subgraph KNOW["Knowledge — served INSIDE the decision context (NOT extracted)"]
+        direction TB
+        OPS["_BASE_PROMPT — operating know-how"]
+        PROF["profiles.py — app/OS manuals"]
+    end
+
+    %% the two Brain decisions cross the MCP seam to the external brain
+    LOOP ==>|"decision request:<br/>{system prompt + assembled context + BrainAction schema}"| EXT
+    EXT ==>|"start_task(goal, embodiment?)<br/>next(session_id, decision=BrainAction)"| LOOP
+    LOOP -.->|"or: the native brain answers decide()"| NATIVE
+
+    %% knowledge still flows INTO the loop's decision context (arrows UNCHANGED from current)
+    OPS -->|"system prompt"| LOOP
+    PROF -->|"operating context"| LOOP
+    PROF -->|"visual context"| EYES
+
+    %% body calls (server-side, unchanged from current)
+    LOOP -->|"screenshot / act / shell / type_into"| DEV
+    LOOP -->|"describe / locate"| EYES
+    EYES --> OR[("OpenRouter — UI-TARS / qwen-VL")]
+    NATIVE --> OR
+
+    classDef body fill:#dff5e1,stroke:#2e7d32,color:#111;
+    classDef eyes fill:#e1f5f0,stroke:#00897b,color:#111;
+    classDef brain fill:#e3f0ff,stroke:#1565c0,color:#111;
+    classDef know fill:#fff3d6,stroke:#e08e00,color:#111;
+    classDef srv fill:#f3e8ff,stroke:#7b1fa2,color:#111;
+    classDef ext fill:#eeeeee,stroke:#777,color:#111;
+
+    class DEV body;
+    class EYES eyes;
+    class EXT,NATIVE brain;
+    class OPS,PROF know;
+    class LOOP srv;
+    class OR ext;

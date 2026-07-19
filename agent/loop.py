@@ -329,10 +329,12 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
 
             if act == "done":
                 log("\n[OK] Brain reports the goal is complete.")
-                return {"status": "done", "steps": step, "history": history}
+                return {"status": "done", "steps": step, "history": history,
+                        "findings": findings}
             if act == "fail":
                 log(f"\n[FAIL] Brain gave up: {thought}")
-                return {"status": "fail", "steps": step, "history": history}
+                return {"status": "fail", "steps": step, "history": history,
+                        "findings": findings}
 
             _loc["s"] = 0.0
             step_failed = False
@@ -487,7 +489,8 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
             time.sleep(settle)
 
         log("\n[STOP] step limit reached without a done/fail.")
-        return {"status": "step_limit", "steps": max_steps, "history": history}
+        return {"status": "step_limit", "steps": max_steps, "history": history,
+                "findings": findings}
     finally:
         tt = totals
         log(f"\n[timing totals] screen {tt['screen']:.1f}s | describe {tt['describe']:.1f}s | "

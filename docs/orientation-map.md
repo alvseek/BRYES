@@ -39,6 +39,18 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 
 ## Entries
 
+### `README.md`
+
+- **type**: 7q-readme
+- **scope**: shared
+- **roles**: []
+- **status**: useful
+- **tags**: [readme, 7q, overview, entry-point, architecture, github]
+- **last_verified**: "2026-07-19"
+- **verified_by**: "claude-software-architect"
+- **update_trigger**: "when the four pieces (Screen/Eyes/Brain/Loop), setup, the task entry point (run()), the ADR list, or the high-level architecture change"
+- **notes**: "The root, GitHub-facing project README (7 Questions Framework) — the single project overview. Covers what BRYES is (Brain-Eyes vision computer-use agent), the CURRENT module coupling (the loop is the sole coupler — grounded on docs/modularity.mmd + docs/loop-dispatch.mmd), setup, how to give a task (run(goal) from Python), the per-step flow, the ADR-001..008 index, and known debts. Supersedes roadmap.md as the closest-to-root overview. Generated 2026-07-19 via /generate-readme."
+
 ### `roadmap.md`
 
 - **type**: other
@@ -49,7 +61,7 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 - **last_verified**: ""
 - **verified_by**: ""
 - **update_trigger**: "when a phase is added/completed or the target architecture (4 pieces, verify step) changes"
-- **notes**: "The milestone-driven build plan, handed to Claude Code one phase at a time (goal / build / test / trap per step). Names the target: Brain+Eyes+Screen+Hands over HTTP, with verify-and-recover as the differentiator. The closest thing to a root overview — there is no root README.md yet."
+- **notes**: "The milestone-driven build plan, handed to Claude Code one phase at a time (goal / build / test / trap per step). Names the target: Brain+Eyes+Screen+Hands over HTTP, with verify-and-recover as the differentiator. A build-sequence plan — the project overview now lives in the root `README.md` (added 2026-07-19)."
 
 ### `screen/README.md`
 
@@ -98,6 +110,18 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 - **verified_by**: ""
 - **update_trigger**: "when the loop's step sequence changes or verify-and-recover (Phase 5) lands"
 - **notes**: "Phase 4 — Close the Loop: agent/loop.py chains screenshot -> Eyes.describe -> Brain.decide -> Eyes.locate -> Hands act, until done/fail/step-limit. Now also dispatches the `shell` action (exec_cmd -> /exec, result into HISTORY). No verify-and-recover yet (that's Phase 5, the product)."
+
+### `api/README.md`
+
+- **type**: other
+- **scope**: shared
+- **roles**: []
+- **status**: useful
+- **tags**: [api, task-invocation, flask, async, http, jobmanager]
+- **last_verified**: "2026-07-19"
+- **verified_by**: "claude-software-architect"
+- **update_trigger**: "when the task API endpoints, the JobManager lifecycle, or the run() wrapping change"
+- **notes**: "The host-side Task-Invocation API (ADR-008): give BRYES a task over HTTP instead of a script. `python api/server.py` -> :8100; POST /tasks {goal,...} -> {task_id}, GET /tasks/<id> -> {status, steps, result} (result carries the findings ledger). Async (a daemon thread per task), single-flight (409 busy), localhost-only. Wraps agent/loop.py run() (the coarse 'hand off a whole goal' path); MCP adapter later. Distinct from screen/server/ (the container body API). Tests: api/test_jobs.py + api/test_server.py (model-free)."
 
 ### `docs/adr/2026-07-15-effector-hierarchy.md`
 
@@ -182,6 +206,18 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 - **verified_by**: "claude-software-architect"
 - **update_trigger**: "when the decide() prompt structure (_build_decide_prompt / CURRENT CONDITION / CONFIRMED FINDINGS / the findings+note fields / the loop findings ledger / _changes_screen / the Eyes-skip) changes"
 - **notes**: "ADR-007 — the Brain's per-step decide() prompt is priority-ordered labelled blocks (GOAL / CURRENT CONDITION [channel-aware: shell result = /exec output, screen marked UNCHANGED] / CONFIRMED FINDINGS [append-only, loop-owned ledger the Brain banks facts into via a `findings` field and TRUSTS] / HISTORY [action + compact `note`] / PROFILES MANUAL / TODO), with an Eyes-skip on non-visual actions. Fixes the re-read/re-doubt non-convergence (the Brain forgot facts because HISTORY was actions-only). Base-prompt trust-split: judge SCREEN from CURRENT CONDITION, TRUST findings/history. Keeps ADR-005 forced tool-calling (findings/note are new fields). Amendment note: ADR-004 Amendment 1 (same session) swapped DESCRIBE_MODEL 8b->30b-a3b to fix the numeric-misread — obsoleting the 'route numeric to 72B' follow-up."
+
+### `docs/adr/2026-07-19-task-invocation-api.md`
+
+- **type**: adr
+- **scope**: shared
+- **roles**: []
+- **status**: useful
+- **tags**: [adr, task-invocation, api, flask, async, mcp, jobmanager, architecture]
+- **last_verified**: "2026-07-19"
+- **verified_by**: "claude-software-architect"
+- **update_trigger**: "when the task-invocation architecture changes (sync/async, HTTP/MCP, the endpoint/result contract, the concurrency model)"
+- **notes**: "ADR-008 - BRYES tasks are invoked through an ASYNC HTTP task service (POST /tasks -> task_id, GET /tasks/<id> polls) wrapping the native run() loop; API-first, MCP as a later thin adapter. Step 0 of the loop-as-a-service target (docs/modularity-target.mmd). Decisions: Flask, global single-flight (409 busy), localhost-only + no auth, result = status/steps/history + CONFIRMED FINDINGS ledger, in-memory job store, one daemon thread per task."
 
 ### `docs/quality-standard.md`
 

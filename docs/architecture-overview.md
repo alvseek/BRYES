@@ -56,6 +56,7 @@ offered verbs the current body can do (a phone never sees `right_click`). Pure A
 - `eyes/client.py` — `describe(img, focus?, expect?, careful?)` (two-mode foveal, [ADR-004](adr/2026-07-16-foveal-describe-trim.md): overview gist / boxed-crop trim; q3-8b, 72B for box+careful) + `box(img, target)` (region → bbox, 72B) + `locate(img, instr)` (element → pixel x,y, UI-TARS). Regression: `eyes/test_describe.py`.
 - `brain/client.py` — `decide(...)` composes priority-ordered prompt blocks (GOAL / CURRENT CONDITION / CONFIRMED FINDINGS / HISTORY / PROFILES MANUAL / TODO — [ADR-007](adr/2026-07-18-brain-prompt-restructure.md)) → structured JSON action; the loop banks the Brain's `findings` into a durable, trusted ledger.
 - `agent/loop.py` — `run(goal)` chains screenshot → describe → decide → locate → act.
+- `api/` — the **host-side Task-Invocation API** ([ADR-008](adr/2026-07-19-task-invocation-api.md)): `jobs.py` (`JobManager` — single-flight, a daemon thread per task, in-memory store) + `server.py` (Flask `POST /tasks` / `GET /tasks/<id>` / `/health`, localhost `:8100`) wrapping `run()`. Give BRYES a task over HTTP instead of a script; async + polled. Distinct from `screen/server/` (the container body API). Model-free tests: `api/test_jobs.py`, `api/test_server.py`.
 - `.env` (gitignored) holds `OPENROUTER_API_KEY` (one key covers Eyes + Brain). Template: `.env.example`.
 
 ## Models (OpenRouter slugs — verified live)
