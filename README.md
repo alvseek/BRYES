@@ -339,3 +339,11 @@ The living, finer-grained list is [docs/backlog.md](docs/backlog.md). Highlights
 - **The Brain is text-only** — it cannot see; it reasons over the Eyes' `describe` text (a lossy seam).
 - **Validated on few tasks** — mostly browser search + a calculator; not yet the full calc suite or
   broad real-world coverage.
+
+---
+
+## License
+
+Apache License 2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE). BRYES is a research
+artifact rather than a maintained product: the approach was evaluated, documented in the
+[ADRs](docs/adr/), and deliberately not carried into production.

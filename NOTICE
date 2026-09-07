@@ -1,0 +1,11 @@
+BRYES (Brain-Eyes)
+Copyright 2026 Alviandi Widiasto (alvseek)
+
+This product — a research vision computer-use agent (the Brain, Eyes and Body
+modules, the orchestrator loop and its task API) together with the architecture
+decision records documenting it — is licensed under the Apache License,
+Version 2.0. See the LICENSE file at the root of this repository, or
+http://www.apache.org/licenses/LICENSE-2.0
+
+BRYES is a research artifact rather than a maintained product: the approach was
+evaluated, documented, and deliberately not carried into production.
