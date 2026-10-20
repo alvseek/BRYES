@@ -15,6 +15,12 @@ computer-use agent: screenshot → decide → click).
 This repo maintains a structured orientation map at `docs/orientation-map.md`.
 Load it before starting work for architecture and navigation context.
 
+## Tutorial Lessons
+BRYES also builds teaching pages from real screenshots (`capture.py` + `lesson.py`,
+output under `lessons/`). The procedure is
+[docs/procedures/make-a-lesson.md](docs/procedures/make-a-lesson.md), also available as the
+`/make-lesson` skill.
+
 ## Agent Memory
 Fleet-authored work-product for this project lives in `.agents/` — session history
 (`.agents/session/`) and project knowledge (`.agents/knowledge/`). Any agent working here

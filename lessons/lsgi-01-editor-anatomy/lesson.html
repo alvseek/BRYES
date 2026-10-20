@@ -1,0 +1,92 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Unreal Editor anatomy: the six regions you will use every day</title><style>
+:root { color-scheme: light; }
+* { box-sizing: border-box; }
+body { margin: 0 auto; max-width: 980px; padding: 40px 24px 80px;
+  font: 16px/1.6 -apple-system, "Segoe UI", Roboto, sans-serif; color: #1b1b1f; background: #fff; }
+header { border-bottom: 3px solid #1b1b1f; padding-bottom: 20px; margin-bottom: 32px; }
+h1 { font-size: 30px; line-height: 1.2; margin: 0 0 8px; }
+.meta { font-size: 13px; color: #666; letter-spacing: .02em; }
+.intro { font-size: 17px; color: #333; }
+.toc { background: #f6f6f4; border-left: 3px solid #ddd; padding: 14px 20px; margin: 24px 0 36px; }
+.toc ol { margin: 6px 0 0; padding-left: 20px; }
+.toc a { color: #1b1b1f; text-decoration: none; }
+.step { margin: 0 0 48px; break-inside: avoid; }
+.step h2 { font-size: 21px; margin: 0 0 4px; }
+.step h2 .n { display: inline-block; min-width: 30px; margin-right: 10px; padding: 1px 7px;
+  background: #1b1b1f; color: #fff; border-radius: 5px; font-size: 17px; text-align: center; }
+figure { margin: 16px 0 10px; }
+figure img { width: 100%; height: auto; display: block; border-radius: 6px;
+  border: 1px solid #d8d8d4; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 10px 0 0; padding: 0; list-style: none;
+  font-size: 13px; color: #555; }
+.legend li { display: flex; gap: 6px; align-items: baseline; }
+.legend b { display: inline-block; min-width: 20px; text-align: center; background: #ffb020;
+  color: #18181b; border-radius: 10px; font-size: 12px; }
+.prose { margin: 14px 0; }
+details { margin: 12px 0 0; padding: 10px 14px; background: #f6f6f4; border-radius: 6px; }
+summary { cursor: pointer; font-weight: 600; }
+.expected { margin-top: 12px; padding-left: 12px; border-left: 3px solid #9ac48a; color: #2c4a22; }
+code { background: #f0efec; padding: 1px 5px; border-radius: 4px; font-size: 14px; }
+footer { margin-top: 56px; padding-top: 16px; border-top: 1px solid #ddd; font-size: 13px; color: #777; }
+@media print { body { max-width: none; padding: 0; } details { background: none; padding: 0; }
+  details[open] summary { display: none; } .step { page-break-inside: avoid; } }
+</style></head><body><header>
+<h1>Unreal Editor anatomy: the six regions you will use every day</h1>
+<div class="meta">LSGI &middot; lesson lsgi-01-editor-anatomy &middot; 2026-10-20 &middot; for Alvi</div>
+</header>
+<div class="intro"><p>This is your own LSGI editor, captured from your screen today, not a stock screenshot. Read it once now and the battle loop stops being a hunt through menus.</p>
+<p>The scope is deliberately narrow. This lesson is about <strong>where things are</strong>, not about how the combat system is designed. Every claim below is either visible in the picture or a property of the editor&#x27;s layout. Anything about the battle loop itself waits for the next lesson, where the <code>unreal</code> agent and LSGI&#x27;s own docs are the authority, not a screenshot.</p></div>
+<nav class="toc"><strong>Steps</strong><ol>
+<li><a href="#step-1">Find the six regions of the editor</a></li>
+<li><a href="#step-2">Read the Content Drawer as a drawer, not a window</a></li>
+<li><a href="#step-3">Learn to read the path, not just the asset</a></li>
+<li><a href="#step-4">Recover the layout when you get lost</a></li>
+</ol></nav>
+<section class="step" id="step-1">
+<h2><span class="n">1</span>Find the six regions of the editor</h2>
+<figure><img src="assets/step-001.callouts.png" alt="step 1 screenshot">
+<ol class="legend">
+<li><b>1</b> Menu bar: File, Edit, Window, Tools, Build, Platforms, Select, Actor, Help, plus the project name LSGI at the far right</li>
+<li><b>2</b> Main toolbar: Save, Selection Mode, and the Play / Simulate / Stop controls</li>
+<li><b>3</b> Viewport: the level itself, here rendering in Perspective and Lit</li>
+<li><b>4</b> Outliner: the actors that exist in the open level</li>
+<li><b>5</b> Details: the properties of whatever you have selected</li>
+<li><b>6</b> Content Drawer: the asset browser, docked over the viewport</li>
+<li><b>7</b> Bottom strip: Output Log, Cmd console, and the version-control status</li>
+</ol>
+</figure>
+<div class="prose"><p>Seven boxes, six jobs. The editor is a fixed arrangement: menu bar and toolbar across the top, the viewport in the middle, the Outliner and Details stacked on the right, the Content Drawer docking over the bottom, and one status strip underneath.<br>  The names matter because every Unreal tutorial you will read uses them without explaining them. When someone writes &quot;open the Details panel&quot;, this is the panel they mean.</p></div>
+<div class="expected"><p>You can point at the viewport, the Outliner, the Details panel and the Content Drawer without hunting for them.</p></div>
+<details><summary>Why this matters</summary><p>Almost every &quot;I cannot find it&quot; in Unreal is one of these regions being closed, hidden behind another, or scrolled out of view. Knowing which region owns which job sends you to the right one instead of clicking through menus.</p></details>
+</section>
+<section class="step" id="step-2">
+<h2><span class="n">2</span>Read the Content Drawer as a drawer, not a window</h2>
+<figure><img src="assets/step-002.callouts.png" alt="step 2 screenshot">
+<ol class="legend">
+<li><b>1</b> The drawer body: folder tree on the left, asset grid on the right</li>
+<li><b>2</b> The Content Drawer toggle, bottom left, next to the Output Log</li>
+</ol>
+</figure>
+<div class="prose"><p>It is open in this capture. Notice what it covers: the lower half of the viewport. That is the deal a drawer makes. It gives the space back the moment you toggle it closed, which is why it is not a floating window you drag around.<br>  Its two halves are also doing different jobs: the tree on the left is the folder hierarchy, the grid on the right is the assets inside the folder you have selected.</p></div>
+<div class="expected"><p>You can open and close the Content Drawer without moving any panel.</p></div>
+<details><summary>Why this matters</summary><p>The single most common way to lose the asset browser is to look for a window called &quot;Content Browser&quot; in the title bar. There is a Content Browser, but the docked form is the drawer, and it is toggled from the bottom strip.</p></details>
+</section>
+<section class="step" id="step-3">
+<h2><span class="n">3</span>Learn to read the path, not just the asset</h2>
+<figure><img src="assets/step-003.callouts.png" alt="step 3 screenshot">
+<ol class="legend">
+<li><b>1</b> The breadcrumb: All &gt; Content &gt; Tests, the folder you are currently looking at</li>
+<li><b>2</b> The same folder in the tree, highlighted</li>
+</ol>
+</figure>
+<div class="prose"><p>The breadcrumb across the top of the grid is the honest answer to &quot;where does this live&quot;. Here it reads <code>All &gt; Content &gt; Tests</code>, so every asset in the grid is inside the project&#x27;s <code>Content/Tests</code> folder.<br>  The tree agrees: <code>Tests</code> is selected, under <code>All &gt; Content</code>. And the assets are what you would expect to find there: test levels (<code>L_TestArena_WP_*</code>, <code>L_Empty_WP_*</code>), a data layer, and <code>BP_LSGIArena</code>.</p></div>
+<div class="expected"><p>You can state the content path of the arena test assets without opening a properties window.</p></div>
+<details><summary>Why this matters</summary><p>An asset can be reached from the Content Drawer, a Reference, the Place Actors panel, or a Blueprint node that mentions it. Only one of those is the file&#x27;s real home. Reading the breadcrumb means you can tell someone else, or yourself tomorrow, exactly where it lives: <code>/Game/Tests</code>.</p></details>
+</section>
+<section class="step" id="step-4">
+<h2><span class="n">4</span>Recover the layout when you get lost</h2>
+<div class="prose"><p>Two habits, no screenshot needed, because both live in regions you have already seen:<br>  - <strong>A panel disappeared.</strong> The <code>Window</code> menu in the menu bar lists every panel the editor can show. Open it there rather than restarting the editor.<br>  - <strong>The asset browser disappeared.</strong> The <code>Content Drawer</code> button in the bottom strip brings it back.<br>  - <strong>The console is one click away.</strong> <code>Cmd</code> in the bottom strip opens the console input, which is where commands like <code>stat fps</code> and console variables go. Most Unreal fixes you will read online are a console command.<br>  - <strong>Are there unsaved changes?</strong> The bottom-right reads <code>All Saved</code> when the editor is holding nothing unsaved. When it changes, the editor is remembering work it has not written to disk.</p></div>
+<div class="expected"><p>You can recover a closed panel and open the console without restarting Unreal.</p></div>
+<details><summary>Why this matters</summary><p>Losing the layout feels like losing the editor. It never is: every panel is one menu away, and the console you will use constantly is already docked at the bottom of your screen.</p></details>
+</section>
+<footer>Built by BRYES from real screenshots. Every image in this lesson was captured from the running application, not drawn or reconstructed.</footer></body></html>

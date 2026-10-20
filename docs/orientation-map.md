@@ -219,6 +219,18 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 - **update_trigger**: "when the task-invocation architecture changes (sync/async, HTTP/MCP, the endpoint/result contract, the concurrency model)"
 - **notes**: "ADR-008 - BRYES tasks are invoked through an ASYNC HTTP task service (POST /tasks -> task_id, GET /tasks/<id> polls) wrapping the native run() loop; API-first, MCP as a later thin adapter. Step 0 of the loop-as-a-service target (docs/modularity-target.mmd). Decisions: Flask, global single-flight (409 busy), localhost-only + no auth, result = status/steps/history + CONFIRMED FINDINGS ledger, in-memory job store, one daemon thread per task."
 
+### `docs/procedures/make-a-lesson.md`
+
+- **type**: other
+- **scope**: shared
+- **roles**: []
+- **status**: useful
+- **tags**: [procedure, lessons, tutorial, screenshots, capture, html, teaching]
+- **last_verified**: "2026-10-20"
+- **verified_by**: "claude-software-architect"
+- **update_trigger**: "when the lesson pipeline changes (capture.py flags, lesson.py step syntax, the gates, or where lessons are placed)"
+- **notes**: "The tutorial-lesson procedure, also served as the `/make-lesson` skill (`.opencode/skills/make-lesson/SKILL.md` points here, deliberately carrying no copy of its own). Splits the work into instrument and author: BRYES captures labelled screenshots (`capture.py` -> `WindowsDevice`, capture-only, no pointer verbs) and builds one HTML page per lesson (`lesson.py`, which refuses a step whose shot is missing); the mentor writes the steps. Lessons live under `lessons/<project>-<nn>-<slug>/` with `lesson.md`, `shots/`, `capture-log.jsonl`, `lesson.html` and generated `assets/`. First two worked examples: `lsgi-01-editor-anatomy` and `lsgi-02-blueprint-editor`."
+
 ### `docs/quality-standard.md`
 
 - **type**: other

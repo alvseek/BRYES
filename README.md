@@ -86,6 +86,14 @@ The **body** is an abstraction, not a hard-wire: Screen + Hands + shell sit behi
 desktop) and `PhoneDevice` (a real Android over adb) are two bodies; the loop, Eyes, and Brain are
 body-agnostic. Full structural detail: [docs/architecture-overview.md](docs/architecture-overview.md).
 
+A **third body records instead of drives.** `WindowsDevice` ([devices/windows.py](devices/windows.py))
+screenshots a real Windows window (or the whole virtual desktop) and advertises **no pointer verbs**,
+so the loop can never drive it by accident. It exists for the lesson pipeline: [capture.py](capture.py)
+saves a labelled screenshot with provenance, [lesson.py](lesson.py) builds a teaching page whose every
+step is backed by one, and the build refuses a step whose shot is missing. Procedure:
+[docs/procedures/make-a-lesson.md](docs/procedures/make-a-lesson.md) (`/make-lesson`), output under
+[lessons/](lessons/).
+
 ### Tech Stack
 
 - **Language**: Python 3 — developed on CPython 3.14 (host-side loop/Eyes/Brain — stdlib HTTP client + a few libs; no hard minimum is declared)
