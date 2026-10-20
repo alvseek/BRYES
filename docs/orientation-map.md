@@ -46,10 +46,10 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 - **roles**: []
 - **status**: useful
 - **tags**: [readme, 7q, overview, entry-point, architecture, github]
-- **last_verified**: "2026-07-19"
+- **last_verified**: "2026-10-20"
 - **verified_by**: "claude-software-architect"
-- **update_trigger**: "when the four pieces (Screen/Eyes/Brain/Loop), setup, the task entry point (run()), the ADR list, or the high-level architecture change"
-- **notes**: "The root, GitHub-facing project README (7 Questions Framework) — the single project overview. Covers what BRYES is (Brain-Eyes vision computer-use agent), the CURRENT module coupling (the loop is the sole coupler — grounded on docs/modularity.mmd + docs/loop-dispatch.mmd), setup, how to give a task (run(goal) from Python), the per-step flow, the ADR-001..008 index, and known debts. Supersedes roadmap.md as the closest-to-root overview. Generated 2026-07-19 via /generate-readme."
+- **update_trigger**: "when the four pieces (Screen/Eyes/Brain/Loop), setup, the task entry point (run()), the ADR list, the lesson pipeline, or the high-level architecture change"
+- **notes**: "The root, GitHub-facing project README (7 Questions Framework) — the single project overview. Covers what BRYES is (Brain-Eyes vision computer-use agent), the CURRENT module coupling (the loop is the sole coupler — grounded on docs/modularity.mmd + docs/loop-dispatch.mmd), setup, how to give a task (run(goal) from Python), the per-step flow, the ADR-001..008 index, and known debts. Supersedes roadmap.md as the closest-to-root overview. Generated 2026-07-19 via /generate-readme. Updated 2026-10-20: a third body (WindowsDevice, capture-only, no pointer verbs) and the lesson pipeline (capture.py + lesson.py, procedure in docs/procedures/make-a-lesson.md) added to the architecture section."
 
 ### `roadmap.md`
 
