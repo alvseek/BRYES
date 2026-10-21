@@ -364,7 +364,7 @@ which is exactly `expect`+`focus`. `framediff.py` is kept & parked for the descr
 
 | Mode | When | What |
 |---|---|---|
-| **OVERVIEW** | no `focus` | downscale ×0.5 → coarse gist (environment / apps / eye-catching) on **qwen3-vl-8b**. The salience cues where to `focus` next. |
+| **OVERVIEW** | no `focus` | downscale ×0.5 → coarse gist (environment / apps / eye-catching) on **deepseek-v4.1-flash**. The salience cues where to `focus` next. |
 | **TRIM** | `focus` set | 72B `box(focus)` → crop (+15% pad, full-res) → describe the crop on **q3-8b**. `expect` (now *requires* `focus`) rides the crop as `VERIFICATION:`. |
 
 72B is demoted from default describer to the **authoritative Eyes** (boxing + the `recheck` careful re-read). Ladder: **q3-8b → `recheck` (72B re-read on an `expect`-mismatch) → `request_diff`** (§8's 2-image diff). Thinking off on all describe calls (measured 14× latency, zero gain). Trim makes cheap models faithful — small VLMs confabulate on full frames but are clean on a small crop; box `None` (unparseable/failed) → full-frame fallback.

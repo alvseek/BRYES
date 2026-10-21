@@ -102,7 +102,7 @@ the lesson pipeline build on it, see [docs/procedures/make-a-lesson.md](docs/pro
 - **Screen container**: Docker Desktop (WSL2) — Xvfb + fluxbox + xdotool + scrot + a Flask control API + noVNC
 - **Phone body**: `adb` over USB (bundled in [tools/platform-tools/](tools/platform-tools/))
 - **Models** (rented, OpenRouter — one API key covers all): UI-TARS-1.5-7B (grounding),
-  qwen3-vl-30b-a3b + qwen2.5-vl-72b (describe / box), deepseek-v4.1-flash (Brain, default) +
+  deepseek-v4.1-flash (describe) + qwen2.5-vl-72b (box), deepseek-v4.1-flash (Brain, default) +
   gemini-2.5-flash-lite (backup)
 
 ---

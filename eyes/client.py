@@ -43,15 +43,20 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 # locate() — GUI grounding (screenshot -> coordinates). UI-TARS = Qwen2.5-VL-7B tuned
 # for grounding; excellent at pointing, weak at describing.
 GROUND_MODEL = "bytedance/ui-tars-1.5-7b"
-# describe() — DEFAULT crop/overview describer: qwen3-vl-30b-a3b (MoE, only 3B active -> fast).
-# It REPLACED qwen3-vl-8b (2026-07-18): the 8b SYSTEMATICALLY misread discounted-price digits
-# (read Rp2.105.000 as Rp1.050.000, byte-identical across passes at temperature 0 -> a repeatable
-# perceptual error, NOT sampling noise), while 30b-a3b reads them correctly in ONE ~3.7s forward
-# pass and lists ONLY the current price, not the struck-through original. Thinking stays OFF: on
-# this model thinking is both slower AND less accurate (8b-thinking could read it but took 40-115s;
-# 30b-a3b-thinking degraded to wrong). Faithful on TRIMMED crops (little to hallucinate); NOT for
-# full busy frames (small/mid VLMs flatten there) — the trim keeps it honest.
-DESCRIBE_MODEL = "qwen/qwen3-vl-30b-a3b-instruct"
+# describe() — the describer for BOTH modes (overview gist and trimmed crop).
+# deepseek-v4.1-flash REPLACED qwen3-vl-30b-a3b on 2026-10-21, on a measured comparison rather
+# than a hunch: over three production frames at the production settings (OVERVIEW_PROMPT, 0.5
+# downscale, thinking off, temperature 0) it was 3x faster (1.4-3.5 s vs 4.9-6.0 s), ~35% cheaper
+# per call, and it made no misreads where the 30b produced three ("GRAPHICS" for Graphs, "Hermad"
+# for Hermod, and an OS guess of Linux/macOS on a Windows desktop). It also named the things the
+# 30b gestured at (an asset name, two YAML filenames).
+# Two things to watch, both from that run: it is MORE VERBOSE on a tight crop where the 30b
+# transcribed and stopped, and it covered fewer fine details on a busy frame (asset counts, the
+# individual level names). If either bites in a real run, tune the prompt before changing the model.
+# The 30b keeps its own lesson on the record: it replaced the 8b on 2026-07-18 because the 8b
+# systematically misread discounted-price digits (Rp2.105.000 read as Rp1.050.000, byte-identical
+# at temperature 0). Thinking stays OFF for this path: reasoning only adds latency to perception.
+DESCRIBE_MODEL = "deepseek/deepseek-v4.1-flash"
 # box() — bounding box for a named region (powers describe()'s TRIM mode). The 72B was the
 # ONLY model that boxed reliably in the bake-off, including small targets; UI-TARS and the
 # small VLMs only point / mislocate. Stays on 72B — the authoritative Eyes.

@@ -20,7 +20,7 @@ GitHub: **github.com/alvseek/BRYES** (remote named `alvseek`, commit identity
 |---|---|---|
 | **Screen** | disposable Ubuntu desktop (Xvfb + fluxbox): screenshots + input, plus a sandboxed **shell** (`/exec`) | local Docker container, `screen/` |
 | **Hands** | `xdotool` click/double-click/right-click/hover/scroll/drag/type/key inside that container | same container |
-| **Eyes** | **qwen3-vl-30b-a3b** *describes* (two-mode foveal, [ADR-004](adr/2026-07-16-foveal-describe-trim.md) + Amend 1; swapped from qwen3-vl-8b 2026-07-18), **Qwen2.5-VL-72B** *boxes* a focus region + does careful re-reads, **UI-TARS-1.5-7B** *locates* elements (grounding → coordinates) | rented, OpenRouter, `eyes/` |
+| **Eyes** | **deepseek-v4.1-flash** *describes* (two-mode foveal, [ADR-004](adr/2026-07-16-foveal-describe-trim.md) + Amend 1; swapped from qwen3-vl-30b-a3b 2026-10-21), **Qwen2.5-VL-72B** *boxes* a focus region + does careful re-reads, **UI-TARS-1.5-7B** *locates* elements (grounding → coordinates) | rented, OpenRouter, `eyes/` |
 | **Brain** | `deepseek-v4.1-flash` (default, swappable; backup `gemini-2.5-flash-lite`) — state → next action (reasoning) | rented, OpenRouter, `brain/` |
 
 **Two rules from the roadmap:** rent everything until it hurts (local GPU 3060 Ti 8GB
@@ -61,7 +61,7 @@ offered verbs the current body can do (a phone never sees `right_click`). Pure A
 
 ## Models (OpenRouter slugs — verified live)
 
-- **Eyes / describe:** `qwen/qwen3-vl-8b-instruct` — the fast default describer (two-mode
+- **Eyes / describe:** `deepseek/deepseek-v4.1-flash` — the fast default describer (two-mode
   foveal, [ADR-004](adr/2026-07-16-foveal-describe-trim.md)): a downscaled OVERVIEW gist when
   unfocused, a 72B-boxed + cropped TRIM read when focused. Faithful on trimmed crops, ~0.3–1.4s.
   Called EVERY step but **no longer the bottleneck** (describe dropped from 5–16s to ~2s).
@@ -99,7 +99,7 @@ offered verbs the current body can do (a phone never sees `right_click`). Pure A
 - **Describe latency ∝ output length; trim makes cheap models faithful** ([ADR-004](adr/2026-07-16-foveal-describe-trim.md)):
   the 72B *boxes* in ~1.5s but *describes* in 5–16s on the SAME frame — *generation*, not the
   model/image, is the cost. So describe is two-mode foveal: OVERVIEW downscales (×0.5) for a
-  cheap gist; TRIM boxes (72B) → crops (+15%) → describes the crop on the fast **qwen3-vl-8b**.
+  cheap gist; TRIM boxes (72B) → crops (+15%) → describes the crop on the fast **deepseek-v4.1-flash**.
   Small VLMs confabulate on full frames but are faithful on a trimmed crop (nothing to
   hallucinate) — q3-8b is safe there, and only there. 72B emits **absolute** box coords at any
   resolution (validated to 4M px — no conversion). Ladder: q3-8b → `recheck` (72B re-read on an
