@@ -219,6 +219,18 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 - **update_trigger**: "when the task-invocation architecture changes (sync/async, HTTP/MCP, the endpoint/result contract, the concurrency model)"
 - **notes**: "ADR-008 - BRYES tasks are invoked through an ASYNC HTTP task service (POST /tasks -> task_id, GET /tasks/<id> polls) wrapping the native run() loop; API-first, MCP as a later thin adapter. Step 0 of the loop-as-a-service target (docs/modularity-target.mmd). Decisions: Flask, global single-flight (409 busy), localhost-only + no auth, result = status/steps/history + CONFIRMED FINDINGS ledger, in-memory job store, one daemon thread per task."
 
+### `docs/adr/2026-10-21-host-body-and-gates.md`
+
+- **type**: adr
+- **scope**: shared
+- **roles**: []
+- **status**: useful
+- **tags**: [adr, host-body, windows, pyautogui, gates, safety, effector]
+- **last_verified**: "2026-10-21"
+- **verified_by**: "claude-software-architect"
+- **update_trigger**: "when the host body's gates or harness rules change, or when environment isolation lands"
+- **notes**: "ADR-009 — a body that acts on the real Windows desktop. Reach requires `device=\"windows\"` AND `BRYES_ALLOW_HOST=1`; `shell` has its own switch; capture is ungated because the lesson pipeline builds the same body. Carries the measured evidence (virtual origin (0,−1080) on one desk then (0,0) after a display change; `pyautogui.FAILSAFE` must be off or a point beyond the primary raises instead of moving), the three harness rules that came from driving Alvi's own Notepad (target a handle you started, kill only what you started, act only inside the target rect), and the honest limit: **the gates are a stopgap, environment isolation is the structural answer**."
+
 ### `docs/procedures/make-a-lesson.md`
 
 - **type**: other
