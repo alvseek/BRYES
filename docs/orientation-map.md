@@ -231,6 +231,18 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 - **update_trigger**: "when the lesson pipeline changes (capture.py flags, lesson.py step syntax, the gates, or where lessons are placed)"
 - **notes**: "The tutorial-lesson procedure, also served as the `/make-lesson` skill (`.opencode/skills/make-lesson/SKILL.md` points here, deliberately carrying no copy of its own). Splits the work into instrument and author: BRYES captures labelled screenshots (`capture.py` -> `WindowsDevice`, capture-only, no pointer verbs) and builds one HTML page per lesson (`lesson.py`, which refuses a step whose shot is missing); the mentor writes the steps. Lessons live under `lessons/<project>-<nn>-<slug>/` with `lesson.md`, `shots/`, `capture-log.jsonl`, `lesson.html` and generated `assets/`. First two worked examples: `lsgi-01-editor-anatomy` and `lsgi-02-blueprint-editor`."
 
+### `docs/procedures/drive-the-desktop.md`
+
+- **type**: other
+- **scope**: shared
+- **roles**: []
+- **status**: useful
+- **tags**: [procedure, host-body, windows, driving, pyautogui, gates, adr-009]
+- **last_verified**: "2026-10-21"
+- **verified_by**: "claude-software-architect"
+- **update_trigger**: "when the host body's entry points, gates, harness rules, or measured timings change, or when an element-level (UIA) path lands"
+- **notes**: "How another agent drives a real Windows application through the host body, also served as `/drive-desktop`. Opens with the ADR-001 ceiling (an application's own API beats pixels, so Unreal's Python/Remote Control API should be preferred). Covers both entry points and when each applies: Python with a window **handle** (`WindowsDevice(hwnd=...)`, safe) versus `POST /tasks {device:'windows', window:'<title>'}` (title-based, fine only when one window can match). Carries the three harness rules that exist because they were violated on 2026-10-21 (handle targeting, kill only what you started, act only inside the target rect), the measured timings (describe 3.7-10.6 s, decide 15-31 s, so the Brain dominates a run), the failure modes (UIPI silence, focus theft, rect refusal, non-ASCII typing), and the note that the environment gates are a stopgap until a dedicated user session exists."
+
 ### `docs/quality-standard.md`
 
 - **type**: other
