@@ -63,12 +63,13 @@ class JobManager:
         self._active: str | None = None      # the running task_id, or None
         self._lock = threading.Lock()        # guards _jobs + _active
 
-    def submit(self, goal, device=None, profile=None, max_steps=12) -> str:
+    def submit(self, goal, device=None, profile=None, max_steps=12, window=None) -> str:
         """Start a task in a background daemon thread; return its task_id.
 
         Raises BusyError if a task is already running (global single-flight).
-        `device` is a body-name string ('android'/'linux') or None (auto-select);
-        `profile` a path string / list of them.
+        `device` is a body-name string ('android'/'linux'/'windows') or None (auto-select);
+        `profile` a path string / list of them; `window` a title substring for the host body
+        only. It is validated at the HTTP boundary, so it never reaches the loop by surprise.
         """
         with self._lock:
             if self._active is not None:
@@ -79,7 +80,7 @@ class JobManager:
             self._prune_locked()
         threading.Thread(
             target=self._run_job,
-            args=(task_id, goal, device, profile, max_steps),
+            args=(task_id, goal, device, profile, max_steps, window),
             daemon=True, name=f"bryes-task-{task_id[:8]}").start()
         return task_id
 
@@ -96,7 +97,7 @@ class JobManager:
             if tid != self._active and self._jobs[tid].status in ("done", "failed"):
                 del self._jobs[tid]
 
-    def _run_job(self, task_id, goal, device, profile, max_steps):
+    def _run_job(self, task_id, goal, device, profile, max_steps, window=None):
         """Background worker: run the loop, record result/error, free the slot.
 
         Writes result/steps BEFORE flipping status to a terminal value, so a
@@ -107,7 +108,8 @@ class JobManager:
         try:
             # A body-name string maps to a Device; None -> run() auto-selects
             # (ADR-006 embodiment); an already-built Device passes through.
-            dev = _make_device(device) if isinstance(device, str) and device else (
+            # `window` belongs to the host body, so it is spent here, at construction.
+            dev = _make_device(device, window=window) if isinstance(device, str) and device else (
                 None if isinstance(device, str) else device)
             result = self._runner(goal, device=dev, profile=profile,
                                   max_steps=max_steps, verbose=False)

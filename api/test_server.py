@@ -104,6 +104,19 @@ def test_bad_input_400():
           c.post("/tasks", json={"goal": "g", "device": "bogus"}).status_code == 400)
 
 
+def test_window_field():
+    def stub(goal, **kw):
+        return {"status": "done"}
+
+    c = _client(stub)
+    check("window on a non-host body -> 400",
+          c.post("/tasks", json={"goal": "g", "device": "linux", "window": "Unreal"}).status_code == 400)
+    check("window with no device -> 400",
+          c.post("/tasks", json={"goal": "g", "window": "Unreal"}).status_code == 400)
+    check("windows is a known device name",
+          c.post("/tasks", json={"goal": "g", "device": "windows"}).status_code != 400)
+
+
 def main():
     test_post_and_poll()
     test_missing_goal()
@@ -111,6 +124,7 @@ def main():
     test_unknown_404()
     test_health()
     test_bad_input_400()
+    test_window_field()
     print()
     if _failed == 0:
         print(f"ALL PASS ({_passed})")

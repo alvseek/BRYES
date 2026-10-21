@@ -1,24 +1,26 @@
 """BRYES — WindowsDevice: the real Windows desktop as a Device (ADR-002).
 
-The body Unreal Editor lives on. Built for RECORDING first: it screenshots (the whole
-desktop, or one window by title) and runs a PowerShell command, and it advertises NO
-pointer verbs. That last part is deliberate. Capture is what authoring a lesson needs;
-driving the real desktop is a separate and unproven job, and an empty `verbs` set means
-the loop can never offer the Brain a click this body cannot perform (ADR-006's one-body
-rule still holds).
+Two jobs in one body, gated separately:
 
-DPI is the trap this file exists to defuse. Unless the process declares itself
-per-monitor DPI aware, `GetWindowRect` answers in LOGICAL pixels while `ImageGrab`
-returns PHYSICAL ones on a scaled display, so the crop lands somewhere else entirely, or
-misses the window. The awareness call runs once at import, before anything measures.
+- **Capture always works.** `screenshot()` grabs the whole virtual desktop (or one window),
+  which is what `capture.py` and the lesson pipeline need.
+- **Driving needs `BRYES_ALLOW_HOST=1`**, and `shell()` needs `BRYES_ALLOW_HOST_SHELL=1` on top.
+  Nothing above the body knows this: `_make_device` refuses early with a readable error, and any
+  other caller meets the gate at the verb itself. The gate is deliberately not in the
+  constructor, because capture constructs this body too.
 
-Why a window rect rather than a full grab: a lesson screenshot should show the editor,
-not the desktop behind it. `window="Unreal"` is the normal case, and a title that matches
-nothing RAISES, because falling back to the whole desktop would silently bake a worse
-image into a tutorial.
+Coordinates arrive in IMAGE space (what the Eyes saw) and are translated to SCREEN space by
+`screen_xy`, which reads the virtual-desktop origin on every action. Measured reason: on a desk
+with a monitor above the primary the origin was (0,−1080), and a cached origin would put every
+click on that monitor 1080 px off after any display change.
+
+DPI is the other trap this file defuses. Unless the process declares per-monitor DPI awareness,
+`GetWindowRect` answers in logical pixels while `ImageGrab` returns physical ones, so the crop
+lands somewhere else entirely. The awareness call runs once, at import.
 """
 import ctypes
 import io
+import os
 import subprocess
 import sys
 import time
@@ -26,7 +28,12 @@ from ctypes import wintypes
 
 from PIL import ImageGrab
 
-from .base import Capabilities
+from .base import ALL_VERBS, Capabilities, default_type_into
+
+try:                       # optional transcript logger (no-op when a run isn't logging)
+    import runlog
+except ImportError:
+    runlog = None
 
 _IS_WINDOWS = sys.platform == "win32"
 
@@ -56,13 +63,13 @@ def _virtual_screen():
 
 _W, _H = _virtual_screen()
 
-# Capture-only body: no pointer verbs, because none of them are implemented yet. The loop
-# can still use it for wait/screenshot/done/fail and the PowerShell channel.
+# A full desktop body: every pointer verb, and a PowerShell channel. Driving is gated at the
+# verb, not here, because capture constructs this same body and must keep working.
 WINDOWS_CAPS = Capabilities(
     name="windows-desktop",
     width=_W,
     height=_H,
-    verbs=frozenset(),
+    verbs=ALL_VERBS,
     has_shell=True,
     shell_flavor="powershell",
     keys={},
@@ -143,53 +150,280 @@ def find_window_rect(title, windows=None):
     return found[2] if found else None
 
 
+def windows_of_pid(pid):
+    """[(hwnd, title, rect)] for the visible titled top-level windows OWNED by `pid`.
+
+    This is how a driver names its target safely: the body launches the application, keeps the
+    pid, and acts only on a window that process owns. A title substring cannot tell two editors
+    apart, and on 2026-10-21 it drove someone else's document.
+    """
+    if not _IS_WINDOWS:
+        return []
+    out = []
+    for hwnd, title, rect in _enum_windows():
+        owner = wintypes.DWORD()
+        ctypes.windll.user32.GetWindowThreadProcessId(hwnd, ctypes.byref(owner))
+        if owner.value == int(pid):
+            out.append((hwnd, title, rect))
+    return out
+
+
+def top_window_of_pid(pid):
+    """(hwnd, title, rect) of the largest visible window `pid` owns, or None."""
+    best, best_area = None, 0
+    for hwnd, title, rect in windows_of_pid(pid):
+        w = rect[2] - rect[0]
+        h = rect[3] - rect[1]
+        if w < 100 or h < 60:
+            continue
+        if w * h > best_area:
+            best, best_area = (hwnd, title, rect), w * h
+    return best
+
+
+def window_title(hwnd):
+    """The current title of a window handle ('' when it has none or is gone)."""
+    if not _IS_WINDOWS or not hwnd:
+        return ""
+    user32 = ctypes.windll.user32
+    length = user32.GetWindowTextLengthW(hwnd)
+    if not length:
+        return ""
+    buf = ctypes.create_unicode_buffer(length + 1)
+    user32.GetWindowTextW(hwnd, buf, length + 1)
+    return buf.value
+
+
+def _env_flag(name):
+    """True when an environment variable is set to something that reads as 'on'."""
+    return str(os.environ.get(name, "")).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def host_allowed():
+    """May this process drive the REAL desktop? Read by `_make_device` for an early refusal."""
+    return _env_flag("BRYES_ALLOW_HOST")
+
+
+def host_shell_allowed():
+    """May this process run a command on the REAL desktop? Its own switch, on purpose."""
+    return _env_flag("BRYES_ALLOW_HOST_SHELL")
+
+
 class WindowsDevice:
-    """The real Windows desktop as a Device. Screenshot + PowerShell only, for now."""
+    """The real Windows desktop as a Device: capture always, driving behind an environment gate."""
 
     caps = WINDOWS_CAPS
 
-    def __init__(self, window=None, raise_window=True):
-        """`window` is a title substring; None captures the whole virtual desktop.
+    def __init__(self, window=None, raise_window=True, input=None, hwnd=None):
+        """`window` is a title substring; None means the whole virtual desktop.
 
-        `raise_window` brings the matched window to the foreground before the grab, because a
+        `hwnd` is the SAFE way to name a driving target: a handle the caller obtained from a
+        process it started (`top_window_of_pid`). A title substring cannot tell two editors
+        apart, so it is for capture only when `hwnd` is absent.
+
+        `raise_window` brings the matched window to the foreground before a grab, because a
         screen grab returns whatever is RENDERED in that rect: a browser on top would be baked
         into the lesson as if it were the editor.
+
+        `input` is the HostInput seam. Leave it None and the real one is created on first use,
+        so a capture-only caller never imports pyautogui.
         """
         self._window = window
+        self._hwnd = int(hwnd) if hwnd else None
         self._raise = raise_window
+        self._input = input
 
-    def _grab(self):
-        if self._window:
+    # ---- capability gates --------------------------------------------------------------
+    def _require_host(self):
+        if not host_allowed():
+            raise RuntimeError(
+                "WindowsDevice refuses to act on the real desktop: set BRYES_ALLOW_HOST=1. "
+                "Screenshots are not gated; only driving and shell are.")
+
+    def _require_host_shell(self):
+        self._require_host()
+        if not host_shell_allowed():
+            raise RuntimeError(
+                "WindowsDevice.shell() is gated separately: set BRYES_ALLOW_HOST_SHELL=1. "
+                "A click can be undone by noticing it; a recursive delete cannot.")
+
+    # ---- geometry ----------------------------------------------------------------------
+    def _origin_xy(self):
+        """The live virtual-desktop origin. Never cached: a display can change mid-run."""
+        if not _IS_WINDOWS:
+            return (0, 0)
+        user32 = ctypes.windll.user32
+        return (user32.GetSystemMetrics(76), user32.GetSystemMetrics(77))
+
+    def screen_xy(self, x, y):
+        """Image-space pixel (what the Eyes saw) -> absolute screen pixel (what the OS uses)."""
+        origin_x, origin_y = self._origin_xy()
+        return (int(x) + origin_x, int(y) + origin_y)
+
+    def _get_input(self):
+        if self._input is None:
+            from .host_input import HostInput   # lazy: capture-only use never imports pyautogui
+            self._input = HostInput()
+        return self._input
+
+    def _target_rect(self):
+        """(left, top, right, bottom) of the handle, or None when no handle is set."""
+        if not self._hwnd or not _IS_WINDOWS:
+            return None
+        rect = wintypes.RECT()
+        ctypes.windll.user32.GetWindowRect(self._hwnd, ctypes.byref(rect))
+        return (rect.left, rect.top, rect.right, rect.bottom)
+
+    def _require_inside_target(self, x, y):
+        """A point outside the target handle is refused, not clicked.
+
+        The foreground guard proves the right window is in front; it does not stop a coordinate
+        that lands on something else entirely. This does, and it is the difference between a
+        failed step and a click into whatever happens to sit beside the target.
+        """
+        rect = self._target_rect()
+        if rect is None:
+            return
+        left, top, right, bottom = rect
+        if not (left <= x < right and top <= y < bottom):
+            raise RuntimeError(
+                f"refusing to act at ({x},{y}): outside the target window "
+                f"({left},{top})-({right},{bottom})")
+
+    # ---- focus -------------------------------------------------------------------------
+    def _target_hwnd(self):
+        """The handle to keep in front: the one given, or the largest window matching a title.
+
+        A handle is stable; a title is a guess. Callers that STARTED their target should pass
+        `hwnd=` and never rely on this fallback.
+        """
+        if self._hwnd:
+            return self._hwnd
+        if not self._window:
+            return None
+        found = find_window(self._window)
+        return found[0] if found else None
+
+    def _ensure_foreground(self, attempts=3):
+        """Keep the target window in front before acting.
+
+        With no window named there is nothing to guard: the caller asked for the whole desktop,
+        which means clicking whatever the coordinates point at is the intent.
+        """
+        if (not self._window and not self._hwnd) or not _IS_WINDOWS:
+            return
+        user32 = ctypes.windll.user32
+        for _ in range(attempts):
+            hwnd = self._target_hwnd()
+            if hwnd is None:
+                raise RuntimeError(
+                    f"no visible window matching {self._window!r} any more")
+            if user32.GetForegroundWindow() == hwnd:
+                return
+            user32.SetForegroundWindow(hwnd)
+            time.sleep(0.15)
+        raise RuntimeError(
+            f"could not bring the target window to the foreground after {attempts} attempts; "
+            "refusing to act on whatever holds focus instead")
+
+    # ---- capture -----------------------------------------------------------------------
+    def grab_window(self):
+        """The named window's rect only. For CAPTURE (lessons), never for driving.
+
+        A window crop's (0,0) is the window's corner, so any coordinate read off it is not a
+        screen coordinate. Driving therefore always uses `screenshot()` (the full desktop),
+        and this method exists for the lesson pipeline, which wants the editor and nothing else.
+        """
+        if self._hwnd:
+            rect = wintypes.RECT()
+            ctypes.windll.user32.GetWindowRect(self._hwnd, ctypes.byref(rect))
+            hwnd, rect = self._hwnd, (rect.left, rect.top, rect.right, rect.bottom)
+        else:
+            if not self._window:
+                raise RuntimeError("grab_window() needs a window title or an hwnd")
             found = find_window(self._window)
             if found is None:
                 raise RuntimeError(
                     f"no visible window matching {self._window!r} "
                     f"(run: python capture.py --list-windows)")
             hwnd, _name, rect = found
-            if self._raise and _IS_WINDOWS:
-                ctypes.windll.user32.SetForegroundWindow(hwnd)
-                time.sleep(0.25)                 # let the repaint land before grabbing
-            return ImageGrab.grab(bbox=rect, all_screens=True)
-        return ImageGrab.grab(all_screens=True)
-
-    def screenshot(self):
+        if self._raise and _IS_WINDOWS:
+            ctypes.windll.user32.SetForegroundWindow(hwnd)
+            time.sleep(0.25)                 # let the repaint land before grabbing
         buf = io.BytesIO()
-        self._grab().save(buf, "PNG")
+        ImageGrab.grab(bbox=rect, all_screens=True).save(buf, "PNG")
         return buf.getvalue()
 
+    def screenshot(self):
+        """The WHOLE virtual desktop, always.
+
+        Deliberately not cropped even when `window` is set: the loop feeds these frames to the
+        Eyes and then turns the Eyes' pixels back into clicks, so the image space and the screen
+        space must be the same frame (decision 4 of the host-body plan). `grab_window()` is the
+        cropped variant, and only capture uses it.
+        """
+        img = ImageGrab.grab(all_screens=True)
+        buf = io.BytesIO()
+        img.save(buf, "PNG")
+        return buf.getvalue()
+
+    # ---- driving -----------------------------------------------------------------------
     def act(self, action):
-        raise NotImplementedError(
-            f"WindowsDevice is a capture-only body: {action.get('type')!r} is not built. "
-            "ADRs 002/006 keep one body per run; driving the real desktop is a separate job.")
+        """One pointer/keyboard action, with image coordinates translated to screen ones."""
+        self._require_host()
+        verb = action.get("type")
+        inp = self._get_input()
+        self._ensure_foreground()
+
+        if verb == "hover":
+            x, y = self.screen_xy(action["x"], action["y"])
+            self._require_inside_target(x, y)
+            inp.hover(x, y)
+        elif verb in ("click", "double_click", "right_click"):
+            x, y = self.screen_xy(action["x"], action["y"])
+            self._require_inside_target(x, y)
+            {"click": inp.click,
+             "double_click": inp.double_click,
+             "right_click": inp.right_click}[verb](x, y)
+        elif verb == "scroll":
+            x, y = self.screen_xy(action["x"], action["y"])
+            self._require_inside_target(x, y)
+            # The Brain sends a direction, not an amount; three notches is the container's
+            # implicit amount too, so a scroll means the same thing on both bodies.
+            up = str(action.get("direction", "down")).lower() == "up"
+            inp.scroll(x, y, 3 if up else -3)
+        elif verb == "drag":
+            x1, y1 = self.screen_xy(action["x"], action["y"])
+            x2, y2 = self.screen_xy(action["x2"], action["y2"])
+            self._require_inside_target(x1, y1)
+            self._require_inside_target(x2, y2)
+            inp.drag(x1, y1, x2, y2)
+        elif verb == "type":
+            inp.type_text(action.get("text", ""))
+        elif verb == "key":
+            inp.press(action.get("key", ""))
+        else:
+            raise ValueError(f"WindowsDevice cannot perform {verb!r}")
+
+        if runlog:
+            runlog.record("action", action, "executed")
 
     def clear_field(self):
-        raise NotImplementedError("WindowsDevice is a capture-only body: no clear gesture yet")
+        """Clear the focused field the Windows way: select all, then delete."""
+        self._require_host()
+        self._ensure_foreground()
+        inp = self._get_input()
+        inp.press("ctrl+a")
+        inp.press("delete")
 
     def type_into(self, text, *, click_xy=None, clear_first=False, press_enter=False):
-        raise NotImplementedError("WindowsDevice is a capture-only body: no text entry yet")
+        self._require_host()          # fail before the first click, not halfway through
+        default_type_into(self, text, click_xy=click_xy, clear_first=clear_first,
+                          press_enter=press_enter)
 
     def shell(self, command, timeout=None, stdin=None):
         """Run a NON-interactive PowerShell command; same result shape as the other bodies."""
+        self._require_host_shell()
         try:
             res = subprocess.run(
                 ["powershell", "-NoProfile", "-NonInteractive", "-Command", str(command)],

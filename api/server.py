@@ -54,6 +54,13 @@ def create_app(manager=None):
             kw["max_steps"] = max_steps
         if body.get("profile") is not None:     # run() validates the profile path itself
             kw["profile"] = body["profile"]
+        window = body.get("window")
+        if window is not None:
+            # The host body names a surface; on any other body the field would do nothing,
+            # and "silently ignored" is the failure this check exists to prevent.
+            if device != "windows":
+                return jsonify({"error": "'window' only applies to \"device\": \"windows\""}), 400
+            kw["window"] = window
         try:
             task_id = manager.submit(goal, **kw)
         except BusyError as e:

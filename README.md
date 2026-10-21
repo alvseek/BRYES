@@ -86,13 +86,13 @@ The **body** is an abstraction, not a hard-wire: Screen + Hands + shell sit behi
 desktop) and `PhoneDevice` (a real Android over adb) are two bodies; the loop, Eyes, and Brain are
 body-agnostic. Full structural detail: [docs/architecture-overview.md](docs/architecture-overview.md).
 
-A **third body records instead of drives.** `WindowsDevice` ([devices/windows.py](devices/windows.py))
-screenshots a real Windows window (or the whole virtual desktop) and advertises **no pointer verbs**,
-so the loop can never drive it by accident. It exists for the lesson pipeline: [capture.py](capture.py)
-saves a labelled screenshot with provenance, [lesson.py](lesson.py) builds a teaching page whose every
-step is backed by one, and the build refuses a step whose shot is missing. Procedure:
-[docs/procedures/make-a-lesson.md](docs/procedures/make-a-lesson.md) (`/make-lesson`), output under
-[lessons/](lessons/).
+A **third body is the real Windows desktop.** `WindowsDevice` ([devices/windows.py](devices/windows.py))
+captures the virtual desktop or one window, and drives it when allowed: pointer and keyboard through
+`pyautogui`, with the image-to-screen origin translated per action. Two environment gates stand in
+front of it, because the host is not disposable: `BRYES_ALLOW_HOST=1` to act at all, and
+`BRYES_ALLOW_HOST_SHELL=1` for shell. The container stays the default, and the profile catalog never
+lists the host, so an unqualified run cannot reach it. Capture is ungated: [capture.py](capture.py) and
+the lesson pipeline build on it, see [docs/procedures/make-a-lesson.md](docs/procedures/make-a-lesson.md).
 
 ### Tech Stack
 
@@ -152,6 +152,8 @@ step is backed by one, and the build refuses a step whose shot is missing. Proce
 | `OPENROUTER_API_KEY` | The one key for Eyes + Brain. Lives in the gitignored `.env`. **Never commit it.** | `sk-or-v1-...` |
 | `SCREEN_RESOLUTION` | Screen container resolution override (in `screen/docker-compose.yml`). | `2560x1600x24` (default `1280x800x24`) |
 | `CHROME_START_URL` | URL Chrome auto-boots to in the container. | `https://www.tokopedia.com` (default `google.com`) |
+| `BRYES_ALLOW_HOST` | Allow the Windows body to **drive the real desktop**. Unset means the host is capture-only, and `device="windows"` refuses before a body is built. | `1` |
+| `BRYES_ALLOW_HOST_SHELL` | Allow `shell` on the **real machine**. Its own switch, because a click can be undone and a recursive delete cannot. Still needs `BRYES_ALLOW_HOST`. | `1` |
 
 ---
 

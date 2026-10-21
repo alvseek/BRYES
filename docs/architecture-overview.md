@@ -37,7 +37,7 @@ each body keeps its transport private:
 |---|---|---|
 | **`ContainerDevice`** (default) | HTTP → `:8000` | the Dockerized desktop, 1280×800, `bash` shell, all 8 pointer verbs |
 | **`PhoneDevice`** | `adb` (USB) | a real Android phone — `screencap` / `input` / `adb shell`; 1080×2400 portrait, no right_click/hover, Back/Home keys, `scroll`→swipe |
-| *`WindowsDevice`* | *(future)* | `mss` + `pyautogui`, in-process — named, not built |
+| **`WindowsDevice`** | in-process (`PIL.ImageGrab` + `pyautogui`) | **the real desktop.** Whole virtual desktop or one named window; all 8 pointer verbs, PowerShell shell. Gated: `BRYES_ALLOW_HOST=1` to act, `BRYES_ALLOW_HOST_SHELL=1` for shell ([ADR-009](adr/2026-10-21-host-body-and-gates.md)). Image coordinates are translated to screen ones by the live virtual origin, so a monitor placed above the primary does not shift every click. Never listed in the profile catalog, so the auto-picker cannot choose it |
 
 The Brain assembles its **action vocabulary from the active body's `Capabilities`** — it is only
 offered verbs the current body can do (a phone never sees `right_click`). Pure API/MCP channels

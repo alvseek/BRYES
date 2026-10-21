@@ -37,19 +37,25 @@ def main():
     print(f"PASS: {d.caps.name} {d.caps.width}x{d.caps.height} "
           f"(shell={d.caps.shell_flavor})")
 
-    # The safety property: capture-only. An empty verb set means the Brain is never offered
-    # a click this body cannot perform.
-    assert d.caps.verbs == frozenset(), f"capture-only body advertises verbs: {d.caps.verbs}"
-    for call in (lambda: d.act({"type": "click", "x": 1, "y": 1}),
-                 lambda: d.clear_field(),
-                 lambda: d.type_into("x")):
-        try:
-            call()
-        except NotImplementedError:
-            pass
-        else:
-            raise AssertionError("capture-only body executed an action")
-    print("PASS: no pointer verbs; act/clear_field/type_into refuse with NotImplementedError")
+    # The body now advertises the full verb set, and every acting verb is gated rather than
+    # absent: with BRYES_ALLOW_HOST unset, acting must REFUSE (RuntimeError), not pretend.
+    from devices.base import ALL_VERBS
+    assert d.caps.verbs == ALL_VERBS, f"windows body verbs: {d.caps.verbs}"
+    saved = os.environ.pop("BRYES_ALLOW_HOST", None)
+    try:
+        for call in (lambda: d.act({"type": "click", "x": 1, "y": 1}),
+                     lambda: d.clear_field(),
+                     lambda: d.type_into("x")):
+            try:
+                call()
+            except RuntimeError as exc:
+                assert "BRYES_ALLOW_HOST" in str(exc), str(exc)
+            else:
+                raise AssertionError("acting succeeded without BRYES_ALLOW_HOST")
+    finally:
+        if saved is not None:
+            os.environ["BRYES_ALLOW_HOST"] = saved
+    print("PASS: full verb set advertised; acting refuses without BRYES_ALLOW_HOST")
 
     test_window_matcher()
 
@@ -60,9 +66,30 @@ def main():
         f"png {w}x{h} != caps {d.caps.width}x{d.caps.height} (virtual-screen space)"
     print(f"PASS: full-desktop grab -> PNG {w}x{h} ({len(png)} bytes), matches caps")
 
-    r = d.shell("Write-Output bryes-windows-ok")
+    # Driving depends on this: with a window named, the frame must STILL be the whole desktop,
+    # because the Eyes' pixels are turned back into screen coordinates. A window crop would
+    # shift every click by the window's own offset.
+    png_win = WindowsDevice(window="NoSuchWindowAnywhere").screenshot()
+    ww, wh = Image.open(io.BytesIO(png_win)).size
+    assert (ww, wh) == (d.caps.width, d.caps.height), \
+        f"a named window changed the frame to {ww}x{wh}; image space must stay screen space"
+    print("PASS: naming a window does not crop the frame (image space == screen space)")
+
+    # The shell channel now sits behind its own gate; this smoke proves the transport, so it
+    # opens both gates for the length of the call and restores whatever was there.
+    shell_saved = {k: os.environ.get(k) for k in ("BRYES_ALLOW_HOST", "BRYES_ALLOW_HOST_SHELL")}
+    os.environ["BRYES_ALLOW_HOST"] = "1"
+    os.environ["BRYES_ALLOW_HOST_SHELL"] = "1"
+    try:
+        r = d.shell("Write-Output bryes-windows-ok")
+    finally:
+        for key, value in shell_saved.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
     assert r["ok"] and "bryes-windows-ok" in r["stdout"], r
-    print("PASS: PowerShell round-trips (Write-Output -> stdout, exit 0)")
+    print("PASS: PowerShell round-trips with both gates set (Write-Output -> stdout, exit 0)")
 
     point = d.pointer()
     assert point is None or (isinstance(point, tuple) and len(point) == 2), point

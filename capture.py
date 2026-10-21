@@ -68,7 +68,7 @@ def main(argv=None):
         ap.error("--lesson and --step are required (or use --list-windows)")
 
     device = WindowsDevice(window=args.window, raise_window=not args.no_raise)
-    png = device.screenshot()
+    png = device.grab_window() if args.window else device.screenshot()
 
     shot_dir = Path(args.out) / args.lesson / "shots"
     shot_dir.mkdir(parents=True, exist_ok=True)

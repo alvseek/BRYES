@@ -29,7 +29,8 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import runlog  # noqa: E402
 from brain.client import answer, build_system_prompt, decide, select_embodiment  # noqa: E402
-from devices import ALL_VERBS, ContainerDevice, PhoneDevice  # noqa: E402
+from devices import ALL_VERBS, ContainerDevice, PhoneDevice, WindowsDevice  # noqa: E402
+from devices.windows import host_allowed  # noqa: E402
 from eyes.client import DESCRIBE_PROMPT, GROUND_PROMPT, describe, locate  # noqa: E402
 from eyes.client import diff as vlm_diff
 from profiles import load_profiles, profile_exists, read_catalog  # noqa: E402
@@ -69,14 +70,27 @@ _FAILURE_LIMIT = 3  # consecutive action-execution FAILURES before a "reconsider
 
 # Embodiment selection (ADR-006): a profile path's top-level (OS) segment names the BODY it
 # belongs to, so the Brain's pick of a profile path also picks the device. One body per run.
-_ROOT_DEVICE = {"android": PhoneDevice, "linux": ContainerDevice}
+# `windows` is the REAL desktop: registered so an explicit `device="windows"` resolves, and
+# deliberately absent from the profile catalog so the auto-picker can never choose it.
+_ROOT_DEVICE = {"android": PhoneDevice, "linux": ContainerDevice, "windows": WindowsDevice}
 
 
-def _make_device(root):
+def _make_device(root, **kw):
     """Instantiate the body for an OS root, failing CLEARLY if it can't be reached (e.g. the
-    phone is unplugged/locked) — we never silently substitute a different body (ADR-006)."""
+    phone is unplugged/locked) — we never silently substitute a different body (ADR-006).
+
+    The host body also fails EARLY here when `BRYES_ALLOW_HOST` is unset, so a run says why
+    in one line instead of dying at the first click.
+    """
+    if root == "windows" and not host_allowed():
+        raise RuntimeError(
+            "device 'windows' drives the REAL desktop; set BRYES_ALLOW_HOST=1 to allow it "
+            "(the container body needs no such switch)")
+    # Drop None so a body with no such parameter is not handed one: `window=None` used to
+    # reach ContainerDevice and break every non-host run.
+    kw = {name: value for name, value in kw.items() if value is not None}
     try:
-        return _ROOT_DEVICE[root]()
+        return _ROOT_DEVICE[root](**kw)
     except Exception as e:
         raise RuntimeError(f"chose body {root!r} but it's unavailable: {e}") from e
 
@@ -126,12 +140,16 @@ def resolve_embodiment(goal, *, picker, catalog_reader):
 
 
 def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=None,
-        device=None, profile=None):
+        device=None, profile=None, window=None):
     """Drive the loop until the Brain says done/fail or steps run out.
 
     Every step's prompts and raw replies (describe / decide / locate / action) plus the
     screenshot are preserved to a transcript under artifacts/runs/ (see runlog); `tag`
     names that run folder.
+
+    `window` names a surface on the host body (`device="windows"`): a title substring the
+    body keeps in front and captures. It never reaches the Brain or the Eyes, and it is
+    useless on any other body, so combining it with one is an error rather than a no-op.
     """
     # VLM describe/decide text (and an answer-only reply) can contain non-ASCII that crashes the
     # default Windows console (cp1252). Make console output lossy-but-safe FIRST so a stray glyph
@@ -140,6 +158,15 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     except (AttributeError, ValueError):
         pass
+
+    # A body NAME (e.g. "windows") is materialised here so `window` can reach it; an already
+    # built Device instance passes through untouched, and keeps the loop transport-blind.
+    if window is not None and (not isinstance(device, str) or device != "windows"):
+        raise ValueError(
+            "window names a surface on the host body: pass it with device='windows', or build "
+            f"the Device yourself. Got device={device!r}, window={window!r}")
+    if isinstance(device, str):
+        device = _make_device(device, window=window)
 
     # Embodiment selection (ADR-006): if the caller forced NEITHER a device NOR a profile, the
     # Brain picks the body + profiles for this goal — or picks NO body and we answer directly.
@@ -165,6 +192,8 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
     else:
         # Forced device instance, no profile.
         embodiment_note = f"forced device={device.caps.name}"
+    if window:
+        embodiment_note += f" window={window!r}"
 
     # App/OS profile (profiles.py): the VISUAL half primes the Eyes, the OPERATING half the Brain,
     # so both know the current app's UI + conventions. Merges multiple profiles (ADR-006).

@@ -2,3 +2,6 @@
 pydantic>=2          # structured LLM output: schema definition + validation guard (ADR-005)
 Pillow>=10           # the Eyes: screenshot decode, downscale, and crop
 flask>=3             # the host task API (POST /tasks, GET /tasks/<id>) over run() (ADR-008)
+pyautogui>=0.9.54    # the HOST body's pointer/keyboard effector (Windows). Pulls its own tree:
+                     # pytweening, pyscreeze, pyrect, pyperclip, pymsgbox, pygetwindow, mouseinfo
+pyperclip>=1.8       # non-ASCII text entry on the host body (clipboard paste, never write())
