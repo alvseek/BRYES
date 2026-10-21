@@ -5,6 +5,44 @@ from `roadmap.md`. Project context: [architecture-overview](../../docs/architect
 
 ---
 
+### [2026-10-21 12.15] (agent: software-architect) — TWO SWAPS, ONE MEASUREMENT: THE EYES AND THE BRAIN BOTH MOVE TO DEEPSEEK V4.1 FLASH 👁️🧠📊
+
+- **Context**: immediately after the host body landed, Alvi asked for the model table, then *"change brain to deepseek-v4.1-flash"*, then *"this v4.1 can also describe, can we test the comparison to qwen3-vl-30b-a3b-instruct? I want to know"*, and finally *"let's just settle at v4.1"*. No new feature: two model decisions, one of them measured.
+- **Discussion**:
+  - **The Brain swap was verified before the default moved.** One live `decide()` call on `deepseek/deepseek-v4.1-flash` returned a schema-valid action through the Pydantic → forced tool-call → our-validation path (227 completion tokens, all reasoning, $0.0011), so ADR-005 held for the successor before anything depended on it. Backup stays `gemini-2.5-flash-lite`: different weights is the point of a backup.
+  - **The Eyes comparison used production settings, not a convenient prompt.** Three frames (two Unreal editors, one chat UI), `OVERVIEW_PROMPT`, 0.5 downscale, thinking off, temperature 0, both models: v4.1 at **1.4–3.5 s** against the 30b's **4.9–6.0 s**, about **35% cheaper** per call, and **no misreads** where the 30b produced three — `GRAPHICS` for Graphs, `Hermad` for Hermod, and an OS guess of Linux/macOS on a Windows desktop. v4.1 also named what the 30b gestured at: the Blueprint asset and two YAML filenames.
+  - **The 30b kept one edge, and it is the one that mattered when it was chosen.** On a small-text crop, both read `426k · $0.26` correctly, but the 30b answered in 0.7 s with exactly the text while v4.1 took 1.6 s and wrapped it in four paragraphs.
+  - **Alvi settled the split himself**: one model, v4.1, for describing. `box`, the careful re-read and `request_diff` stay on the 72B, and grounding stays on UI-TARS, because those are different jobs from describing.
+- **Key Interactions**: *"I want to know"* is the whole reason the bake-off exists; *"let's just settle at v4.1"* closed it without a second round.
+- **Issues Encountered**:
+  - **Problem Description**: the swap is well measured for *this* corpus and unmeasured for the corpus that chose the previous model.
+  - **Root Cause**: the 30b replaced the 8b in July because the 8b systematically misread **discounted price digits** (Rp2.105.000 read as Rp1.050.000, repeatable at temperature 0). The three frames tested today are an Unreal editor and a chat UI, with no price layout anywhere. One cost readout is not that test.
+  - **Solution Process**: ran the crop path anyway with `CROP_PROMPT`, since exact transcription is the job; recorded the gap rather than letting the overview result stand in for it.
+  - **Resolution**: unresolved by design — it is a tech debt with a named test, not a hidden assumption.
+  - **Also**: the earlier crop attempt used a wrong box and landed on a nearly blank strip, where **both** models invented a number (`499`, `4801`). Invalid crop, so not evidence about either model, but a reminder that neither refuses an empty image.
+- **Outcomes**:
+  - **Deliverables**: `brain/client.py` and `eyes/client.py` moved to `deepseek-v4.1-flash` with the reasoning recorded beside each constant; docs synced where they state the current model (README, architecture-overview, agent-loop-flow, context-index, quality-standard), which also cleared three stale `qwen3-vl-8b` lines that had survived the July swap. Pushed `3d57c05` and `0b143d1`.
+  - **Progress Made**: the project now runs two of its four model roles on one family, which halves the vendors in the hot path and cuts the describe cost per step. The `describe` call was verified live on the Blueprint capture before the switch.
+  - **Tech Debts**:
+    - **[new] Price-digit fidelity is unproven for v4.1.** The test that dethroned the 8b was discounted-price reading; today's corpus has none. A Tokopedia-style screenshot with a struck-through original is the missing measurement.
+    - **[new] Crop verbosity.** v4.1 pads where the 30b transcribed, which costs tokens per trim step and adds noise the Brain has to ignore.
+    - **[new] The alias, not the snapshot.** The default is `deepseek/deepseek-v4.1-flash`, whose route and price can move; `-1017` is the pinned build.
+    - **[new] No full loop on the new pair.** One `describe()` call and one `decide()` call, not a converged run.
+    - **[carry] Model-fallback unexercised live**: the backup has still never fired in a real degeneration.
+  - **Next Steps**:
+    - Run one full loop on the throwaway target with both new models, which is what turns two verified calls into a proven pair.
+    - Re-run the bake-off on a price-grid screenshot before trusting v4.1 with a shopping task.
+    - Decide whether to pin `-1017`.
+- **Insights**:
+  - **New Understanding**: a model choice is a claim about a failure mode. The 30b was chosen *for* digit fidelity, so replacing it needs a digit test, not a general competence test — and a general one is what I ran.
+  - **Pattern Recognition**: the same shape as `0eb34b96` — I verified something adjacent to the claim (description quality) and nearly let it stand for the claim (price fidelity).
+  - **Improvement Areas**: the bake-off should start from the previous model's reason for existing. That reason is written down in the constant's comment, which I read while editing it.
+- **Promotions**:
+  → Promoted in place to [brain/client.py](../../brain/client.py) and [eyes/client.py](../../eyes/client.py) — the measured comparison sits beside the constant, where the next swap will read it.
+  → Promoted to [README](../../README.md), [architecture-overview](../../docs/architecture-overview.md), [agent-loop-flow](../../docs/agent-loop-flow.md), [context-index](../../docs/context-index.md) and [quality-standard](../../docs/quality-standard.md) — the current model, wherever it is stated.
+
+---
+
 ### [2026-08-23 09.02] (agent: software-architect) — THE DESTINATION, ANSWERED: BRYES IS FOR SEEING WHAT PUBLISHES NOTHING — AND AQUAZONE'S FORMS PUBLISH PLENTY (MEASURED) 👁️🪟✅
 
 - **Context**: Direct continuation of the 01.38 audit, which closed on *"decide what BRYES is FOR."* Alvi answered it, and the answer reframes the project rather than retiring it. No BRYES code touched.
