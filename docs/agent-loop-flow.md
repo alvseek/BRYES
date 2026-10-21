@@ -34,7 +34,7 @@ Two transports, two homes:
 | **Screen** | local Docker container | HTTP `:8000` | `GET /screenshot` |
 | **Hands** | *same* container (not a separate service) | HTTP `:8000` | `POST /action` (runs `xdotool`) |
 | **Eyes** | rented, OpenRouter — Qwen2.5-VL-72B (`describe`) + UI-TARS-1.5-7B (`locate`) | HTTPS | `describe()`, `locate()` |
-| **Brain** | rented, OpenRouter (`deepseek-v4-flash`, swappable; backup `gemini-2.5-flash-lite`) | HTTPS | `decide()` |
+| **Brain** | rented, OpenRouter (`deepseek-v4.1-flash`, swappable; backup `gemini-2.5-flash-lite`) | HTTPS | `decide()` |
 
 ```mermaid
 graph TD
@@ -47,7 +47,7 @@ graph TD
 
     subgraph openrouter["OpenRouter (HTTPS)"]
         Eyes["Eyes<br/>describe(png): Qwen2.5-VL-72B<br/>locate(png, target): UI-TARS-1.5-7B"]
-        Brain["Brain — deepseek-v4-flash<br/>decide(goal, obs, history)"]
+        Brain["Brain - deepseek-v4.1-flash<br/>decide(goal, obs, history)"]
     end
 
     Loop -->|"GET /screenshot"| Screen
@@ -105,7 +105,7 @@ sequenceDiagram
     participant L as Loop
     participant S as Screen/Hands (:8000)
     participant E as Eyes (UI-TARS)
-    participant B as Brain (deepseek-v4-flash)
+    participant B as Brain (deepseek-v4.1-flash)
 
     L->>S: GET /screenshot
     S-->>L: PNG

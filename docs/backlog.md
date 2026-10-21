@@ -46,7 +46,7 @@ in [../roadmap.md](../roadmap.md); this is the finer-grained "what's left right 
 - [ ] **Confirm the remaining app-level hands behavior** — `scroll` is now confirmed app-level
       (Tokopedia results scrolled through distinct screenfuls, 2026-07-14). Still eyeball-only:
       `double_click` selects, `right_click` context menu, `drag` on a draggable surface.
-- [ ] **Validate the default Brain (`deepseek-v4-flash`) on the calculator suite** (`1550×3÷4`,
+- [ ] **Validate the default Brain (`deepseek-v4.1-flash`, swapped 2026-10-21) on the calculator suite** (`1550×3÷4`,
       `128+47`, `512−137`, `7÷8`, `12+34+56` on clutter) — it carried the Tokopedia browser task cleanly
       (12 steps, 2026-07-17) but hasn't been run on the multi-digit calc suite. *(qwen3.6-flash was
       dropped as Brain, so its old calc-validation item is obsolete — see [ADR-005](adr/2026-07-16-structured-output-standard.md).)*

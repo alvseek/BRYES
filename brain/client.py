@@ -25,13 +25,12 @@ try:                       # optional transcript logger (no-op when a run isn't 
 except ImportError:
     runlog = None
 
-# deepseek-v4-flash: the primary Brain. It returns clean, schema-valid JSON under our
-# response_format json_schema standard WITH thinking on (verified 3/3 live), is served by 18
-# providers, and is cheap. It replaced qwen3.6-flash (the old bake-off winner): qwen's
-# Alibaba endpoint mis-applies a json_schema grammar / forced tool_choice to its THINKING
-# stream and degenerates (content:null / finish_reason=error) — a documented, ecosystem-wide
-# Qwen reasoning-model bug, not a provider outage. See ADR-005.
-MODEL = "deepseek/deepseek-v4-flash"
+# deepseek-v4.1-flash: the primary Brain. The successor to v4-flash, same family and the same
+# structured-output discipline (our Pydantic schema -> forced tool-call -> our validation, see
+# ADR-005). Swapped 2026-10-21, verified live under the forced-tool-calling path before the
+# default moved. The v4.1 snapshot also accepts image input, which is why a future Brain that
+# sees for itself is a small step rather than a rewrite; this client still sends text only.
+MODEL = "deepseek/deepseek-v4.1-flash"
 
 # Backup Brain (ADR-005): if the primary fails its allotted tries (a provider degeneration /
 # finish_reason=error), decide()'s LAST attempt escapes to this model. Chosen for RESILIENCE

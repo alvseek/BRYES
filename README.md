@@ -102,7 +102,7 @@ the lesson pipeline build on it, see [docs/procedures/make-a-lesson.md](docs/pro
 - **Screen container**: Docker Desktop (WSL2) — Xvfb + fluxbox + xdotool + scrot + a Flask control API + noVNC
 - **Phone body**: `adb` over USB (bundled in [tools/platform-tools/](tools/platform-tools/))
 - **Models** (rented, OpenRouter — one API key covers all): UI-TARS-1.5-7B (grounding),
-  qwen3-vl-30b-a3b + qwen2.5-vl-72b (describe / box), deepseek-v4-flash (Brain, default) +
+  qwen3-vl-30b-a3b + qwen2.5-vl-72b (describe / box), deepseek-v4.1-flash (Brain, default) +
   gemini-2.5-flash-lite (backup)
 
 ---
@@ -212,7 +212,7 @@ saved to a transcript under `artifacts/runs/` (via [runlog.py](runlog.py)).
 | `device` | `"linux"` → `ContainerDevice`, `"android"` → `PhoneDevice`. Omit → the Brain **self-selects** ([ADR-006](docs/adr/2026-07-17-embodiment-selection.md)). |
 | `profile` | App/OS profile path (e.g. `"android/whatsapp"`) → supplies Eyes + Brain knowledge. Omit → auto-selected. |
 | `max_steps` | Step budget before `step_limit` (default 12). |
-| `brain_model` | Override the Brain model slug (default `deepseek/deepseek-v4-flash`). |
+| `brain_model` | Override the Brain model slug (default `deepseek/deepseek-v4.1-flash`). |
 
 ### Commands
 
@@ -302,7 +302,7 @@ Full ADRs live in [docs/adr/](docs/adr/). In order:
 | [ADR-002](docs/adr/2026-07-15-device-interface.md) | **Device abstraction** — Screen+Hands+shell behind a swappable *vision-controllable body* with a `Capabilities` manifest. Proven by adding a real phone as body #2. |
 | [ADR-003](docs/adr/2026-07-16-change-feedback-verify-and-recover.md) | **Verify-and-recover** — the Eyes *report* an action's effect, the Brain *judges* it (a VLM verdict proved noisy; a screen-wide pixel diff can't see small changes). |
 | [ADR-004](docs/adr/2026-07-16-foveal-describe-trim.md) | **Two-mode foveal describe** — cut describe latency 5–16s → ~2s by attacking output length (overview gist / boxed-crop trim). Amendment 1 swapped the crop describer to a 30B MoE to fix a numeric-misread. |
-| [ADR-005](docs/adr/2026-07-16-structured-output-standard.md) | **Structured output** — formats enforced by our Pydantic schema + forced tool-calling, never trusted to the AI. deepseek-v4-flash primary + gemini-2.5-flash-lite backup. |
+| [ADR-005](docs/adr/2026-07-16-structured-output-standard.md) | **Structured output** — formats enforced by our Pydantic schema + forced tool-calling, never trusted to the AI. deepseek-v4.1-flash primary + gemini-2.5-flash-lite backup. |
 | [ADR-006](docs/adr/2026-07-17-embodiment-selection.md) | **Embodiment selection** — the agent self-selects its body + profiles from a catalog before the loop, or answers a knowledge goal directly. |
 | [ADR-007](docs/adr/2026-07-18-brain-prompt-restructure.md) | **Brain-prompt restructure** — priority-ordered blocks + an append-only, trusted CONFIRMED FINDINGS ledger, fixing a re-read/re-doubt non-convergence. |
 | [ADR-008](docs/adr/2026-07-19-task-invocation-api.md) | **Task-invocation API** — expose `run()` as an async HTTP task service (`POST /tasks` → poll `GET /tasks/{id}`), single-flight, localhost. API-first; an MCP adapter over it is the next step. |

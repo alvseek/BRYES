@@ -21,7 +21,7 @@ GitHub: **github.com/alvseek/BRYES** (remote named `alvseek`, commit identity
 | **Screen** | disposable Ubuntu desktop (Xvfb + fluxbox): screenshots + input, plus a sandboxed **shell** (`/exec`) | local Docker container, `screen/` |
 | **Hands** | `xdotool` click/double-click/right-click/hover/scroll/drag/type/key inside that container | same container |
 | **Eyes** | **qwen3-vl-30b-a3b** *describes* (two-mode foveal, [ADR-004](adr/2026-07-16-foveal-describe-trim.md) + Amend 1; swapped from qwen3-vl-8b 2026-07-18), **Qwen2.5-VL-72B** *boxes* a focus region + does careful re-reads, **UI-TARS-1.5-7B** *locates* elements (grounding → coordinates) | rented, OpenRouter, `eyes/` |
-| **Brain** | `deepseek-v4-flash` (default, swappable; backup `gemini-2.5-flash-lite`) — state → next action (reasoning) | rented, OpenRouter, `brain/` |
+| **Brain** | `deepseek-v4.1-flash` (default, swappable; backup `gemini-2.5-flash-lite`) — state → next action (reasoning) | rented, OpenRouter, `brain/` |
 
 **Two rules from the roadmap:** rent everything until it hurts (local GPU 3060 Ti 8GB
 is a last resort, Phase 6); prove ONE real task end-to-end before generalizing.
@@ -72,7 +72,7 @@ offered verbs the current body can do (a phone never sees `right_click`). Pure A
   OpenRouter. $0.10/M in, $0.20/M out, images free. UI-TARS is Qwen2.5-VL-7B tuned for
   grounding: great at pointing, but the fine-tune degraded description — which is why
   describe moved to a general VLM (above).
-- **Brain / reasoning:** `deepseek/deepseek-v4-flash` (default, text-only) — returns clean
+- **Brain / reasoning:** `deepseek/deepseek-v4.1-flash` (default, text-only) — returns clean
   schema-valid JSON under our `response_format: json_schema` standard with thinking on (18
   providers, cheap). `brain_model` is swappable per `run()`; backup `google/gemini-2.5-flash-lite`
   (different weights, no reasoning-stream bug — the LAST decide attempt escapes to it). Text-only
@@ -157,4 +157,4 @@ offered verbs the current body can do (a phone never sees `right_click`). Pure A
 ([ADR-003](adr/2026-07-16-change-feedback-verify-and-recover.md) — `expect`/`VERIFICATION`,
 Brain-judged) · describe-speed then solved via the two-mode foveal describe
 ([ADR-004](adr/2026-07-16-foveal-describe-trim.md), describe 5–16s → ~2s) ·
-6 Hosting ⬜ (only if forced). **Brain default: `deepseek-v4-flash`** (clean under json_schema+thinking; backup `gemini-2.5-flash-lite`, [ADR-005](adr/2026-07-16-structured-output-standard.md)).
+6 Hosting ⬜ (only if forced). **Brain default: `deepseek-v4.1-flash`** (clean under json_schema+thinking; backup `gemini-2.5-flash-lite`, [ADR-005](adr/2026-07-16-structured-output-standard.md)).
