@@ -1,0 +1,4 @@
+# Shell scripts must reach Linux as LF: a CRLF shebang fails as "bash\r: No such file
+# or directory", and the container then restarts in a loop with only that line in its log.
+# core.autocrlf=true on Windows would otherwise check every .sh out as CRLF.
+*.sh text eol=lf

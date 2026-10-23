@@ -28,7 +28,7 @@ from ctypes import wintypes
 
 from PIL import ImageGrab
 
-from .base import ALL_VERBS, Capabilities, default_type_into
+from .base import ALL_VERBS, Capabilities, clamp_hold, default_type_into
 
 try:                       # optional transcript logger (no-op when a run isn't logging)
     import runlog
@@ -402,6 +402,10 @@ class WindowsDevice:
             inp.type_text(action.get("text", ""))
         elif verb == "key":
             inp.press(action.get("key", ""))
+        elif verb == "key_hold":
+            # A held key is continuous movement where a tap is one step. The span is
+            # clamped here as well as in the loop: this path is also reachable directly.
+            inp.hold(action.get("key", ""), clamp_hold(action.get("seconds")))
         else:
             raise ValueError(f"WindowsDevice cannot perform {verb!r}")
 

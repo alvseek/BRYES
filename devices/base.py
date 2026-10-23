@@ -20,8 +20,22 @@ from typing import Protocol, runtime_checkable
 # always available and are NOT device verbs; `shell` is gated by Capabilities.has_shell.
 # See brain/client.py for how the full vocabulary is assembled from these.
 ALL_VERBS = frozenset({
-    "click", "double_click", "right_click", "hover", "scroll", "drag", "type", "key",
+    "click", "double_click", "right_click", "hover", "scroll", "drag", "type", "key", "key_hold",
 })
+
+# A held key's span, in seconds. One owner for the bounds: the loop clamps what the Brain
+# asked for, and every body clamps again at the verb, so a direct caller cannot hold a key
+# for an unbounded time. KEY_HOLD_MAX stays well inside the container's 15 s HTTP timeout.
+KEY_HOLD_MIN, KEY_HOLD_MAX, KEY_HOLD_DEFAULT = 0.1, 5.0, 1.0
+
+
+def clamp_hold(seconds) -> float:
+    """The span a body may actually hold: the default when absent, clamped to the bounds."""
+    try:
+        value = float(seconds)
+    except (TypeError, ValueError):
+        value = KEY_HOLD_DEFAULT
+    return max(KEY_HOLD_MIN, min(value, KEY_HOLD_MAX))
 
 
 @dataclass(frozen=True)
@@ -56,7 +70,8 @@ class Device(Protocol):
     def act(self, action: dict) -> None:
         """Perform ONE pointer/keyboard action. `action` carries {"type": <verb>, ...}
         plus whatever that verb needs: click/double_click/right_click/hover -> x, y;
-        scroll -> x, y, direction; drag -> x, y, x2, y2; type -> text; key -> key.
+        scroll -> x, y, direction; drag -> x, y, x2, y2; type -> text; key -> key;
+        key_hold -> key, seconds (press, keep the key down for `seconds`, release).
         The verb is always one the device advertised in `caps.verbs`."""
         ...
 

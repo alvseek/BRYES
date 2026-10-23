@@ -56,12 +56,12 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 - **type**: other
 - **scope**: shared
 - **roles**: []
-- **status**: unverified
+- **status**: stale-but-valuable
 - **tags**: [roadmap, phases, architecture, entry-point]
-- **last_verified**: ""
-- **verified_by**: ""
+- **last_verified**: "2026-10-23"
+- **verified_by**: "claude-software-architect"
 - **update_trigger**: "when a phase is added/completed or the target architecture (4 pieces, verify step) changes"
-- **notes**: "The milestone-driven build plan, handed to Claude Code one phase at a time (goal / build / test / trap per step). Names the target: Brain+Eyes+Screen+Hands over HTTP, with verify-and-recover as the differentiator. A build-sequence plan — the project overview now lives in the root `README.md` (added 2026-07-19)."
+- **notes**: "The milestone-driven build plan, handed to Claude Code one phase at a time (goal / build / test / trap per step). Kept as the record of the build sequence, not as current state: phases 0-5 are all built, Phase 6 was never forced, and its model names are two swaps behind (`DeepSeek V4` is now v4.1-flash; UI-TARS is still the grounder). Verified 2026-10-23 and left as-is deliberately: rewriting a completed plan to current models adds nothing. The project overview lives in the root `README.md`."
 
 ### `screen/README.md`
 
@@ -80,36 +80,36 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 - **type**: other
 - **scope**: shared
 - **roles**: []
-- **status**: unverified
+- **status**: useful
 - **tags**: [eyes, grounding, ui-tars, openrouter, coordinates]
-- **last_verified**: ""
-- **verified_by**: ""
+- **last_verified**: "2026-10-23"
+- **verified_by**: "claude-software-architect"
 - **update_trigger**: "when the Eyes model, locate()/describe() signatures, or coordinate convention change"
-- **notes**: "Phase 2 — the Eyes: UI-TARS-1.5-7B grounding client (rented via OpenRouter, not a container). locate(png, instr) -> pixel (x,y); describe(png) -> text for the Brain. Documents the smart_resize coordinate-conversion convention."
+- **notes**: "Phase 2 — the Eyes. Covers `locate()`: UI-TARS-1.5-7B grounding via OpenRouter (matches `GROUND_MODEL` in client.py), plus the smart_resize coordinate convention. Verified 2026-10-23 against the code, with one thing the file did not say added: the **describe** half arrived with the loop (ADR-004) and runs elsewhere — deepseek-v4.1-flash for fast overview/crop reads, qwen2.5-vl-72b for boxing, careful re-reads and diffs — so a reader does not mistake the Eyes for one model."
 
 ### `brain/README.md`
 
 - **type**: other
 - **scope**: shared
 - **roles**: []
-- **status**: unverified
+- **status**: useful
 - **tags**: [brain, decider, deepseek, openrouter, json-action]
-- **last_verified**: ""
-- **verified_by**: ""
+- **last_verified**: "2026-10-23"
+- **verified_by**: "claude-software-architect"
 - **update_trigger**: "when the Brain model, decide() signature, or the action JSON shape change"
-- **notes**: "Phase 3 — the Brain: DeepSeek V4 decider (rented, text-only). decide(goal, observation, history) -> one structured JSON action naming its target by description. Eyes ground the description to a pixel afterward."
+- **notes**: "Phase 3 — the Brain: DeepSeek V4.1 Flash (`deepseek/deepseek-v4.1-flash`) decider, rented and text-only in practice, with gemini-2.5-flash-lite as the last-attempt fallback. decide(goal, observation, history) -> one structured action naming its target by description; the Eyes ground the description to a pixel. Repaired 2026-10-23: the model line, the action schema (the full per-body verb set, not `click|type|key|done|fail`) and the answered Phase-4 question were all stale, and the module docstring in client.py said qwen3.6-flash."
 
 ### `agent/README.md`
 
 - **type**: other
 - **scope**: shared
 - **roles**: []
-- **status**: unverified
+- **status**: stale-but-valuable
 - **tags**: [loop, orchestration, closed-loop, phase-4]
-- **last_verified**: ""
-- **verified_by**: ""
+- **last_verified**: "2026-10-23"
+- **verified_by**: "claude-software-architect"
 - **update_trigger**: "when the loop's step sequence changes or verify-and-recover (Phase 5) lands"
-- **notes**: "Phase 4 — Close the Loop: agent/loop.py chains screenshot -> Eyes.describe -> Brain.decide -> Eyes.locate -> Hands act, until done/fail/step-limit. Now also dispatches the `shell` action (exec_cmd -> /exec, result into HISTORY). No verify-and-recover yet (that's Phase 5, the product)."
+- **notes**: "Phase 4 — Close the Loop, as it was built: screenshot -> describe -> decide -> locate -> act, until done/fail/step-limit. Verified 2026-10-23 as a **historical record that no longer describes the loop**: it says no verify-and-recover exists (ADR-003 and ADR-007 shipped it), omits the `wait`/`screenshot`/`shell`/`type_into` actions and the findings ledger, and predates embodiment selection (ADR-006). A status banner now sits at its top pointing readers at agent-loop-flow.md, which is the current shape."
 
 ### `api/README.md`
 

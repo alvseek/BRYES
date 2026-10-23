@@ -8,8 +8,10 @@ Run:  python devices/test_host_input.py
 """
 import os
 import sys
+from types import SimpleNamespace
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from devices import host_input as hi  # noqa: E402
 from devices.host_input import HostInput  # noqa: E402
 
 
@@ -43,6 +45,12 @@ class RecorderPy:
 
     def press(self, key):
         self._rec("press", key)
+
+    def keyDown(self, key):
+        self._rec("keyDown", key)
+
+    def keyUp(self, key):
+        self._rec("keyUp", key)
 
     def hotkey(self, *keys):
         self._rec("hotkey", *keys)
@@ -99,6 +107,58 @@ def main():
     h.press("ctrl+SHIFT+Escape")
     assert py.calls[-1] == ("hotkey", ("ctrl", "shift", "escape"), {}), py.calls[-1]
     print("PASS: keys alias, and a chord becomes a hotkey without the case surviving")
+
+    # key_hold: down, keep down for the span, release. The sleep is recorded rather than
+    # performed, and `hi.time` is swapped only on this module so the real clock is untouched.
+    real_time = hi.time
+    try:
+        slept = []
+        hi.time = SimpleNamespace(sleep=lambda s: slept.append(s))
+
+        before = len(py.calls)
+        h.hold("w", 2.0)
+        got = [(c[0], c[1]) for c in py.calls[before:]]
+        assert got == [("keyDown", ("w",)), ("keyUp", ("w",))], got
+        assert slept == [2.0], slept
+        print("PASS: key_hold presses down, holds for the span, releases")
+
+        before = len(py.calls)
+        h.hold("ctrl+SHIFT", 0.5)
+        assert [c[0] for c in py.calls[before:]] == ["keyDown", "keyDown", "keyUp", "keyUp"]
+        assert [c[1][0] for c in py.calls[before:]] == ["ctrl", "shift", "shift", "ctrl"]
+        print("PASS: a held chord goes down in order and comes up in reverse")
+
+        def _boom(_seconds):
+            raise RuntimeError("killed mid-hold")
+
+        hi.time = SimpleNamespace(sleep=_boom)
+        before = len(py.calls)
+        try:
+            h.hold("w", 1.0)
+        except RuntimeError:
+            pass
+        assert [c[0] for c in py.calls[before:]] == ["keyDown", "keyUp"], py.calls[before:]
+        print("PASS: an exception mid-hold still releases the key")
+    finally:
+        hi.time = real_time
+
+    # A chord whose SECOND key refuses must still lift the first: a stuck modifier
+    # outlives the run, and no later action presses it up.
+    class _RefuseSecond(RecorderPy):
+        def keyDown(self, key):
+            if key == "shift":
+                raise RuntimeError("refused by the window manager")
+            super().keyDown(key)
+
+    refusing = _RefuseSecond()
+    h2 = HostInput(bind=refusing, clipboard=RecorderClipboard())
+    try:
+        h2.hold("ctrl+shift", 1.0)
+    except RuntimeError:
+        pass
+    assert [c[0] for c in refusing.calls] == ["keyDown", "keyUp"], refusing.calls
+    assert refusing.calls[-1][1] == ("ctrl",), refusing.calls[-1]
+    print("PASS: a refused chord still lifts the keys that did go down")
 
     h.type_text("hello world")
     assert py.calls[-1] == ("write", ("hello world",), {"interval": 0}), py.calls[-1]

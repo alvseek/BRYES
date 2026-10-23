@@ -12,7 +12,7 @@ import time
 import urllib.error
 import urllib.request
 
-from .base import ALL_VERBS, Capabilities, default_type_into
+from .base import ALL_VERBS, Capabilities, clamp_hold, default_type_into
 
 try:                       # optional transcript logger (no-op when a run isn't logging)
     import runlog
@@ -79,8 +79,14 @@ class ContainerDevice:
         return self._open(self._base + "/screenshot")
 
     def act(self, action):
-        if action.get("type") == "key" and action.get("key"):
+        # A held key needs the same keysym rewrite as a tap: the server's key_hold branch
+        # uses the token verbatim, so "Enter" would 400 without this.
+        if action.get("type") in ("key", "key_hold") and action.get("key"):
             action = {**action, "key": _normalize_key(action["key"])}
+        if action.get("type") == "key_hold":
+            # Same bounds the Windows body honours, so a direct caller sees one behaviour
+            # on both desktops. The server still validates its own copy of the range.
+            action = {**action, "seconds": clamp_hold(action.get("seconds"))}
         req = urllib.request.Request(
             self._base + "/action", data=json.dumps(action).encode(),
             headers={"Content-Type": "application/json"}, method="POST")

@@ -77,7 +77,7 @@ This is the "what prompt / what feed flows to each other" answer. Per step:
 | 2 | `describe(png, focus?)` | `DESCRIBE_PROMPT` + optional **focus** + PNG → **Qwen2.5-VL-72B** | **text** report that separates the *live entry* from *history* (<=512 tok) | [eyes/client.py](../eyes/client.py) |
 | 3 | `decide(goal, obs, history)` | `SYSTEM_PROMPT` + `{goal, observation, history}` — **text only**, Think High (`reasoning.effort=high`) | JSON `{thought, action, target?, destination?, direction?, seconds?, text?, key?, command?, timeout?, focus?}` | [brain/client.py](../brain/client.py) |
 | 4 | `locate(png, target)` | `GROUND_PROMPT(target)` + PNG → **UI-TARS-1.5-7B** | pixel `(x,y)` (+ diagnostics) | [eyes/client.py](../eyes/client.py) |
-| 5 | `hands(payload)` | point actions `{type: click\|double_click\|right_click\|hover, x, y}`, `{type: scroll, x, y, direction}`, `{type: drag, x, y, x2, y2}`, `{type: type, text}`, `{type: key, key}` | xdotool executes; `{ok}` | [screen/server/app.py](../screen/server/app.py) |
+| 5 | `hands(payload)` | point actions `{type: click\|double_click\|right_click\|hover, x, y}`, `{type: scroll, x, y, direction}`, `{type: drag, x, y, x2, y2}`, `{type: type, text}`, `{type: key, key}`, `{type: key_hold, key, seconds}` | xdotool executes; `{ok}` | [screen/server/app.py](../screen/server/app.py) |
 | 6 | `exec_cmd(payload)` (shell action only — no describe/locate) | `{command, timeout?, stdin?}` → `POST /exec` (subprocess `shell=True`, sandboxed) | `{ok, exit_code, stdout, stderr}` — threaded into HISTORY | [screen/server/app.py](../screen/server/app.py) |
 
 Notes that matter for Phase 5:
@@ -129,13 +129,14 @@ Narration, keyed to [`agent/loop.py`](../agent/loop.py):
 3. **`decide`** from `goal + observation + history` → one JSON action.
 4. If the action is `done`/`fail`, return. Otherwise it is a **point action**
    (`click`/`double_click`/`right_click`/`hover`/`scroll`/`drag`), `type_into` (the one-shot
-   text-entry combo — see step 5), `type`, `key`,
+   text-entry combo — see step 5), `type`, `key`, `key_hold` (press, keep down for `seconds`,
+   release — for surfaces that read key state),
    `wait` (pause `seconds` for a loading screen — no UI touch), `screenshot` (save the
    current frame as a deliverable `capture-NN.png` — no UI touch), or `shell` (run a command
    via `POST /exec` — no locate, no UI touch; the exit code + output thread into HISTORY).
 5. For a point action, **`locate`** the named `target` on the *same* screenshot → `(x,y)`
-   (a `drag` also locates its `destination`), then **Hands** execute it. `type`/`key` go
-   straight to the Hands (no locate — `type` hits whatever the Brain already focused).
+   (a `drag` also locates its `destination`), then **Hands** execute it. `type`/`key`/`key_hold`
+   go straight to the Hands (no locate — `type` hits whatever the Brain already focused).
    **`type_into`** grounds its optional `click_target` here (if present), then hands the whole
    *[click? → clear? → type → Enter?]* gesture to the body (`device.type_into`) — one Brain
    decision, one device-composed gesture (≤1 click, first, since grounding is per-frame).
@@ -286,7 +287,8 @@ heuristic onto a mechanical decider.
 **Still open** (see [backlog.md](backlog.md)): the *explicit* post-action re-check/recover
 step (Phase 5 — deferred until base capability ≥80%); a combo/macro action (compose the now-
 atomic primitives); validating qwen3.6-flash on the calculator suite; live-verifying the new
-`scroll`/`drag`/`double_click`/`right_click`/`hover` primitives on a real screen.
+`scroll`/`drag`/`double_click`/`right_click`/`hover` primitives on a real screen, and
+`key_hold` inside a real game (its transport is proven against `xev`; a game reading it is not).
 
 ---
 

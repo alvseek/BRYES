@@ -1,8 +1,8 @@
 """BRYES Phase 3 — The Brain.
 
 Decides the single next action given the goal, a TEXT description of the screen,
-and the history so far. Primary model qwen3.6-flash via OpenRouter, with deepseek-v4-flash
-as the resilience fallback (ADR-005).
+and the history so far. Primary model deepseek-v4.1-flash via OpenRouter, with
+gemini-2.5-flash-lite as the resilience fallback (ADR-005).
 
 The Brain is text-only by design: it reasons about elements *by description*
 (e.g. "the + button") and never about pixels. The Eyes (Phase 2) turn those
@@ -166,6 +166,9 @@ Rules:
         required:  target: element to press on  |  destination: where to release
     key           — press a key or chord
         required:  key: e.g. Return, Escape, Tab, ctrl+a
+    key_hold      — press AND HOLD a key so continuous behaviour happens (a game character
+        walks while the key is down); `key` above is one tap
+        required:  key: e.g. w, Up, Down  |  seconds: how long to hold, 0.1 to 5
     wait          — let a loading screen settle before looking again
         required:  seconds: how long to pause
     shell         — run a NON-interactive command (see SHELL below)
@@ -274,7 +277,8 @@ class BrainAction(BaseModel):
 # the Brain is only offered verbs the current body supports. The loop-meta actions (wait,
 # screenshot, done, fail) are always available; `shell` only if the body has one. `caps` is
 # read duck-typed (no devices import), so the Brain stays decoupled from device internals.
-_VERB_ORDER = ("click", "double_click", "right_click", "hover", "scroll", "drag", "type", "key")
+_VERB_ORDER = ("click", "double_click", "right_click", "hover", "scroll", "drag", "type",
+               "key", "key_hold")
 _FULL_VERBS = frozenset(_VERB_ORDER)     # back-compat default when decide() gets no caps
 
 

@@ -81,6 +81,7 @@ def t_smoke():
         {"type": "drag",         "x": PT[0], "y": PT[1], "x2": PT[0] + 40, "y2": PT[1] + 40},
         {"type": "type",         "text": ""},
         {"type": "key",          "key": "Escape"},
+        {"type": "key_hold",     "key": "Escape", "seconds": 0.1},
     ):
         _action(p)
     return ("smoke: all primitives execute -> ok", True, "")
@@ -142,7 +143,36 @@ def t_right_click_menu():
             "" if changed else "no change — is fluxbox up?")
 
 
-TESTS = [t_smoke, t_bad_payloads, t_point_lands, t_drag_ends, t_right_click_menu]
+def t_key_hold():
+    """key_hold occupies the server for its span, and a bad span is refused.
+
+    The elapsed wall time is the assertion that matters: a hold that returned instantly
+    would be a tap wearing the action's name. No app is needed to prove the key stayed
+    down, only that the request took the span it asked for.
+    """
+    def _is_400(payload):
+        req = urllib.request.Request(
+            BASE + "/action", data=json.dumps(payload).encode(),
+            headers={"Content-Type": "application/json"}, method="POST")
+        try:
+            urllib.request.urlopen(req, timeout=15)
+            return False
+        except urllib.error.HTTPError as e:
+            return e.code == 400
+    _reset()
+    started = time.monotonic()
+    _action({"type": "key_hold", "key": "Escape", "seconds": 0.6})
+    elapsed = time.monotonic() - started
+    held = elapsed >= 0.55
+    refused = (_is_400({"type": "key_hold", "seconds": 0.5})
+               and _is_400({"type": "key_hold", "key": "Escape", "seconds": 99}))
+    return ("key_hold holds for its span; bad payloads rejected",
+            held and refused,
+            f"elapsed {elapsed:.2f}s, refused={refused}")
+
+
+TESTS = [t_smoke, t_bad_payloads, t_point_lands, t_drag_ends, t_key_hold,
+         t_right_click_menu]
 
 
 def main():

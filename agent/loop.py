@@ -29,7 +29,7 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import runlog  # noqa: E402
 from brain.client import answer, build_system_prompt, decide, select_embodiment  # noqa: E402
-from devices import ALL_VERBS, ContainerDevice, PhoneDevice, WindowsDevice  # noqa: E402
+from devices import ALL_VERBS, ContainerDevice, PhoneDevice, WindowsDevice, clamp_hold  # noqa: E402
 from devices.windows import host_allowed  # noqa: E402
 from eyes.client import DESCRIBE_PROMPT, GROUND_PROMPT, describe, locate  # noqa: E402
 from eyes.client import diff as vlm_diff
@@ -461,6 +461,14 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
                     k = action.get("key", "")
                     device.act({"type": "key", "key": k})
                     did = f"pressed key '{k}'"
+                elif act == "key_hold":
+                    # A held key, for surfaces that watch key STATE rather than key taps
+                    # (a game character walks while the key is down). Clamped here so the
+                    # Brain cannot ask for a hold longer than the body will honour.
+                    k = action.get("key", "")
+                    secs = clamp_hold(action.get("seconds"))
+                    device.act({"type": "key_hold", "key": k, "seconds": secs})
+                    did = f"held key '{k}' for {secs:g}s"
                 else:
                     did = f"unknown action skipped: {action}"
                 action_failures = 0    # the action executed cleanly — reset the failure streak

@@ -1,5 +1,11 @@
 # BRYES — Phase 4: Close the Loop
 
+> **Status: this file records the Phase-4 build.** The loop has since grown embodiment
+> selection (ADR-006), the findings ledger and per-step verification (ADR-007), the
+> `wait` / `screenshot` / `shell` actions, and `type_into`. For the current shape read
+> [agent-loop-flow.md](../docs/agent-loop-flow.md); [loop.py](loop.py) is the source of
+> truth.
+
 Chains all four pieces into one autonomous cycle:
 
 ```

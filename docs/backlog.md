@@ -46,6 +46,16 @@ in [../roadmap.md](../roadmap.md); this is the finer-grained "what's left right 
 - [ ] **Confirm the remaining app-level hands behavior** — `scroll` is now confirmed app-level
       (Tokopedia results scrolled through distinct screenfuls, 2026-07-14). Still eyeball-only:
       `double_click` selects, `right_click` context menu, `drag` on a draggable surface.
+- [x] **`key_hold` is live-proven at the transport (2026-10-23).** Payload validation and the
+      exact `keydown / sleep / keyup` chain by [screen/test_action_payloads.py](../screen/test_action_payloads.py),
+      release-on-exception by `devices/test_host_input.py`, clamp + skip by `agent/test_key_hold.py`,
+      and the container endpoint by `screen/test_hands.py`. Proven live inside the container against
+      `xev`: a **1.2 s hold produced KeyPress at t=3634499 and KeyRelease at t=3635713** (1,214 ms,
+      15 auto-repeat pairs), so the X server really held the key down rather than tapping it.
+      **Still unproven:** a real game reading it as movement, and the Windows body's hold on a real
+      target (that transport is unit-tested only). A harness note from the run: `windowactivate`
+      alone did not deliver keys to an xterm; `xdotool windowfocus` on the same window did, so a
+      target must genuinely hold focus before a held key can land.
 - [ ] **Validate the default Brain (`deepseek-v4.1-flash`, swapped 2026-10-21) on the calculator suite** (`1550×3÷4`,
       `128+47`, `512−137`, `7÷8`, `12+34+56` on clutter) — it carried the Tokopedia browser task cleanly
       (12 steps, 2026-07-17) but hasn't been run on the multi-digit calc suite. *(qwen3.6-flash was

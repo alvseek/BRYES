@@ -43,6 +43,9 @@ class FakeInput:
     def press(self, chord):
         self.calls.append(("press", chord))
 
+    def hold(self, chord, seconds):
+        self.calls.append(("hold", chord, seconds))
+
     def type_text(self, text):
         self.calls.append(("type_text", text))
 
@@ -108,6 +111,15 @@ def main():
         d.act({"type": "drag", "x": 7, "y": 8, "x2": 9, "y2": 10})
         assert fake.calls[-1] == ("drag", 107, -192, 109, -190), fake.calls[-1]
         print("PASS: scroll is signed by direction, drag translates both ends")
+
+        # key_hold: no coordinates to translate, and the span is clamped at the verb.
+        d.act({"type": "key_hold", "key": "w", "seconds": 2})
+        assert fake.calls[-1] == ("hold", "w", 2.0), fake.calls[-1]
+        d.act({"type": "key_hold", "key": "w", "seconds": 99})
+        assert fake.calls[-1] == ("hold", "w", 5.0), fake.calls[-1]
+        d.act({"type": "key_hold", "key": "w"})
+        assert fake.calls[-1] == ("hold", "w", 1.0), fake.calls[-1]
+        print("PASS: key_hold passes the key through and clamps the span")
 
         d.act({"type": "type", "text": "hello"})
         assert fake.calls[-1] == ("type_text", "hello"), fake.calls[-1]

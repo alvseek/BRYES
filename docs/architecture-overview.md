@@ -19,7 +19,7 @@ GitHub: **github.com/alvseek/BRYES** (remote named `alvseek`, commit identity
 | Piece | What | Where |
 |---|---|---|
 | **Screen** | disposable Ubuntu desktop (Xvfb + fluxbox): screenshots + input, plus a sandboxed **shell** (`/exec`) | local Docker container, `screen/` |
-| **Hands** | `xdotool` click/double-click/right-click/hover/scroll/drag/type/key inside that container | same container |
+| **Hands** | `xdotool` click/double-click/right-click/hover/scroll/drag/type/key/key-hold inside that container | same container |
 | **Eyes** | **deepseek-v4.1-flash** *describes* (two-mode foveal, [ADR-004](adr/2026-07-16-foveal-describe-trim.md) + Amend 1; swapped from qwen3-vl-30b-a3b 2026-10-21), **Qwen2.5-VL-72B** *boxes* a focus region + does careful re-reads, **UI-TARS-1.5-7B** *locates* elements (grounding → coordinates) | rented, OpenRouter, `eyes/` |
 | **Brain** | `deepseek-v4.1-flash` (default, swappable; backup `gemini-2.5-flash-lite`) — state → next action (reasoning) | rented, OpenRouter, `brain/` |
 
@@ -50,7 +50,7 @@ offered verbs the current body can do (a phone never sees `right_click`). Pure A
   `/action`, `/exec`), `docker-compose.yml`, `test_phase1.py`, `test_hands.py` (deterministic
   Hands regression test), `test_shell.py` (deterministic shell-channel test). `/action` verbs:
   `click`, `double_click`, `right_click`, `hover`,
-  `scroll`, `drag`, `type`, `key`. `/pointer` returns the mouse `(x,y)` for model-free
+  `scroll`, `drag`, `type`, `key`, `key_hold`. `/pointer` returns the mouse `(x,y)` for model-free
   action assertions. Live view: noVNC at `http://localhost:6080/vnc.html`; control API on `:8000`.
 - `devices/` — the **Device abstraction** ([ADR-002](adr/2026-07-15-device-interface.md)): `base.py` (`Device` Protocol + `Capabilities`), `container.py` (`ContainerDevice`), `phone.py` (`PhoneDevice`, adb), `test_phone.py` (deterministic smoke). The loop's `run(goal, device=None)` defaults to `ContainerDevice`.
 - `eyes/client.py` — `describe(img, focus?, expect?, careful?)` (two-mode foveal, [ADR-004](adr/2026-07-16-foveal-describe-trim.md): overview gist / boxed-crop trim; q3-8b, 72B for box+careful) + `box(img, target)` (region → bbox, 72B) + `locate(img, instr)` (element → pixel x,y, UI-TARS). Regression: `eyes/test_describe.py`.
@@ -117,6 +117,11 @@ offered verbs the current body can do (a phone never sees `right_click`). Pure A
   `scroll` (`direction` up|down) / `drag` (`target`→`destination`) — each is ONE atomic
   xdotool call with no hidden action. Movement is regression-tested (`test_hands.py` +
   `/pointer`); `scroll` also validated live on Tokopedia (2026-07-14).
+  **`key_hold`** (`key` + `seconds`, 0.1–5 s) is the one keyboard action that is not a tap: the
+  body presses the key down, waits, then releases, so a surface that samples key *state* — a game
+  character walking while a key is held — sees continuous input. It is bounded at the verb, held
+  in a `try/finally` on the host body so an exception cannot leave a key down, and offered by
+  both desktops only (a phone has no held key state through `input keyevent`).
 - **Effector tiers — vision is the fallback, not the only tool** ([ADR-001](adr/2026-07-15-effector-hierarchy.md)):
   the Brain routes each intent to the most direct channel available.
   **Tier 2 — shell:** the `shell` action runs a NON-interactive command inside the container
@@ -130,8 +135,8 @@ offered verbs the current body can do (a phone never sees `right_click`). Pure A
   pattern is named so later channels (http/mcp/email/phone) inherit it. Beyond the Hands, the
   Brain also has loop-level `wait` (pause N Brain-chosen seconds, clamped 0.5–30s) and
   `screenshot` (save a `capture-NN.png` deliverable). Full Brain action set: click /
-  double_click / right_click / hover / scroll / drag / type / **type_into** / key / wait / screenshot /
-  **shell** / done / fail.
+  double_click / right_click / hover / scroll / drag / type / **type_into** / key / **key_hold** /
+  wait / screenshot / **shell** / done / fail.
 - **Real browser = Google Chrome from the .deb:** apt `chromium`/`chromium-browser` on
   Ubuntu 24.04 is a *snap transitional* that won't run in a container. Chrome is installed
   from the official `.deb` (in the Dockerfile), launched `--no-sandbox` (Chrome won't run its

@@ -30,6 +30,7 @@ or **prove it from the command line**:
 ```bash
 python test_phase1.py             # saves shot_before.png + shot_after.png
 python test_hands.py              # deterministic regression check for the Hands primitives
+python test_action_payloads.py    # /action payload + command shape, no Docker or display needed
 python test_shell.py              # deterministic regression check for the shell channel (/exec)
 ```
 

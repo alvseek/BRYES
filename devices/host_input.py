@@ -15,6 +15,8 @@ Three things the library does not give us live here instead:
 - **Layout-independent typing.** `write()` follows the active keyboard layout, so Indonesian
   text cannot be typed through it; anything non-ASCII goes via the clipboard instead.
 """
+import time
+
 import pyautogui
 import pyperclip
 
@@ -84,6 +86,30 @@ class HostInput:
             self._py.press(keys[0])
         else:
             self._py.hotkey(*keys)
+
+    def hold(self, chord, seconds):
+        """Press a key/chord DOWN, keep it down for `seconds`, then release it.
+
+        A game samples key state every frame, so this is continuous movement where
+        `press` is one tap. A single `Enter` holds one key; a chord holds every part
+        and releases them in reverse order. The release lives in a `finally` because
+        an exception mid-hold would otherwise leave a key down on the real desktop,
+        and nothing here can press a key back up after the process dies.
+        """
+        keys = [_key(part) for part in str(chord).split("+") if part.strip()]
+        if not keys:
+            return
+        pressed = []
+        try:
+            for key in keys:
+                self._py.keyDown(key)
+                pressed.append(key)      # only a key that actually went down
+            time.sleep(max(0.0, float(seconds)))
+        finally:
+            # A partial press must be undone too: if the SECOND key of a chord raises,
+            # the first is already down and nothing else will ever lift it.
+            for key in reversed(pressed):
+                self._py.keyUp(key)
 
     def type_text(self, text):
         """ASCII through the keyboard, anything else through the clipboard. Newlines are Enter."""

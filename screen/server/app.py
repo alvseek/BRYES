@@ -121,6 +121,21 @@ def action():
         if not key:
             return jsonify({"error": "key requires 'key' (e.g. Return, Escape, ctrl+a)"}), 400
         cmd = ["xdotool", "key", str(key)]
+    elif atype == "key_hold":                  # press, keep down for `seconds`, release
+        key = data.get("key")
+        if not key:
+            return jsonify({"error": "key_hold requires 'key'"}), 400
+        try:
+            secs = float(data.get("seconds", 1.0))
+        except (TypeError, ValueError):
+            return jsonify({"error": "key_hold 'seconds' must be a number"}), 400
+        if not 0.1 <= secs <= 5.0:
+            # Bounds live here too because this endpoint is reachable without the loop.
+            # The ceiling keeps the request well inside the caller's HTTP timeout.
+            return jsonify({"error": "key_hold 'seconds' must be between 0.1 and 5.0"}), 400
+        # One xdotool chain: the key goes down, the server waits, the key comes up. A
+        # game reads that as continuous movement; `key` above is one tap.
+        cmd = ["xdotool", "keydown", str(key), "sleep", f"{secs:.2f}", "keyup", str(key)]
     else:
         return jsonify({"error": f"unknown action type: {atype!r}"}), 400
 

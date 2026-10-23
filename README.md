@@ -221,9 +221,11 @@ saved to a transcript under `artifacts/runs/` (via [runlog.py](runlog.py)).
 | `cd screen && docker compose up -d` | Start the Screen container body (API `:8000`, noVNC `:6080`) |
 | `cd screen && docker compose up -d --build` | Rebuild after editing the Screen server (see debts — stale-image caveat) |
 | `python screen/test_hands.py` | Model-free Hands regression test |
+| `python screen/test_action_payloads.py` | Model-free `/action` payload + command-shape test (no Docker, no display) |
 | `python screen/test_shell.py` | Model-free shell-channel (`/exec`) test |
 | `python devices/test_type_into.py` | Model-free `type_into` device-capability test |
 | `python agent/test_condition_ledger.py` | Model-free loop findings-ledger / condition test |
+| `python agent/test_key_hold.py` | Model-free loop test for `key_hold` (clamp + skip) |
 | `python api/server.py` | Start the host **task API** ([ADR-008](docs/adr/2026-07-19-task-invocation-api.md)) on `127.0.0.1:8100` |
 | `python api/test_jobs.py` / `python api/test_server.py` | Model-free task-API tests (JobManager + routes) |
 | `ruff check .` | Lint (config in [ruff.toml](ruff.toml)) |
@@ -255,8 +257,8 @@ which action (full map: [docs/loop-dispatch.mmd](docs/loop-dispatch.mmd); tempor
 
 4. **Act** (`eyes.locate()` → `device.act()` / `device.shell()`)
    - Pointer actions (`click`/`scroll`/`drag`/`type_into`) are grounded to a pixel by the Eyes, then
-     executed by the body. `type`/`key`/`shell` skip the Eyes entirely (the Brain routes to the
-     most direct channel — shell over vision, [ADR-001](docs/adr/2026-07-15-effector-hierarchy.md)).
+     executed by the body. `type`/`key`/`key_hold`/`shell` skip the Eyes entirely (the Brain routes to
+     the most direct channel — shell over vision, [ADR-001](docs/adr/2026-07-15-effector-hierarchy.md)).
 
 5. **Verify** (next `describe(..., visual_expectation)`)
    - The Brain predicts a checkable expectation; the next describe **reports that thing's actual

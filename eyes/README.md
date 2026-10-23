@@ -58,6 +58,11 @@ in Phase 6 — but it's cheap enough to ignore until real usage proves otherwise
 
 ## Model
 
-`bytedance/ui-tars-1.5-7b` — the only UI-TARS on OpenRouter today (no 72B, no
-UI-TARS-2). If 7B grounding proves too weak on real target apps, the fallback is
+`bytedance/ui-tars-1.5-7b` for grounding — the only UI-TARS on OpenRouter today (no 72B,
+no UI-TARS-2). If 7B grounding proves too weak on real target apps, the fallback is
 UI-TARS-72B (more expensive) per the roadmap's Phase 6.
+
+This file covers `locate()`, the grounding half. The **describe** half arrived with the
+loop (ADR-004) and runs on other models: `deepseek-v4.1-flash` for the fast overview and
+crop reads, and `qwen2.5-vl-72b` for boxing, careful re-reads and diffs. Those constants
+and their measured history live in [client.py](client.py).

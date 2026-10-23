@@ -2,8 +2,8 @@
 
 Screenshot -> text/coords, each capability on the model that does its job best:
   describe(img, visual_focus, visual_expectation, careful) -> text report (two-mode foveal, ADR-004):
-       OVERVIEW (no visual_focus) = downscaled gist on qwen3-vl-8b; TRIM (visual_focus) = 72B box() ->
-       crop -> q3-8b describes the crop. `careful` re-reads a crop on the 72B (recheck rung).
+       OVERVIEW (no visual_focus) = downscaled gist on v4.1-flash; TRIM (visual_focus) = 72B box() ->
+       crop -> v4.1-flash describes the crop. `careful` re-reads a crop on the 72B (recheck rung).
   box(img, target)         -> (x1,y1,x2,y2) bounding box for the TRIM crop, via Qwen2.5-VL-72B
        (the only reliable boxer; absolute coords at any resolution) — or None (-> full frame).
   locate(img, instruction) -> pixel (x, y) of one element, via UI-TARS-1.5-7B (grounding).
@@ -11,8 +11,8 @@ Screenshot -> text/coords, each capability on the model that does its job best:
 
 Why the split: UI-TARS (a grounding fine-tune) is great at locate/pointing but confabulates
 and flattens history when asked to describe; a general VLM describes faithfully. The fast
-q3-8b is faithful ONLY on trimmed crops (a small clean crop has little to hallucinate), so the
-72B stays the authoritative Eyes for boxing + careful re-reads + diffs. Latency is
+describer is faithful on a trimmed crop and covers fewer fine details on a busy full frame,
+so the 72B stays the authoritative Eyes for boxing + careful re-reads + diffs. Latency is
 output-length-bound, so describe says less about less (ADR-004). Thinking off on describe/box.
 
 Coordinate conventions (the two models DIFFER — proven live at 1080x2400 and 2560x1600/4M px):
@@ -62,7 +62,7 @@ DESCRIBE_MODEL = "deepseek/deepseek-v4.1-flash"
 # small VLMs only point / mislocate. Stays on 72B — the authoritative Eyes.
 BOX_MODEL = "qwen/qwen2.5-vl-72b-instruct"
 # careful describe — the recheck rung (ADR-004): re-read a crop on the 72B when the fast
-# q3-8b read is doubted (a visual_expectation mismatch). Same model as BOX_MODEL, distinct role.
+# describer's read is doubted (a visual_expectation mismatch). Same model as BOX_MODEL, distinct role.
 CAREFUL_MODEL = "qwen/qwen2.5-vl-72b-instruct"
 
 # Qwen2.5-VL preprocessing constants — used by smart_resize() to convert box()'s coords (which
