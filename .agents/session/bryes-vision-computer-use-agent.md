@@ -29,6 +29,7 @@ from `roadmap.md`. Project context: [architecture-overview](../../docs/architect
     - **[new] Every other checkout of this repo still carries the CRLF blob** until it fetches this commit.
     - **[carry] No QA instrument**, so the change ships on unit coverage plus one live transport proof.
     - **[carry] adb missing**, ruff not installed.
+    - **[carry 2026-10-21] The model-swap set, still open**: price-digit fidelity unproven for v4.1 · crop verbosity · the alias versus a pinned `-1017` · no converged loop on the new pair · the model fallback has never fired live.
   - **Next Steps**:
     - Hold a movement key in the real game and watch the character walk.
     - Hold a key on the Windows body against a real target.
