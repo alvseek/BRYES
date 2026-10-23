@@ -5,6 +5,44 @@ from `roadmap.md`. Project context: [architecture-overview](../../docs/architect
 
 ---
 
+### [2026-10-23 14.23] (agent: software-architect) — A HELD KEY FOR A WALKING CHARACTER, AND A CONTAINER THAT COULD NOT BOOT FROM ITS OWN COMMIT ⌨️🎮🪵
+
+- **Context**: The session opened as an awakening on the localized lane. Two tasks ran: repair the model drift the awakening surfaced, then add a held-key action after Alvi corrected an earlier "drag" reading — *"not drag, but 'key down' as in pressing it long to make a game character walk"*. Planned with `/quick-wizard` in three gated rounds.
+- **Discussion**:
+  - **The correction set the scope, and investigating first is what kept it honest.** Drag already shipped end to end on all four bodies (loop, Brain schema, container, Windows, phone), so the real gap was key *state*, not pointer gestures.
+  - **Both desktops, not Windows alone**: the container is where a hold can be proven without touching his real desktop, and the marginal cost was one endpoint.
+  - **Atomic hold over a down/up pair**: the loop re-observes between every action, so holding across steps buys little, while it leaves a key down across an unknown number of steps on his own machine. `key_down`/`key_up` stays the natural second step if diagonal movement matters, and it reuses the same transport.
+  - **The duration reused `seconds`**, which already existed for `wait`, so the Brain schema did not change at all.
+- **Key Interactions**: "proceed" on each gated round; the drag-to-key correction; *"docker is running btw, you still need it/"* once the engine was up.
+- **Issues Encountered**:
+  - **The container would not stay up after the rebuild.** The log held one line, repeated: `/usr/bin/env: 'bash\r': No such file or directory`.
+    - **Root cause**: `entrypoint.sh` was **committed with CRLF** (48 carriage returns) while `core.autocrlf=true` kept the working copy matching it, so `git status` was clean throughout. Docker copies the working tree, so the shebang arrived as `bash\r`.
+    - **Resolution**: converted the working copy to LF, added `.gitattributes` with `*.sh text eol=lf`, rebuilt, container healthy.
+  - **No keys reached an xterm that had been activated.** `xdotool type hello` delivered nothing; `xdotool windowfocus` on the same window made it land. Recorded rather than worked around.
+  - **The first live attempt timed out silently** because the container was in that crash loop, not because the API was slow.
+  - **Also environmental**: `devices/test_phone.py` needs `tools/platform-tools/adb.exe`, which is absent here, and ruff is still not installed, so the lint gate did not run.
+- **Outcomes**:
+  - **Deliverables**: `key_hold` end to end (`devices/base.py` vocabulary plus `clamp_hold`, `host_input.hold`, the Windows dispatch, the container endpoint plus its client clamp, the loop dispatch, the Brain prompt line), two new suites (`agent/test_key_hold.py`, `screen/test_action_payloads.py`), new checks in three existing ones, `.gitattributes`, a knowledge entry, and the first half's repairs (brain and eyes READMEs, two stale code docstrings, four map entries verified). Pushed `1728401`.
+  - **Progress Made**: 14 model-free suites green; the live transport proof (a 1.2 s hold measured 1,214 ms with 15 auto-repeat pairs); the container boots again.
+  - **Tech Debts**:
+    - **[new] No live game has read the hold**, and the Windows body's hold is unit-tested only.
+    - **[new] Every other checkout of this repo still carries the CRLF blob** until it fetches this commit.
+    - **[carry] No QA instrument**, so the change ships on unit coverage plus one live transport proof.
+    - **[carry] adb missing**, ruff not installed.
+  - **Next Steps**:
+    - Hold a movement key in the real game and watch the character walk.
+    - Hold a key on the Windows body against a real target.
+    - Consider `key_down`/`key_up` if diagonal movement is needed.
+- **Insights**:
+  - **New Understanding**: a capability can exist in the schema, the prompt and the tests and still never have been exercised where it matters. `key` had been "supported" since July with no test that a key reaches an application.
+  - **Pattern Recognition**: `0eb34b96` twice — the CRLF was a neighbour of the image (working tree, not blob), and `windowactivate` was a neighbour of focus. Both looked like diligence and neither answered the question.
+  - **Improvement Areas**: the first Docker attempt was written off as "engine down" when the engine had started and the container was crash-looping. Reading container logs before concluding would have found it in one command.
+- **Promotions**:
+  → Promoted to [.agents/knowledge/container-and-keyboard.md](../knowledge/container-and-keyboard.md) — the CRLF boot failure, the rebuild rule, the focus finding, and the held-key proof.
+  → Promoted to [docs/backlog.md](../../docs/backlog.md) — the `key_hold` proof status and what remains unproven.
+
+---
+
 ### [2026-10-21 12.15] (agent: software-architect) — TWO SWAPS, ONE MEASUREMENT: THE EYES AND THE BRAIN BOTH MOVE TO DEEPSEEK V4.1 FLASH 👁️🧠📊
 
 - **Context**: immediately after the host body landed, Alvi asked for the model table, then *"change brain to deepseek-v4.1-flash"*, then *"this v4.1 can also describe, can we test the comparison to qwen3-vl-30b-a3b-instruct? I want to know"*, and finally *"let's just settle at v4.1"*. No new feature: two model decisions, one of them measured.

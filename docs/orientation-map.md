@@ -46,10 +46,10 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 - **roles**: []
 - **status**: useful
 - **tags**: [readme, 7q, overview, entry-point, architecture, github]
-- **last_verified**: "2026-10-21"
+- **last_verified**: "2026-10-23"
 - **verified_by**: "claude-software-architect"
 - **update_trigger**: "when the four pieces (Screen/Eyes/Brain/Loop), setup, the task entry point (run()), the ADR list, the lesson pipeline, or the high-level architecture change"
-- **notes**: "The root, GitHub-facing project README (7 Questions Framework) — the single project overview. Covers what BRYES is (Brain-Eyes vision computer-use agent), the CURRENT module coupling (the loop is the sole coupler — grounded on docs/modularity.mmd + docs/loop-dispatch.mmd), setup, how to give a task (run(goal) from Python), the per-step flow, the ADR-001..008 index, and known debts. Supersedes roadmap.md as the closest-to-root overview. Generated 2026-07-19 via /generate-readme. Updated 2026-10-20: a third body (WindowsDevice, capture-only, no pointer verbs) and the lesson pipeline (capture.py + lesson.py, procedure in docs/procedures/make-a-lesson.md) added to the architecture section."
+- **notes**: "The root, GitHub-facing project README (7 Questions Framework) — the single project overview. Covers what BRYES is (Brain-Eyes vision computer-use agent), the CURRENT module coupling (the loop is the sole coupler — grounded on docs/modularity.mmd + docs/loop-dispatch.mmd), setup, how to give a task (run(goal) from Python), the per-step flow, the ADR-001..008 index, and known debts. Supersedes roadmap.md as the closest-to-root overview. Generated 2026-07-19 via /generate-readme. Updated 2026-10-20: a third body (WindowsDevice, capture-only, no pointer verbs) and the lesson pipeline (capture.py + lesson.py, procedure in docs/procedures/make-a-lesson.md) added to the architecture section. Updated 2026-10-23: `key_hold` added to the action set and the hands table, plus the two new regression commands (screen/test_action_payloads.py, agent/test_key_hold.py)."
 
 ### `roadmap.md`
 
@@ -70,10 +70,10 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 - **roles**: []
 - **status**: useful
 - **tags**: [screen, hands, shell, exec, docker, xvfb, xdotool, flask-api]
-- **last_verified**: "2026-07-15"
+- **last_verified**: "2026-10-23"
 - **verified_by**: "claude-software-architect"
 - **update_trigger**: "when the Screen container stack, the /screenshot|/action|/exec API, or ports change"
-- **notes**: "Phase 1 — the Screen+Hands: disposable Ubuntu container (Xvfb + fluxbox + xdotool + scrot) exposing screenshot + the full Hands action set (click/double_click/right_click/hover/scroll/drag/type/key) over a Flask API (:8000) with noVNC live view (:6080). Also POST /exec — the Tier-2 shell effector (run a command in the sandboxed container; ADR-001). Apps: gnome-calculator, xterm, Chrome. Tests: test_hands.py + test_shell.py."
+- **notes**: "Phase 1 — the Screen+Hands: disposable Ubuntu container (Xvfb + fluxbox + xdotool + scrot) exposing screenshot + the full Hands action set (click/double_click/right_click/hover/scroll/drag/type/key/key_hold) over a Flask API (:8000) with noVNC live view (:6080). Also POST /exec — the Tier-2 shell effector (run a command in the sandboxed container; ADR-001). Apps: gnome-calculator, xterm, Chrome. Tests: test_hands.py + test_shell.py, and test_action_payloads.py (added 2026-10-23: /action payload validation and command shape, no Docker needed)."
 
 ### `eyes/README.md`
 
@@ -122,6 +122,30 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 - **verified_by**: "claude-software-architect"
 - **update_trigger**: "when the task API endpoints, the JobManager lifecycle, or the run() wrapping change"
 - **notes**: "The host-side Task-Invocation API (ADR-008): give BRYES a task over HTTP instead of a script. `python api/server.py` -> :8100; POST /tasks {goal,...} -> {task_id}, GET /tasks/<id> -> {status, steps, result} (result carries the findings ledger). Async (a daemon thread per task), single-flight (409 busy), localhost-only. Wraps agent/loop.py run() (the coarse 'hand off a whole goal' path); MCP adapter later. Distinct from screen/server/ (the container body API). Tests: api/test_jobs.py + api/test_server.py (model-free)."
+
+### `docs/architecture-overview.md`
+
+- **type**: architecture-overview
+- **scope**: shared
+- **roles**: []
+- **status**: useful
+- **tags**: [architecture, layers, devices, brain, eyes, hands, actions, effector-tiers]
+- **last_verified**: "2026-10-23"
+- **verified_by**: "claude-software-architect"
+- **update_trigger**: "when a layer, the Device abstraction, the Brain action set, or an effector tier changes"
+- **notes**: "The single-section architecture deep-dive: the four pieces, the Device abstraction and its three bodies, the effector tiers (API/MCP over shell over vision), the full Brain action set, `type_into` as the device-level text gesture, and the two-mode foveal describe. **It was missing from this map until 2026-10-23**, which is why it is being indexed here rather than only listed in the README. Updated the same day for `key_hold` (the one keyboard action that is not a tap) and its focus precondition on the container."
+
+### `docs/agent-loop-flow.md`
+
+- **type**: flow-diagram
+- **scope**: shared
+- **roles**: []
+- **status**: useful
+- **tags**: [flow, loop, sequence, actions, verification, recovery, history]
+- **last_verified**: "2026-10-23"
+- **verified_by**: "claude-software-architect"
+- **update_trigger**: "when the per-step loop, the action dispatch, or the verification/recovery path changes"
+- **notes**: "The loop as a sequence: screenshot → describe → decide → locate → act → verify, with the per-step component table, the BRAIN PROMPT blocks, the HISTORY and CONFIRMED FINDINGS rules, and the change-feedback rungs. Also carried the running list of what is still open. **Missing from this map until 2026-10-23.** Updated the same day: `key_hold` added to the action list and to the Hands payload contract."
 
 ### `docs/adr/2026-07-15-effector-hierarchy.md`
 
@@ -254,6 +278,18 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 - **verified_by**: "claude-software-architect"
 - **update_trigger**: "when the host body's entry points, gates, harness rules, or measured timings change, or when an element-level (UIA) path lands"
 - **notes**: "How another agent drives a real Windows application through the host body, also served as `/drive-desktop`. Opens with the ADR-001 ceiling (an application's own API beats pixels, so Unreal's Python/Remote Control API should be preferred). Covers both entry points and when each applies: Python with a window **handle** (`WindowsDevice(hwnd=...)`, safe) versus `POST /tasks {device:'windows', window:'<title>'}` (title-based, fine only when one window can match). Carries the three harness rules that exist because they were violated on 2026-10-21 (handle targeting, kill only what you started, act only inside the target rect), the measured timings (describe 3.7-10.6 s, decide 15-31 s, so the Brain dominates a run), the failure modes (UIPI silence, focus theft, rect refusal, non-ASCII typing), and the note that the environment gates are a stopgap until a dedicated user session exists."
+
+### `docs/backlog.md`
+
+- **type**: other
+- **scope**: shared
+- **roles**: []
+- **status**: useful
+- **tags**: [backlog, tech-debts, next-steps, qa, proofs]
+- **last_verified**: "2026-10-23"
+- **verified_by**: "claude-software-architect"
+- **update_trigger**: "when an item is added, closed, or re-scoped"
+- **notes**: "The living list of what is known-broken, planned, or unproven, split into next steps and tech debts. It is the honest counterpart to the README's claims: a capability whose app-level behaviour has never been watched lives here. Added to this map on 2026-10-23 (it was not indexed before), the same day its `key_hold` entry was written and then checked off with the live timings."
 
 ### `docs/quality-standard.md`
 
