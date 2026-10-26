@@ -274,10 +274,10 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 - **roles**: []
 - **status**: useful
 - **tags**: [procedure, host-body, windows, driving, pyautogui, gates, adr-009]
-- **last_verified**: "2026-10-21"
+- **last_verified**: "2026-10-26"
 - **verified_by**: "claude-software-architect"
 - **update_trigger**: "when the host body's entry points, gates, harness rules, or measured timings change, or when an element-level (UIA) path lands"
-- **notes**: "How another agent drives a real Windows application through the host body, also served as `/drive-desktop`. Opens with the ADR-001 ceiling (an application's own API beats pixels, so Unreal's Python/Remote Control API should be preferred). Covers both entry points and when each applies: Python with a window **handle** (`WindowsDevice(hwnd=...)`, safe) versus `POST /tasks {device:'windows', window:'<title>'}` (title-based, fine only when one window can match). Carries the three harness rules that exist because they were violated on 2026-10-21 (handle targeting, kill only what you started, act only inside the target rect), the measured timings (describe 3.7-10.6 s, decide 15-31 s, so the Brain dominates a run), the failure modes (UIPI silence, focus theft, rect refusal, non-ASCII typing), and the note that the environment gates are a stopgap until a dedicated user session exists."
+- **notes**: "How another agent drives a real Windows application through the host body, also served as `/drive-desktop`. Opens with the ADR-001 ceiling (an application's own API beats pixels, so Unreal's Python/Remote Control API should be preferred). Covers both entry points and when each applies: Python with a window **handle** (`WindowsDevice(hwnd=...)`, safe) versus `POST /tasks {device:'windows', window:'<title>'}` (title-based, fine only when one window can match). Carries the three harness rules that exist because they were violated on 2026-10-21 (handle targeting, kill only what you started, act only inside the target rect), the measured timings (describe 3.7-10.6 s, decide 15-31 s, so the Brain dominates a run), the failure modes (UIPI silence, focus theft, rect refusal, non-ASCII typing), and the note that the environment gates are a stopgap until a dedicated user session exists. Updated 2026-10-26: also installed as a full copy by `setup-scripts/` for use from other projects, so every relative link must resolve from `docs/procedures/` (the ADR-001 link was dead until then; the installer's test now checks every rewritten target exists)."
 
 ### `setup-scripts/`
 
