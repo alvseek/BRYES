@@ -2,3 +2,7 @@
 # or directory", and the container then restarts in a loop with only that line in its log.
 # core.autocrlf=true on Windows would otherwise check every .sh out as CRLF.
 *.sh text eol=lf
+
+# Windows batch files must keep CRLF: cmd.exe parses by byte offset, and an LF-only file
+# runs fragments of its own comment lines once it holds a multi-line block or a goto.
+*.bat text eol=crlf

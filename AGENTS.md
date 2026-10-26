@@ -25,6 +25,10 @@ Two project procedures live in `docs/procedures/`, each also served as a skill:
   Windows application through the host body, which needs `BRYES_ALLOW_HOST=1` and targets a window
   handle it started.
 
+To use both from another project, install them globally: `setup-scripts\setup-all-claude-code.bat`
+(Claude Code commands) or `setup-scripts\setup-all-opencode.bat` (OpenCode skills). The installed
+file is a copy of the procedure, so re-run the installer after editing `docs/procedures/`.
+
 ## Agent Memory
 Fleet-authored work-product for this project lives in `.agents/` — session history
 (`.agents/session/`) and project knowledge (`.agents/knowledge/`). Any agent working here

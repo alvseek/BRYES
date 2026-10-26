@@ -279,6 +279,18 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 - **update_trigger**: "when the host body's entry points, gates, harness rules, or measured timings change, or when an element-level (UIA) path lands"
 - **notes**: "How another agent drives a real Windows application through the host body, also served as `/drive-desktop`. Opens with the ADR-001 ceiling (an application's own API beats pixels, so Unreal's Python/Remote Control API should be preferred). Covers both entry points and when each applies: Python with a window **handle** (`WindowsDevice(hwnd=...)`, safe) versus `POST /tasks {device:'windows', window:'<title>'}` (title-based, fine only when one window can match). Carries the three harness rules that exist because they were violated on 2026-10-21 (handle targeting, kill only what you started, act only inside the target rect), the measured timings (describe 3.7-10.6 s, decide 15-31 s, so the Brain dominates a run), the failure modes (UIPI silence, focus theft, rect refusal, non-ASCII typing), and the note that the environment gates are a stopgap until a dedicated user session exists."
 
+### `setup-scripts/`
+
+- **type**: other
+- **scope**: shared
+- **roles**: []
+- **status**: useful
+- **tags**: [installer, procedures, claude-code, opencode, bat, skills]
+- **last_verified**: "2026-10-26"
+- **verified_by**: "claude-software-architect"
+- **update_trigger**: "when a procedure is added to or removed from `PROCEDURES` in `install_skills.py`, or when a platform's global command/skill directory changes"
+- **notes**: "Installs `/drive-desktop` and `/make-lesson` globally so agents in OTHER projects (the Unreal agent in LSGI) can use them. `setup-all-claude-code.py` writes `~/.claude/commands/<name>.md`; `setup-all-opencode.py` writes `~/.config/opencode/skills/<name>/SKILL.md`; each has a `.bat` that only finds a real Python 3 (skipping the WindowsApps Store stub) and runs the `.py`. The shared `install_skills.py` copies the FULL procedure from `docs/procedures/` (the in-repo `.opencode/skills/` pointers resolve a relative path that does not exist from another project), rewrites relative links to absolute ones into the clone, and prepends a note naming the clone so its scripts can be run from there. The installed file is a generated copy: edit the procedure, then re-run the installer. A per-platform manifest (`.bryes-manifest`, `.bryes-opencode-manifest`) lets a re-run replace its own files without touching anything else. Override the target with `BRYES_TARGET_DIR`. Tested by `python setup-scripts/test_setup.py` (model-free, temp dirs only). Shape copied from `agent-memory-project/setup-scripts`."
+
 ### `docs/backlog.md`
 
 - **type**: other

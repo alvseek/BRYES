@@ -5,7 +5,7 @@ Everything here was run on 2026-10-21; the numbers are measured, not estimated.
 
 ## Read this first: is vision the right effector?
 
-[ADR-001](adr/2026-07-15-effector-hierarchy.md) puts channels in order: **API, then shell, then
+[ADR-001](../adr/2026-07-15-effector-hierarchy.md) puts channels in order: **API, then shell, then
 vision**. Unreal Editor ships a Python plugin and a Remote Control API; an application that
 publishes one should be driven through it. This body exists for the case where no channel exists,
 or where the screen is the thing you must trust. Do not reach for pixels to do what an API does
