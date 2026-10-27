@@ -1,0 +1,243 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>A Basic Attack that plays a montage and deals damage on the hit</title><style>
+:root { color-scheme: light; }
+* { box-sizing: border-box; }
+body { margin: 0 auto; max-width: 980px; padding: 40px 24px 80px;
+  font: 16px/1.6 -apple-system, "Segoe UI", Roboto, sans-serif; color: #1b1b1f; background: #fff; }
+header { border-bottom: 3px solid #1b1b1f; padding-bottom: 20px; margin-bottom: 32px; }
+h1 { font-size: 30px; line-height: 1.2; margin: 0 0 8px; }
+.meta { font-size: 13px; color: #666; letter-spacing: .02em; }
+.intro { font-size: 17px; color: #333; }
+.toc { background: #f6f6f4; border-left: 3px solid #ddd; padding: 14px 20px; margin: 24px 0 36px; }
+.toc ol { margin: 6px 0 0; padding-left: 20px; }
+.toc a { color: #1b1b1f; text-decoration: none; }
+.step { margin: 0 0 48px; break-inside: avoid; }
+.step h2 { font-size: 21px; margin: 0 0 4px; }
+.step h2 .n { display: inline-block; min-width: 30px; margin-right: 10px; padding: 1px 7px;
+  background: #1b1b1f; color: #fff; border-radius: 5px; font-size: 17px; text-align: center; }
+figure { margin: 16px 0 10px; }
+figure img { width: 100%; height: auto; display: block; border-radius: 6px;
+  border: 1px solid #d8d8d4; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 10px 0 0; padding: 0; list-style: none;
+  font-size: 13px; color: #555; }
+.legend li { display: flex; gap: 6px; align-items: baseline; }
+.legend b { display: inline-block; min-width: 20px; text-align: center; background: #ffb020;
+  color: #18181b; border-radius: 10px; font-size: 12px; }
+.prose { margin: 14px 0; }
+details { margin: 12px 0 0; padding: 10px 14px; background: #f6f6f4; border-radius: 6px; }
+summary { cursor: pointer; font-weight: 600; }
+.expected { margin-top: 12px; padding-left: 12px; border-left: 3px solid #9ac48a; color: #2c4a22; }
+code { background: #f0efec; padding: 1px 5px; border-radius: 4px; font-size: 14px; }
+footer { margin-top: 56px; padding-top: 16px; border-top: 1px solid #ddd; font-size: 13px; color: #777; }
+@media print { body { max-width: none; padding: 0; } details { background: none; padding: 0; }
+  details[open] summary { display: none; } .step { page-break-inside: avoid; } }
+</style></head><body><header>
+<h1>A Basic Attack that plays a montage and deals damage on the hit</h1>
+<div class="meta">LSGI &middot; lesson lsgi-06-basic-attack-ability &middot; 2026-10-27 &middot; for Alvi</div>
+</header>
+<div class="intro"><p>By the end you have a Basic Attack the turn-based fight can pick: a Blueprint ability <code>GA_Shark_BasicAttack</code> that plays <code>AM_Test_Combo</code> and deals the action&#x27;s damage when the punch lands, plus an action asset tagged <code>BasicAttack</code> in the test kit. What the screenshots cannot show comes from the LSGI code, and each step says which file.</p></div>
+<nav class="toc"><strong>Steps</strong><ol>
+<li><a href="#step-1">Find the montage the attack will play</a></li>
+<li><a href="#step-2">Read the hit event the montage sends</a></li>
+<li><a href="#step-3">The marker has no Event Tag, because the notify owns it</a></li>
+<li><a href="#step-4">Read the tag on the notify class</a></li>
+<li><a href="#step-5">Create the ability Blueprint on GASGameplayAbility</a></li>
+<li><a href="#step-6">Start from the event that carries the action</a></li>
+<li><a href="#step-7">Play the montage and listen for the hit</a></li>
+<li><a href="#step-8">Deal the damage once, on the first punch</a></li>
+<li><a href="#step-9">End the ability when the montage stops, then compile</a></li>
+<li><a href="#step-10">Check the finished ability</a></li>
+<li><a href="#step-11">Create the action asset</a></li>
+<li><a href="#step-12">Point the action at the ability and tag it Basic Attack</a></li>
+<li><a href="#step-13">Check the action, and save it for real</a></li>
+<li><a href="#step-14">Put the Basic Attack in the combatant&#x27;s kit</a></li>
+</ol></nav>
+<section class="step" id="step-1">
+<h2><span class="n">1</span>Find the montage the attack will play</h2>
+<figure><img src="assets/step-001.callouts.png" alt="step 1 screenshot">
+<ol class="legend">
+<li><b>1</b> Content Browser search: AM_Test</li>
+<li><b>2</b> AM_Test_Combo, the montage the attack plays</li>
+</ol>
+</figure>
+<div class="prose"><p>In the Content Browser, search <code>AM_Test</code> and double-click <code>AM_Test_Combo</code> to open it in the montage editor.<br>  It lives in <code>Content/LSGI/System/Combat/Test</code>, next to <code>GA_TestSharkAttackSequence</code>, the test ability that already plays it.</p></div>
+<div class="expected"><p>The montage editor is open on <code>AM_Test_Combo</code>, with the Notifies track visible under the timeline.</p></div>
+<details><summary>Why this matters</summary><p>The ability you build is only as good as the montage under it. Reading the montage first tells you when the hit happens, which is the moment damage must land, not the moment the ability starts.</p></details>
+</section>
+<section class="step" id="step-2">
+<h2><span class="n">2</span>Read the hit event the montage sends</h2>
+<figure><img src="assets/step-002.callouts.png" alt="step 2 screenshot">
+<ol class="legend">
+<li><b>1</b> Click this first Ability marker</li>
+<li><b>2</b> Its Event Tag appears here, in Details</li>
+</ol>
+</figure>
+<div class="prose"><p>On the Notifies track there are three markers labelled <code>Ability</code>, one per punch. Click the first one. The Details panel on the right then shows that notify&#x27;s settings.<br>  These markers are <code>AN_GameplayEvent</code> notifies: each one sends a gameplay event to the character&#x27;s ability system when the animation reaches it.</p></div>
+<div class="expected"><p>The first marker turns blue, and Details shows sections such as Anim Notify, Trigger Settings and Event.</p></div>
+<details><summary>Why this matters</summary><p>The montage task in your ability listens only for the tags you give it (<code>GASAbilityTask_PlayMontageAndWaitForEvent</code> registers exactly that tag container). Give it the wrong tag and the punch lands with no damage and no error. And there are three markers, so the same event arrives three times; step 8 makes damage land once.</p></details>
+</section>
+<section class="step" id="step-3">
+<h2><span class="n">3</span>The marker has no Event Tag, because the notify owns it</h2>
+<figure><img src="assets/step-003.callouts.png" alt="step 3 screenshot">
+<ol class="legend">
+<li><b>1</b> Not the tag: Event here holds timing settings every notify has</li>
+<li><b>2</b> Where a per-marker Event Tag would appear: nothing here</li>
+</ol>
+</figure>
+<div class="prose"><p>Scroll the whole Details panel: there is no Event Tag. The <strong>Event</strong> section under Category holds Trigger Weight Threshold, Montage Tick Type and Can be Filtered Via Request, which every notify has.<br>  The tag is set once, on the notify class <code>AN_GameplayEvent</code>, and every marker of that class sends the same one. The montage file stores no tag value at all; the name <code>Ability</code> appears only inside <code>AN_GameplayEvent</code> (read from both asset files).</p></div>
+<div class="expected"><p>You know the tag is read from <code>AN_GameplayEvent</code>, not from the montage.</p></div>
+<details><summary>Why this matters</summary><p>When a value you expect per instance is missing from Details, it usually lives on the class instead, and every placement shares it. That matters later: change the tag on <code>AN_GameplayEvent</code> and every montage using it changes too.</p></details>
+</section>
+<section class="step" id="step-4">
+<h2><span class="n">4</span>Read the tag on the notify class</h2>
+<figure><img src="assets/step-004.callouts.png" alt="step 4 screenshot">
+<ol class="legend">
+<li><b>1</b> Class Defaults: the values every placement of this notify uses</li>
+<li><b>2</b> Event Tag = Ability</li>
+<li><b>3</b> Event Tag variable, eye closed: not editable per marker</li>
+<li><b>4</b> GetNotifyName returns the tag&#x27;s name: why the markers read &quot;Ability&quot;</li>
+</ol>
+</figure>
+<div class="prose"><p>In the Content Browser search <code>AN_GameplayEvent</code>, open it, and click <strong>Class Defaults</strong> in the toolbar. Details shows <strong>Event Tag: Ability</strong>.<br>  In My Blueprint, the <code>Event Tag</code> variable has a closed eye: it is not Instance Editable, which is why the montage&#x27;s Details had no tag to show. The graph open on <code>GetNotifyName</code> returns the tag&#x27;s name, which is the label you saw on each marker.</p></div>
+<div class="expected"><p>You can say the hit tag is <code>Ability</code>, and why the marker had no field for it.</p></div>
+<details><summary>Why this matters</summary><p>This is the tag your ability&#x27;s montage task must listen for. And because it lives on the class, every montage that places <code>AN_GameplayEvent</code> sends <code>Ability</code>: if a later montage needs a different hit tag, it needs a different notify (or this variable made Instance Editable), not a change here.</p></details>
+</section>
+<section class="step" id="step-5">
+<h2><span class="n">5</span>Create the ability Blueprint on GASGameplayAbility</h2>
+<figure><img src="assets/step-005.callouts.png" alt="step 5 screenshot">
+<ol class="legend">
+<li><b>1</b> Search All Classes: GASGa is enough</li>
+<li><b>2</b> GASGameplayAbility, under GameplayAbility: pick this one</li>
+<li><b>3</b> Lookalike: an effect calculation, not an ability</li>
+<li><b>4</b> Then Select</li>
+</ol>
+</figure>
+<div class="prose"><p>In <code>Content/LSGI/System/Combat/Test</code>, right-click an empty spot and choose <strong>Blueprint Class</strong>. In <strong>Pick Parent Class</strong>, expand <strong>All Classes</strong>, search <code>GASGa</code>, click <strong>GASGameplayAbility</strong>, then <strong>Select</strong>. Name the new asset <code>GA_Shark_BasicAttack</code>.<br>  <code>GASGameplayAbility</code> is AgateGAS&#x27;s ability base. It sits under the engine&#x27;s <code>GameplayAbility</code>, as the tree shows.</p></div>
+<div class="expected"><p>A new <code>GA_Shark_BasicAttack</code> asset in the Test folder, and opening it shows <strong>Parent class: GAS Gameplay Ability</strong> in the top-right.</p></div>
+<details><summary>Why this matters</summary><p>The parent decides which events and nodes the graph offers. The search also matches <code>GASGameplayEffectExecutionCalculation</code>; that one computes effect numbers and has no ability events, so picking it gives you a graph that cannot play a montage. Not <code>LSGICombatAttackAbility</code> either: its C++ deals the damage and ends the ability the instant it starts (<code>LSGICombatAttackAbility.cpp</code>), which would cut the montage off before the punch.</p></details>
+</section>
+<section class="step" id="step-6">
+<h2><span class="n">6</span>Start from the event that carries the action</h2>
+<figure><img src="assets/step-006.callouts.png" alt="step 6 screenshot">
+<ol class="legend">
+<li><b>1</b> Parent class: GASGameplay Ability, the check for step 5</li>
+<li><b>2</b> Not this one: Event ActivateAbility has no Event Data</li>
+<li><b>3</b> Right-click here and search ActivateAbilityFromEvent</li>
+</ol>
+</figure>
+<div class="prose"><p>The graph opens with two greyed-out events. Leave them. Right-click an empty spot, search <code>ActivateAbilityFromEvent</code>, and add <strong>Event ActivateAbilityFromEvent</strong>.<br>  Then drag from its <strong>Event Data</strong> pin, choose <strong>Promote to Variable</strong>, and name the variable <code>SavedEventData</code>. Wire the event&#x27;s white execution pin into the new Set node.</p></div>
+<div class="expected"><p>Event ActivateAbilityFromEvent is wired into a Set SavedEventData node, and My Blueprint lists SavedEventData under Variables.</p></div>
+<details><summary>Why this matters</summary><p>The turn flow starts this ability with a gameplay event whose payload holds the targets and the chosen action (<code>LSGITurnBasedCombatSubsystem_Phases.cpp</code>: <code>TriggerAbilityFromGameplayEvent</code> with <code>Payload.TargetData</code> and <code>Payload.OptionalObject</code>). Only the FromEvent version hands you that payload. You save it because the damage happens later, on the punch, and the montage&#x27;s own events carry a different payload with no action in it.</p></details>
+</section>
+<section class="step" id="step-7">
+<h2><span class="n">7</span>Play the montage and listen for the hit</h2>
+<figure><img src="assets/step-007.callouts.png" alt="step 7 screenshot">
+<ol class="legend">
+<li><b>1</b> SavedEventData, the check for step 6</li>
+<li><b>2</b> Drag from the Set node&#x27;s white output pin</li>
+<li><b>3</b> Drop here and search PlayMontageAndWaitForEvent</li>
+</ol>
+</figure>
+<div class="prose"><p>Drag from the white output pin of the <strong>SET</strong> node, release on empty space, and search <code>PlayMontageAndWaitForEvent</code>. Pick the one that has an <strong>Event Tags</strong> input (AgateGAS&#x27;s <code>GASAbilityTask_PlayMontageAndWaitForEvent</code>), not the engine&#x27;s plain <code>PlayMontageAndWait</code>.<br>  On the new node set <strong>Montage To Play</strong> to <code>AM_Test_Combo</code>, and add <code>Ability</code> to <strong>Event Tags</strong>.</p></div>
+<div class="expected"><p>A PlayMontageAndWaitForEvent node after SET, Montage To Play is AM_Test_Combo, Event Tags holds Ability, and the node shows output pins including On Completed, On Interrupted, On Cancelled and Event Received.</p></div>
+<details><summary>Why this matters</summary><p>The plain <code>PlayMontageAndWait</code> tells you when the montage finishes, but not when the punch lands. The Event version also fires <strong>Event Received</strong> for each gameplay event whose tag is in Event Tags, which is how the <code>Ability</code> notify from step 4 reaches your graph. With Event Tags empty, nothing arrives and the attack deals no damage, silently.</p></details>
+</section>
+<section class="step" id="step-8">
+<h2><span class="n">8</span>Deal the damage once, on the first punch</h2>
+<figure><img src="assets/step-008.callouts.png" alt="step 8 screenshot">
+<ol class="legend">
+<li><b>1</b> Drag from Event Received</li>
+<li><b>2</b> Place Do Once, then ApplyActionDamage, here</li>
+<li><b>3</b> Drag SavedEventData in as a Get for the Payload</li>
+</ol>
+</figure>
+<div class="prose"><p>Drag from <strong>Event Received</strong>, drop on empty space, and add a <strong>Do Once</strong> node. From Do Once&#x27;s <strong>Completed</strong> output, add <strong>Apply Action Damage</strong> (category LSGI | Combat | Damage).<br>  Its <strong>Ability</strong> input already means Self. <strong>Payload</strong> needs the data you saved in step 6, so you read the variable back:<br>  - In My Blueprint, under <strong>Variables</strong>, press and hold on <code>SavedEventData</code>, drag it onto an empty spot in the graph, and let go. A small menu pops up with <strong>Get SavedEventData</strong> and <strong>Set SavedEventData</strong>: pick <strong>Get</strong>. (Holding Ctrl while you drop skips the menu and makes a Get straight away.)<br>  - A small node appears with one blue pin on its right. Drag from that pin to the <strong>Payload</strong> pin on Apply Action Damage.<br>  - Do not use the <strong>Event Data</strong> pin on the montage node. That one is the punch&#x27;s own data, not the action&#x27;s.</p></div>
+<div class="expected"><p>Event Received → Do Once → Apply Action Damage, with SavedEventData (Get) wired into Payload.</p></div>
+<details><summary>Why this matters</summary><p><code>AM_Test_Combo</code> has three <code>Ability</code> markers, so Event Received fires three times. Each <code>ApplyActionDamage</code> call deals the action&#x27;s full formula damage and rolls its own crit (<code>LSGICombatDamageLibrary</code>), so without Do Once one Basic Attack hits three times. And the payload must be the saved one: the montage&#x27;s event carries the notify&#x27;s data, with no targets and no action, so damage would find nothing to hit.</p></details>
+</section>
+<section class="step" id="step-9">
+<h2><span class="n">9</span>End the ability when the montage stops, then compile</h2>
+<figure><img src="assets/step-009.callouts.png" alt="step 9 screenshot">
+<ol class="legend">
+<li><b>1</b> SavedEventData (Get) into Payload, the check for step 8</li>
+<li><b>2</b> Wire On Completed, On Interrupted, On Cancelled (skip On Blend Out)</li>
+<li><b>3</b> Add End Ability here; all three wires go into it</li>
+<li><b>4</b> Then Compile, and Save</li>
+</ol>
+</figure>
+<div class="prose"><p>Right-click an empty spot and add <strong>End Ability</strong>. Drag a wire from <strong>On Completed</strong> into its white input pin, then do the same from <strong>On Interrupted</strong> and <strong>On Cancelled</strong>. One input pin takes all three wires.<br>  Leave <strong>On Blend Out</strong> and the white output of Apply Action Damage unconnected. Then click <strong>Compile</strong> and save (Ctrl+S).</p></div>
+<div class="expected"><p>Compile shows a green tick with no errors, and the tab title loses its asterisk after saving.</p></div>
+<details><summary>Why this matters</summary><p>The turn does not move on until this ability ends: the turn flow waits for the ability system&#x27;s ended signal before the next combatant acts (<code>HandleAbilityEnded</code> in <code>LSGITurnBasedCombatSubsystem_Phases.cpp</code>). An ability that never calls End Ability leaves the battle stuck on this turn. Wiring only On Completed is not enough either: a montage that is interrupted or cancelled never completes.</p></details>
+</section>
+<section class="step" id="step-10">
+<h2><span class="n">10</span>Check the finished ability</h2>
+<figure><img src="assets/step-010.callouts.png" alt="step 10 screenshot">
+<ol class="legend">
+<li><b>1</b> End Ability, fed by Completed, Interrupted and Cancelled</li>
+<li><b>2</b> On Blend Out: hollow pin, left unconnected</li>
+<li><b>3</b> Compile ... successful</li>
+<li><b>4</b> No asterisk: saved</li>
+<li><b>5</b> 1 Unsaved left: AN_GameplayEvent, which should not be saved</li>
+</ol>
+</figure>
+<div class="prose"><p>Read the graph left to right: the turn&#x27;s event is saved, the montage plays, the first <code>Ability</code> hit deals damage once, and any way the montage stops ends the ability.<br>  A filled pin has a wire, a hollow pin does not; that is how you check On Blend Out is empty without tracing lines.</p></div>
+<div class="expected"><p>Compiler Results says successful, the tab has no asterisk, and the only unsaved asset is one you did not mean to change.</p></div>
+<details><summary>Why this matters</summary><p>A Blueprint that compiles is not proof it works, only that its wiring is legal. The checks that matter here are the ones a compiler cannot see: damage behind Do Once, Payload from the saved variable, and every montage ending routed to End Ability.</p></details>
+</section>
+<section class="step" id="step-11">
+<h2><span class="n">11</span>Create the action asset</h2>
+<figure><img src="assets/step-011.callouts.png" alt="step 11 screenshot">
+<ol class="legend">
+<li><b>1</b> Search LSGICombatActio</li>
+<li><b>2</b> LSGICombat Action Definition: pick this one</li>
+<li><b>3</b> Lookalike: a different class, not an action</li>
+<li><b>4</b> Then Select</li>
+</ol>
+</figure>
+<div class="prose"><p>In <code>Content/LSGI/Pack/Base/System/Combat</code> (next to <code>DA_CombatAction_Test_ActionA</code>), right-click an empty spot, choose <strong>Miscellaneous &gt; Data Asset</strong>, search <code>LSGICombatActio</code>, pick <strong>LSGICombat Action Definition</strong>, then <strong>Select</strong>. Name it <code>DA_CombatAction_Shark_BasicAttack</code>.</p></div>
+<div class="expected"><p>A new <code>DA_CombatAction_Shark_BasicAttack</code> asset next to <code>DA_CombatAction_Test_ActionA</code>.</p></div>
+<details><summary>Why this matters</summary><p>The ability is *how* the attack plays; this asset is *what* the menu offers. A combatant&#x27;s kit lists action definitions, not abilities (<code>LSGICombatAbilitySet.h</code>: &quot;the set lists combat actions rather than raw ability classes&quot;), so an ability with no action pointing at it is never granted and never offered.</p></details>
+</section>
+<section class="step" id="step-12">
+<h2><span class="n">12</span>Point the action at the ability and tag it Basic Attack</h2>
+<figure><img src="assets/step-012.callouts.png" alt="step 12 screenshot">
+<ol class="legend">
+<li><b>1</b> Ability Class: pick GA_Shark_BasicAttack</li>
+<li><b>2</b> Expand Presentation: Display Name and Category are inside</li>
+<li><b>3</b> Action Value 1.0 and Stat Factor Attack: already right</li>
+<li><b>4</b> Target Rule One Enemy: already right</li>
+<li><b>5</b> Save</li>
+</ol>
+</figure>
+<div class="prose"><p>Set <strong>Ability Class</strong> to <code>GA_Shark_BasicAttack</code>. Expand <strong>Presentation</strong>, set <strong>Display Name</strong> to <code>Basic Attack</code>, and set <strong>Category</strong> to <code>Combat.LSGI.Action.Category.BasicAttack</code>. Then save.<br>  Leave the rest: <strong>Action Value</strong> 1.0, <strong>Stat Factor</strong> Attack and <strong>Target Rule</strong> One Enemy are already what a basic attack needs, and Is Bonus Action stays off.</p></div>
+<div class="expected"><p>Ability Class shows GA_Shark_BasicAttack, Category shows BasicAttack, and the tab loses its asterisk.</p></div>
+<details><summary>Why this matters</summary><p>Category is not decoration. It is how the game tells a Basic Attack from a Skill, a Burst or an Item: menu grouping, the fallback icon, and the option-loss rules all read it (<code>LSGICombatTags.ini</code>: &quot;What kind of action it is. Drives menu grouping and the fallback icon.&quot;). The existing test action is tagged Skill, which is why it was not a basic attack. And damage is <code>floor(Attack x Action Value x C / (C + Defense))</code>, minimum 1 (<code>LSGIDamageExecution</code>), so Action Value 1.0 means one times the attacker&#x27;s Attack before defense.</p></details>
+</section>
+<section class="step" id="step-13">
+<h2><span class="n">13</span>Check the action, and save it for real</h2>
+<figure><img src="assets/step-013.callouts.png" alt="step 13 screenshot">
+<ol class="legend">
+<li><b>1</b> Ability Class: GA_Shark_BasicAttack</li>
+<li><b>2</b> Display Name: Basic Attack</li>
+<li><b>3</b> Category: Combat.LSGI.Action.Category.BasicAttack</li>
+<li><b>4</b> The asterisk: changed but not saved yet</li>
+<li><b>5</b> Click Save (or Ctrl+S with this window focused)</li>
+</ol>
+</figure>
+<div class="prose"><p>Check the three values you set. Then look at the tab title: an asterisk after the name means the change exists only in memory. Click <strong>Save</strong> and watch the asterisk disappear.</p></div>
+<div class="expected"><p>The tab title has no asterisk, and the Unsaved count dropped by one.</p></div>
+<details><summary>Why this matters</summary><p>Unreal keeps edits in memory until you save, and the status bar&#x27;s Unsaved count is the honest number. An unsaved action works in this editor session and is gone after a restart or a teammate&#x27;s pull, which looks exactly like &quot;it worked yesterday&quot;.</p></details>
+</section>
+<section class="step" id="step-14">
+<h2><span class="n">14</span>Put the Basic Attack in the combatant&#x27;s kit</h2>
+<figure><img src="assets/step-014.callouts.png" alt="step 14 screenshot">
+<ol class="legend">
+<li><b>1</b> Actions: 1 Array element</li>
+<li><b>2</b> Index [0]: DA_CombatAction_Shark_BasicAttack</li>
+<li><b>3</b> No asterisk: saved</li>
+</ol>
+</figure>
+<div class="prose"><p>Open <code>DA_AbilitySet_Test</code> (in <code>Content/LSGI/Pack/Base/System/Combat</code>), expand <strong>Actions</strong>, and set <strong>Index [0]</strong> to <code>DA_CombatAction_Shark_BasicAttack</code>. This replaces the old test action, <code>DA_CombatAction_Test_ActionA</code>, so every turn this combatant takes is a damaging Basic Attack. Save.<br>  Saving asks you to <strong>Check Out</strong> the asset: every <code>.uasset</code> here is a Git LFS lockable file (<code>.gitattributes</code>), and checking out takes the lock in your name so teammates cannot save over you. Pick <strong>Check Out Selected</strong>, not Make Writable.</p></div>
+<div class="expected"><p>Actions shows 1 Array element, Index [0] is DA_CombatAction_Shark_BasicAttack, and the tab has no asterisk.</p></div>
+<details><summary>Why this matters</summary><p>This list is the combatant&#x27;s whole menu and also what gets granted to its ability system: the set grants one ability per listed action (<code>LSGICombatAbilitySet.h</code>). The turn flow then looks up the granted ability by the action&#x27;s Ability Class (<code>FindAbilitySpecFromClass</code> in <code>LSGITurnBasedCombatSubsystem_Phases.cpp</code>), so an action that is not in this list cannot run even if everything else is right. Replacing the old action also makes the test unambiguous: the old one was tagged Skill and dealt no damage.</p></details>
+</section>
+<footer>Built by BRYES from real screenshots. Every image in this lesson was captured from the running application, not drawn or reconstructed.</footer></body></html>
