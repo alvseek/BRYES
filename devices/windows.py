@@ -122,6 +122,38 @@ def safe_point(frame, target=None):
     return ((left + right) // 2, (top + bottom) // 2)
 
 
+def _raise_window(hwnd):
+    """Bring `hwnd` to the foreground, including from a background process.
+
+    Windows refuses `SetForegroundWindow` to a process that does not already own the
+    foreground, which is exactly the bridge's situation: it is started by a terminal and never
+    holds focus. Attaching to the current foreground thread's input queue for the length of the
+    call is the documented way around that, and it leaves nothing attached afterwards.
+
+    Measured 2026-10-28: without this, every action refused with "could not bring the target
+    window to the foreground" while another app held focus.
+    """
+    user32 = ctypes.windll.user32
+    kernel32 = ctypes.windll.kernel32
+    user32.SetForegroundWindow(wintypes.HWND(hwnd))
+    if user32.GetForegroundWindow() == hwnd:
+        return True
+    foreground = user32.GetForegroundWindow()
+    if not foreground:
+        return False
+    other = user32.GetWindowThreadProcessId(wintypes.HWND(foreground), None)
+    mine = kernel32.GetCurrentThreadId()
+    attached = user32.AttachThreadInput(mine, other, True)
+    try:
+        user32.BringWindowToTop(wintypes.HWND(hwnd))
+        user32.SetForegroundWindow(wintypes.HWND(hwnd))
+        user32.SetFocus(wintypes.HWND(hwnd))
+    finally:
+        if attached:
+            user32.AttachThreadInput(mine, other, False)
+    return user32.GetForegroundWindow() == hwnd
+
+
 def monitor_rect(hwnd):
     """(left, top, right, bottom) of the monitor holding `hwnd`, or None.
 
@@ -473,7 +505,7 @@ class WindowsDevice:
                     f"no visible window matching {self._window!r} any more")
             if foreground_is_target(user32.GetForegroundWindow(), hwnd, owner_of):
                 return
-            user32.SetForegroundWindow(hwnd)
+            _raise_window(hwnd)
             time.sleep(0.15)
         raise RuntimeError(
             f"could not bring the target window to the foreground after {attempts} attempts; "
