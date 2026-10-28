@@ -166,6 +166,16 @@ def main():
         assert out["ok"] and "bryes-host-shell-ok" in out["stdout"], out
         print("PASS: shell round-trips with both gates set")
 
+        # A window owned by the target counts as the target: that is what keeps a right-click
+        # menu alive when the next action would otherwise re-raise the window and dismiss it.
+        from devices.windows import foreground_is_target
+        owners = {9: 5, 5: 0, 7: 0}
+        assert foreground_is_target(5, 5, owners.get)
+        assert foreground_is_target(9, 5, owners.get)        # its menu, 9 -> 5
+        assert not foreground_is_target(7, 5, owners.get)    # another app's window
+        assert not foreground_is_target(0, 5, owners.get)
+        print("PASS: a window the target owns counts as the target, another app's does not")
+
         print("\nPASS: all WindowsDevice driving checks green")
     finally:
         for name, value in saved.items():

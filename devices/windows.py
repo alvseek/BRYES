@@ -72,6 +72,31 @@ class _MONITORINFO(ctypes.Structure):
                 ("rcWork", wintypes.RECT), ("dwFlags", wintypes.DWORD)]
 
 
+def foreground_is_target(foreground, target, owner_of, limit=8):
+    """True when the target holds focus, or a window it owns does.
+
+    `owner_of(hwnd)` returns a window's owner (GetWindow GW_OWNER). A menu is its own top-level
+    window, hosted in the same process and owned by the window that opened it, so while a graph
+    context menu is open the foreground window is the menu rather than the editor. Raising the
+    editor at that moment dismisses the very menu the next keystroke was meant for, which makes
+    every keyboard-first interaction (right-click, type a node name) impossible.
+
+    Measured 2026-10-28 on the Unreal editor: after a right-click the foreground was an untitled
+    `UnrealWindow` whose GW_OWNER was the blueprint window, while its GA_ROOTOWNER was the main
+    editor window. So the chain is walked by OWNER, not by root owner, or the popup is missed.
+    """
+    if not target:
+        return False
+    handle = foreground
+    for _ in range(limit):
+        if not handle:
+            return False
+        if handle == target:
+            return True
+        handle = owner_of(handle)
+    return False
+
+
 def monitor_rect(hwnd):
     """(left, top, right, bottom) of the monitor holding `hwnd`, or None.
 
@@ -390,12 +415,16 @@ class WindowsDevice:
         if (not self._window and not self._hwnd) or not _IS_WINDOWS:
             return
         user32 = ctypes.windll.user32
+
+        def owner_of(handle):
+            return user32.GetWindow(wintypes.HWND(handle), 4)   # GW_OWNER
+
         for _ in range(attempts):
             hwnd = self._target_hwnd()
             if hwnd is None:
                 raise RuntimeError(
                     f"no visible window matching {self._window!r} any more")
-            if user32.GetForegroundWindow() == hwnd:
+            if foreground_is_target(user32.GetForegroundWindow(), hwnd, owner_of):
                 return
             user32.SetForegroundWindow(hwnd)
             time.sleep(0.15)
