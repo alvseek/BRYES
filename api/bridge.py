@@ -7,7 +7,9 @@ by description, and acts at a pixel; BRYES does as it is told and reports what i
   GET  /windows                           -> {frame: {origin, size}, windows: [{id, title, rect,
                                               image_rect, foreground, ...}]}
   GET  /pointer?window=<id>               -> {x, y, image_x, image_y, inside_frame, inside_window}
-  GET  /screenshot?window=<id>            -> PNG of the body's current frame
+  GET  /screenshot?window=<id>            -> PNG of the body's current frame, 1:1
+  GET  /downscaleshot?window=&scale=0.5   -> PNG scaled down, with the mapping headers
+  GET  /upscaleshot?window=&x1=&y1=&x2=&y2=&scale=2 -> PNG of that crop, enlarged, same headers
   POST /act      {window, type, x?, y?, x2?, y2?, text?, key?, seconds?, direction?}
   POST /locate   {window, instruction}    -> {x, y}
   GET  /profiles?path=<a/b>               -> {path, visual, operating}
@@ -39,6 +41,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from flask import Flask, abort, jsonify, request, send_file  # noqa: E402
+from PIL import Image  # noqa: E402
 from werkzeug.exceptions import HTTPException  # noqa: E402
 
 from devices.windows import WindowsDevice, monitor_rect, pointer_in_rect  # noqa: E402
@@ -124,6 +127,56 @@ def _parse_window_id(raw):
         return None
 
 
+def _scaled(image, scale):
+    """PNG bytes of `image` scaled by `scale` (PIL's LANCZOS, size rounded to at least 1 px)."""
+    width, height = image.size
+    size = (max(1, round(width * scale)), max(1, round(height * scale)))
+    buf = io.BytesIO()
+    image.resize(size, Image.LANCZOS).save(buf, "PNG")
+    return buf.getvalue()
+
+
+def _scale_arg(raw, default, low, high):
+    """A scale factor from the query string, refused outside [low, high] rather than clamped."""
+    if raw is None or raw == "":
+        return default
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        abort(400, description="scale must be a number")
+    if not low <= value <= high:
+        abort(400, description=f"scale must be between {low} and {high}")
+    return value
+
+
+def _crop_arg(args, size):
+    """(x1, y1, x2, y2) from the query string, validated against the frame it comes from."""
+    try:
+        x1, y1 = int(args["x1"]), int(args["y1"])
+        x2, y2 = int(args["x2"]), int(args["y2"])
+    except (KeyError, TypeError, ValueError):
+        abort(400, description="x1, y1, x2 and y2 are required integers")
+    width, height = size
+    if not (0 <= x1 < x2 <= width and 0 <= y1 < y2 <= height):
+        abort(400, description=f"the crop must sit inside the {width}x{height} frame, "
+                              f"with x1 < x2 and y1 < y2")
+    return (x1, y1, x2, y2)
+
+
+def _shot_response(png, scale, origin, frame):
+    """A PNG with the numbers a caller needs to map what it sees back to frame pixels.
+
+    The rule, for both directions: `frame_px = origin + returned_px / scale`.
+    At `scale` 0.5 a returned pixel 2 is frame pixel 4; at `scale` 1.5 a returned pixel 15 is
+    frame pixel 10, offset by `origin` if the shot was cropped first.
+    """
+    resp = send_file(io.BytesIO(png), mimetype="image/png")
+    resp.headers["X-Bryes-Scale"] = f"{scale:g}"
+    resp.headers["X-Bryes-Origin"] = f"{origin[0]},{origin[1]}"
+    resp.headers["X-Bryes-Frame"] = f"{frame[0]},{frame[1]}"
+    return resp
+
+
 def make_app(device_factory=None, locator=None, window_lister=None, frame_provider=None):
     """The Flask app, with every outside dependency injectable so the surface tests model-free."""
     factory = device_factory or _device_factory
@@ -186,6 +239,34 @@ def make_app(device_factory=None, locator=None, window_lister=None, frame_provid
             "inside_frame": pointer_in_rect(pos, (left, top, right, bottom)),
             "inside_window": bool(win) and pointer_in_rect(pos, tuple(win["rect"])),
         })
+
+    @app.get("/downscaleshot")
+    def downscaleshot():
+        """The frame scaled down, for a caller that wants the whole screen cheaply.
+
+        `scale` defaults to 0.5, which is the factor BRYES's own Eyes use for their overview.
+        """
+        hwnd = _parse_window_id(request.args.get("window"))
+        scale = _scale_arg(request.args.get("scale"), default=0.5, low=0.05, high=1.0)
+        with _LOCK:
+            png = _device_for(hwnd).screenshot()
+        image = Image.open(io.BytesIO(png))
+        return _shot_response(_scaled(image, scale), scale, (0, 0), image.size)
+
+    @app.get("/upscaleshot")
+    def upscaleshot():
+        """One region, cropped then enlarged: the zoom that costs the caller no eyesight.
+
+        The crop is in frame pixels, and every returned pixel maps back through the same rule.
+        """
+        hwnd = _parse_window_id(request.args.get("window"))
+        scale = _scale_arg(request.args.get("scale"), default=2.0, low=1.0, high=4.0)
+        with _LOCK:
+            png = _device_for(hwnd).screenshot()
+        image = Image.open(io.BytesIO(png))
+        box = _crop_arg(request.args, image.size)
+        crop = image.crop(box)
+        return _shot_response(_scaled(crop, scale), scale, (box[0], box[1]), image.size)
 
     @app.get("/screenshot")
     def screenshot():

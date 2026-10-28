@@ -7,12 +7,21 @@ and a locator, so a fake body and a fake locator are enough to prove it. What is
 here is the Windows enumeration (real windows) and the Eyes (a live call); both are exercised
 once by hand when the bridge is pointed at the editor.
 """
+import io
 import sys
 from pathlib import Path
+
+from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from api.bridge import make_app  # noqa: E402
+
+
+def _png(width=100, height=100):
+    buf = io.BytesIO()
+    Image.new("RGB", (width, height), (10, 20, 30)).save(buf, "PNG")
+    return buf.getvalue()
 
 
 class Caps:
@@ -31,9 +40,10 @@ class FakeDevice:
         self.caps = Caps()
         self.actions = []
         self.pos = (960, 540)
+        self.png = _png(100, 100)
 
     def screenshot(self):
-        return b"\x89PNG\r\n\x1a\nfake-frame"
+        return self.png
 
     def act(self, action):
         if action.get("x") == -1:
@@ -78,15 +88,44 @@ def test_health_and_windows():
 
 
 def test_screenshot():
-    app, _ = build()
+    app, device = build()
     c = app.test_client()
     r = c.get("/screenshot?window=0x1a")
     assert r.status_code == 200
     assert r.mimetype == "image/png"
-    assert r.data == b"\x89PNG\r\n\x1a\nfake-frame"
+    assert r.data == device.png
     r = c.get("/screenshot")
     assert r.status_code == 400            # no window named
     print("PASS: /screenshot returns the body's bytes, and 400 without a window")
+
+
+def test_downscaleshot():
+    app, _ = build()
+    c = app.test_client()
+    r = c.get("/downscaleshot?window=0x1a&scale=0.5")
+    assert r.status_code == 200
+    assert Image.open(io.BytesIO(r.data)).size == (50, 50)
+    assert r.headers["X-Bryes-Scale"] == "0.5"
+    assert r.headers["X-Bryes-Origin"] == "0,0"
+    assert r.headers["X-Bryes-Frame"] == "100,100"
+    # the default is the factor the Eyes themselves use for an overview
+    assert Image.open(io.BytesIO(c.get("/downscaleshot?window=0x1a").data)).size == (50, 50)
+    assert c.get("/downscaleshot?window=0x1a&scale=5").status_code == 400
+    assert c.get("/downscaleshot?window=0x1a&scale=wide").status_code == 400
+    print("PASS: /downscaleshot halves by default and reports how to map back")
+
+
+def test_upscaleshot():
+    app, _ = build()
+    c = app.test_client()
+    r = c.get("/upscaleshot?window=0x1a&x1=10&y1=20&x2=40&y2=60&scale=2")
+    assert r.status_code == 200
+    assert Image.open(io.BytesIO(r.data)).size == (60, 80)      # 30x40 crop, doubled
+    assert r.headers["X-Bryes-Scale"] == "2"
+    assert r.headers["X-Bryes-Origin"] == "10,20"               # crop offset travels with it
+    assert c.get("/upscaleshot?window=0x1a&x1=10&y1=20").status_code == 400
+    assert c.get("/upscaleshot?window=0x1a&x1=10&y1=20&x2=200&y2=60").status_code == 400
+    print("PASS: /upscaleshot crops, enlarges, and carries the crop origin")
 
 
 def test_act_forwards_and_refuses():
@@ -158,6 +197,8 @@ def test_profiles():
 if __name__ == "__main__":
     test_health_and_windows()
     test_screenshot()
+    test_downscaleshot()
+    test_upscaleshot()
     test_act_forwards_and_refuses()
     test_locate()
     test_pointer()
