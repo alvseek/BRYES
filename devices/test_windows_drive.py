@@ -21,6 +21,7 @@ class FakeInput:
 
     def __init__(self):
         self.calls = []
+        self.pos = (0, 0)
 
     def hover(self, x, y):
         self.calls.append(("hover", x, y))
@@ -49,8 +50,12 @@ class FakeInput:
     def type_text(self, text):
         self.calls.append(("type_text", text))
 
+    def move(self, x, y):
+        self.calls.append(("move", x, y))
+        self.pos = (x, y)
+
     def pointer(self):
-        return (0, 0)
+        return self.pos
 
 
 def set_flags(host=False, shell=False):

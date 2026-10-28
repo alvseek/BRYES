@@ -30,6 +30,7 @@ class FakeDevice:
         self.hwnd = hwnd
         self.caps = Caps()
         self.actions = []
+        self.pos = (960, 540)
 
     def screenshot(self):
         return b"\x89PNG\r\n\x1a\nfake-frame"
@@ -38,6 +39,9 @@ class FakeDevice:
         if action.get("x") == -1:
             raise RuntimeError("refusing to act at (-1,0): outside the target window")
         self.actions.append(action)
+
+    def pointer(self):
+        return self.pos
 
 
 WINDOWS = [
@@ -120,6 +124,23 @@ def test_locate():
     print("PASS: /locate returns the Eyes' pixel for the caller's words")
 
 
+def test_pointer():
+    app, device = build()
+    c = app.test_client()
+    r = c.get("/pointer?window=0x1a")
+    body = r.get_json()
+    assert r.status_code == 200, body
+    # frame origin is (-100,-50) in this fixture, so image space shifts by that
+    assert body["x"] == 960 and body["y"] == 540
+    assert body["image_x"] == 1060 and body["image_y"] == 590
+    assert body["inside_frame"] is True
+    assert body["inside_window"] is True
+    device.pos = (-900, -900)                    # parked on another display
+    body = c.get("/pointer?window=0x1a").get_json()
+    assert body["inside_frame"] is False and body["inside_window"] is False
+    print("PASS: /pointer reports both spaces and whether the pointer is outside the window")
+
+
 def test_profiles():
     app, _ = build()
     c = app.test_client()
@@ -139,5 +160,6 @@ if __name__ == "__main__":
     test_screenshot()
     test_act_forwards_and_refuses()
     test_locate()
+    test_pointer()
     test_profiles()
     print("PASS: all bridge tests green")

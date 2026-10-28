@@ -116,13 +116,19 @@ needs twenty steps, this is the wrong instrument; use the application's own API.
   running at a higher integrity level than Python. If the editor runs as administrator, run the
   harness the same way, or expect silence.
 - **`could not bring the target window to the foreground after 3 attempts`.** Something keeps
-  stealing focus; the body refuses rather than clicking into whatever is on top.
+  stealing focus; the body refuses rather than clicking into whatever is on top. A menu the app
+  opened counts as the app: the body walks the window's owner chain, so a context menu is not a
+  focus steal. If it still fires, a background process cannot raise a window it does not own.
 - **`no visible window matching ...`.** The window closed, or the title changed beyond the
   substring (Unreal's title carries the open level).
 - **`refusing to act at (x,y): outside the target window`.** The Eyes pointed outside the handle.
   The step fails rather than acting elsewhere; give the Brain a `visual_focus` or a clearer goal.
 - **Typed text arrives without accents or symbols.** Anything non-ASCII goes through the
   clipboard; if the clipboard is unavailable to the target, it will not arrive.
+- **The pointer is outside the target.** Before every action the body reads the pointer and, if
+  it is outside the frame, moves it back to the target's centre before acting. `GET /pointer` on
+  the bridge reports the same test. A pointer that keeps needing to be brought back means a
+  coordinate upstream is wrong, not that the restore is broken.
 
 ## What this body cannot do
 

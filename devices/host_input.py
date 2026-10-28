@@ -59,6 +59,10 @@ class HostInput:
     def hover(self, x, y):
         self._py.moveTo(x, y, duration=0)
 
+    def move(self, x, y):
+        """Put the pointer at (x, y) without clicking. Used to bring it back into the target."""
+        self._py.moveTo(x, y, duration=0)
+
     def click(self, x, y, button="left"):
         self._py.click(x, y, button=button)
 

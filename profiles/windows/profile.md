@@ -28,3 +28,6 @@ Base profile for the real Windows desktop body (`WindowsDevice`). Inherited by e
 - Coordinates are image pixels of the captured monitor. The body refuses a point outside the
   target window's rectangle, so a far-off point fails rather than clicking beside the target.
 - Prefer the app's own keyboard shortcuts over hunting through its menus.
+- The pointer is part of the frame: before every action the body checks where the pointer is and
+  moves it back inside the target window if it was left on another display. Ask for
+  `GET /pointer` to see where it is and whether it is inside.

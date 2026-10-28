@@ -6,6 +6,7 @@ by description, and acts at a pixel; BRYES does as it is told and reports what i
   GET  /health                            -> {ok: true}
   GET  /windows                           -> {frame: {origin, size}, windows: [{id, title, rect,
                                               image_rect, foreground, ...}]}
+  GET  /pointer?window=<id>               -> {x, y, image_x, image_y, inside_frame, inside_window}
   GET  /screenshot?window=<id>            -> PNG of the body's current frame
   POST /act      {window, type, x?, y?, x2?, y2?, text?, key?, seconds?, direction?}
   POST /locate   {window, instruction}    -> {x, y}
@@ -40,7 +41,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from flask import Flask, abort, jsonify, request, send_file  # noqa: E402
 from werkzeug.exceptions import HTTPException  # noqa: E402
 
-from devices.windows import WindowsDevice, monitor_rect  # noqa: E402
+from devices.windows import WindowsDevice, monitor_rect, pointer_in_rect  # noqa: E402
 from eyes.client import locate as eyes_locate  # noqa: E402
 from profiles import load_profiles, profile_exists  # noqa: E402
 
@@ -164,6 +165,27 @@ def make_app(device_factory=None, locator=None, window_lister=None, frame_provid
                                   "size": [right - left, bottom - top]},
                         "image_rect": [rx1 - left, ry1 - top, rx2 - left, ry2 - top]})
         return jsonify({"windows": out})
+
+    @app.get("/pointer")
+    def pointer():
+        """Where the pointer is, in both spaces, and whether it is inside the window.
+
+        A caller that only ever sees frames has no way to know the pointer was left on another
+        display; this is the read that answers it, and `inside_window` is the same test the
+        body applies before acting.
+        """
+        hwnd = _parse_window_id(request.args.get("window"))
+        device = _device_for(hwnd)
+        with _LOCK:
+            pos = device.pointer()
+        left, top, right, bottom = frame_of(hwnd)
+        win = next((w for w in lister() if _parse_window_id(w["id"]) == hwnd), None)
+        return jsonify({
+            "x": int(pos[0]), "y": int(pos[1]),
+            "image_x": int(pos[0]) - left, "image_y": int(pos[1]) - top,
+            "inside_frame": pointer_in_rect(pos, (left, top, right, bottom)),
+            "inside_window": bool(win) and pointer_in_rect(pos, tuple(win["rect"])),
+        })
 
     @app.get("/screenshot")
     def screenshot():

@@ -97,6 +97,31 @@ def foreground_is_target(foreground, target, owner_of, limit=8):
     return False
 
 
+def pointer_in_rect(pos, rect):
+    """True when a pointer position lies inside a (left, top, right, bottom) rectangle."""
+    if not pos or not rect:
+        return False
+    left, top, right, bottom = rect
+    return left <= pos[0] < right and top <= pos[1] < bottom
+
+
+def safe_point(frame, target=None):
+    """A point inside `frame` to restore the pointer to: the target's centre when it is known.
+
+    A pointer left on another display makes the next press land on whatever is there, which is
+    the same accident the rect guard prevents, one step earlier. Measured 2026-10-28: with the
+    editor on the primary screen, a pointer parked over the other monitor makes every action a
+    click on the wrong app before the guard ever sees a coordinate.
+    """
+    left, top, right, bottom = frame
+    if target:
+        cx = (max(target[0], left) + min(target[2], right)) // 2
+        cy = (max(target[1], top) + min(target[3], bottom)) // 2
+        if left <= cx < right and top <= cy < bottom:
+            return (cx, cy)
+    return ((left + right) // 2, (top + bottom) // 2)
+
+
 def monitor_rect(hwnd):
     """(left, top, right, bottom) of the monitor holding `hwnd`, or None.
 
@@ -406,6 +431,28 @@ class WindowsDevice:
         found = find_window(self._window)
         return found[0] if found else None
 
+    def _ensure_pointer_in_frame(self):
+        """Bring the pointer back inside the frame before acting.
+
+        A pointer left on another display makes the next press land on whatever is under it,
+        which is the same accident the rect guard prevents, one step earlier. The frame is the
+        target's monitor, so "outside" means another screen or a window covering this one.
+
+        Logged, never silent: a pointer that keeps needing to be brought back means a
+        coordinate upstream is wrong, and the transcript is where that shows up.
+        """
+        if not _IS_WINDOWS:
+            return
+        inp = self._get_input()
+        frame = self._frame_rect()
+        pos = inp.pointer()
+        if pointer_in_rect(pos, frame):
+            return
+        safe = safe_point(frame, self._target_rect())
+        inp.move(*safe)
+        if runlog:
+            runlog.record("pointer", f"was {pos}, restored to {safe}", "outside the frame")
+
     def _ensure_foreground(self, attempts=3):
         """Keep the target window in front before acting.
 
@@ -478,6 +525,7 @@ class WindowsDevice:
         self._require_host()
         verb = action.get("type")
         inp = self._get_input()
+        self._ensure_pointer_in_frame()
         self._ensure_foreground()
 
         if verb == "hover":
