@@ -27,6 +27,12 @@
 ### From Pre-Planning Discussion
 - **Discussion**: none separate from the parent handoff.
 
+## Protocol (Quick Wizard)
+
+- **Scope gate — stays Quick Wizard.** None of the escalation criteria hold: two new text files and one catalog line later, no interdependent code, nothing irreversible, no bug hunt, no formal comparison or ADR, and it fits one session.
+- **Rounds — none fired, each skipped out loud because it was settled before this plan existed.** Scope: R2 and the council handoff. Product-flow: no UI, these are files the loop reads. Technical-core: the profile format already exists (Terms & Vocab / Visual / Operating, inheriting up the path), so there is no new mechanism to choose. Integration-points: `load_profiles` and the catalog both exist and nothing new is called.
+- **Process note, recorded rather than smoothed over.** The files were written before this procedure was read, so both statements above were produced after execution instead of before it. The content did not change as a result, because every decision had already been settled in conversation, but the order was wrong: QW requires investigate, gate, rounds, then execute.
+
 ## What Was Built
 
 - **`profiles/windows/profile.md`** — the base desktop: taskbar, title bar, active window, dialogs, monitor, and the coordinate rule a caller needs (image pixels of the captured monitor; the body refuses points outside the target window).
