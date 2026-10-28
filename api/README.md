@@ -43,3 +43,35 @@ python api/server.py        # -> http://127.0.0.1:8100  (localhost only, no auth
 - `server.py` — Flask app factory (`create_app`) + the 3 routes
 - `test_jobs.py` — model-free JobManager lifecycle test
 - `test_server.py` — model-free Flask route test (`test_client` + stub runner)
+
+## The other surface: `bridge.py`
+
+The task API above hands over a whole goal and lets BRYES's brain drive. `bridge.py` is the
+layer below it, for a caller that already knows what to do and only needs eyes and hands:
+no goal, no loop, no decision. It runs on `http://127.0.0.1:8110`.
+
+```
+GET  /windows                            every targetable window: id, title, rect,
+                                         image_rect (in the frame's own pixels), foreground
+GET  /pointer?window=<id>                where the pointer is, in screen and image space, and
+                                         whether it is inside the frame and inside the window
+GET  /screenshot?window=<id>              PNG of the target's monitor, 1:1
+GET  /downscaleshot?window=&scale=0.5     the frame scaled down (default 0.5, as the Eyes'
+                                          own overview does)
+GET  /upscaleshot?window=&x1=&y1=&x2=&y2=&scale=2   one crop, enlarged
+POST /act      {window, type, x, y, ...}  one verb at the caller's pixels
+POST /locate   {window, instruction}      one pixel from the Eyes (UI-TARS) on a fresh frame
+GET  /profiles?path=windows/unreal-editor the vocabulary both sides read
+```
+
+- **Mapping rule for the two scaled shots:** `frame_px = origin + returned_px / scale`, with
+  `X-Bryes-Scale`, `X-Bryes-Origin` and `X-Bryes-Frame` returned as headers on every image.
+- **No auth, loopback only**, by [USER-NAME]'s call; the standing guard is that a body must be
+  `application/json`, which keeps a cross-origin form post out.
+- **One action at a time** — a lock, the same intent as the task API's single-flight.
+- Every dependency (device factory, locator, window lister, frame) is injectable, so the whole
+  surface is tested model-free in `test_bridge.py`.
+
+Measured 2026-10-28 through this surface, with the caller outside BRYES: a `Print String` node
+created by right-click and typed name, three execution wires landed in `BP_CombatBody_Enemy`,
+and a clean compile, without saving.

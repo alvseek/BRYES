@@ -96,9 +96,19 @@ They are in the code, not just good advice, and each one exists because it was v
    window's rectangle: `refusing to act at (x,y): outside the target window`. The step fails; it
    does not click beside it.
 
+**The frame is the target's monitor.** `screenshot()` grabs the monitor that holds the target
+window (resolved by `MonitorFromWindow`), not the whole desk, so a two-screen machine no longer
+hands the Eyes an image with the app in half of it. Every coordinate is a pixel of that frame,
+and `screen_xy` adds the frame's origin. With no window named the frame is still the whole
+desktop, which is what capture wants. `caps` reports the same size the grab will produce.
+
+**The pointer is brought back before acting.** A pointer left on another display makes the next
+press land on whatever is under it, so before every action the body reads the pointer and moves
+it to the target's centre if it is outside. `GET /pointer` on the bridge reports the same test.
+
 ## What a run costs
 
-Measured on this machine, whole-desktop frames of 2560×1440:
+Measured on this machine, frames of the target's monitor (3440×1440 on the ultrawide, 1920×1080 on the secondary):
 
 | Phase | Time |
 |---|---|

@@ -168,7 +168,7 @@ I have to use this document as my **ONLY** source of truth to track which sub-pl
 | SP-2 | DONE | 2026-10-28 | 2026-10-28 | software-architect | Host frame (monitor), window-selects-body and the no-window refusal, delta drag, coordinate verbs, post-drag diff. Quality review fixed 5 findings. **Runtime verification NOT done** — no live host run yet |
 | SP-3 | DROPPED | — | 2026-10-28 | — | Alvi dropped the Unreal API channel at wrap-up. No work had started; R5 is no longer being delivered |
 | SP-4 | DONE | 2026-10-28 | 2026-10-28 | software-architect | Both profiles and the catalog section, listed now that R9 refuses a host run with no window. `test_profiles.py` ALL PASS |
-| SP-5 | IN PROGRESS | 2026-10-28 | - | software-architect | Three of three wires and a clean compile, proven live through the bridge. Remainder: the session record and the map entry |
+| SP-5 | DONE | 2026-10-28 | 2026-10-28 | software-architect | Three of three wires and a clean compile, proven live through the bridge; the settings task done end to end; the procedures, the map and the session record brought up to date |
 | SP-6 | DONE | 2026-10-28 | 2026-10-28 | software-architect | Six routes, five model-free tests, and a live proof: a real click and keystroke through the bridge changed a probe window while a point outside it was refused |
 
 **Status values**: NOT STARTED → IN PROGRESS → DONE → BLOCKED (with reason in Notes)
@@ -178,10 +178,16 @@ I have to use this document as my **ONLY** source of truth to track which sub-pl
 ## **QA HANDOFF**
 *Filled at Step 18. This council is **not** runtime-verified — this section records the plan for that verification, which happens in a QA session with the stack up. Each sub-plan owns the checklist for its own change; this section owns the batch, which no sub-plan can see.*
 
-- **Sub-plan checklists**: [`qa/checklists/{feature}.md` for each sub-plan that produced one, with the skip and its reason for each that did not]
-- **Cross-plan integration**: [exercised — what ran it (an `/integration-test` run, or a named test) | NOT covered — why]
-- **Runtime verification**: **NOT DONE.** Next action: [run each sub-plan's checklist with the stack up — `/run-qa-test --checklist <path>` per checklist]
-- **Release**: [the sub-plans this batch releases together — one deployment for the batch, not one per sub-plan]
+- **Sub-plan checklists**: none — no QA instrument exists for BRYES (no `qa/` bench, no map), so no
+  sub-plan produced a checklist and none was skipped for a reason other than that.
+- **Cross-plan integration**: exercised — a caller outside BRYES drove the bridge end to end
+  (window list → pointer → screenshot → right-click → typed node name → three pin drags → compile)
+  and separately completed a Project Settings edit. `api/test_bridge.py` (8 model-free tests) and
+  `devices/test_windows_drive.py` cover the surface and the three host fixes.
+- **Runtime verification**: **NOT DONE.** Next action: run the bridge once on a second Unreal
+  project and re-measure the pin rate with `locate` primed by the profile's Visual half.
+- **Release**: SP-1, SP-2, SP-4, SP-5 and SP-6 release together on branch
+  `sp4-sp6-visual-bridge`; SP-3 was dropped before any work started.
 
 ---
 
