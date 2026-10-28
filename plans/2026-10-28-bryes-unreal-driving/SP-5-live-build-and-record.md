@@ -144,8 +144,9 @@ I have to use this document as my **ONLY** source of truth to execute and track 
     - **Two of three wires landed**: `Event BeginPlay` → Print String exec, and `Event ActorBeginOverlap` → Print String exec, both visible as white wires.
     - **The third attempt missed and did something else**: the press landed on `Event Tick`'s node body rather than its pin, so the graph MOVED the node instead of wiring it. Caught by the next screenshot, undone with Ctrl+Z (`Undo: Move Node`).
     - Compile after the two wires: the Compile tooltip read `Good to go`. After the undo it read `Dirty, needs to be recompiled`.
+    - **The third wire, retried on a measured coordinate**: a 6x crop put `Event Tick`'s `then` pin at x 1299..1312, y 952..966, so the earlier press at (1322,955) had been 17 px to its right, on the node body. Pressing at (1305,959) and dragging to (710,639) landed the wire. Compile then read `Good to go` with all three.
     - Nothing was saved; the status bar reads `1 Unsaved`.
-  - **Success Criteria**: A met for reach, screen reads and the compile. B met at 2 of 3 wires, with the third recorded as a miss.
+  - **Success Criteria**: A met for reach, screen reads and the compile. B met: three of three wires landed, the third only after its pin coordinate was measured on a 6x crop instead of eyeballed.
   - **Tech Debts**: the third wire is unproven; a pin press within a few pixels of the body moves the node with no error, which is the silent failure R6 exists to catch, now measured rather than assumed.
   - **Result**: the method works. My earlier "blocked" reading was wrong, and the cause was the focus guard, not the menu.
 

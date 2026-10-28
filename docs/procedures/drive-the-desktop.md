@@ -134,6 +134,31 @@ needs twenty steps, this is the wrong instrument; use the application's own API.
 
 - **No element addressing.** There is no UI Automation path yet, so a run cannot say "invoke the
   button named Compile"; it clicks pixels. Unreal's Slate UI is unmeasured for a tree.
+
+## Driving it from another agent (the bridge)
+
+`api/bridge.py` exposes the same body as primitives over loopback HTTP, for a caller that
+already knows what to do and does not want the Brain in the path:
+
+```
+GET  /windows   -> {frame, windows:[{id, title, rect, image_rect, foreground}]}
+GET  /pointer?window=<id> -> {x, y, image_x, image_y, inside_frame, inside_window}
+GET  /screenshot?window=<id> -> PNG of the target's monitor
+POST /act      {window, type, x, y, ...}   one verb, at the caller's pixels
+POST /locate   {window, instruction}       one pixel from the Eyes
+GET  /profiles?path=windows/unreal-editor  the vocabulary both sides read
+```
+
+Measured 2026-10-28 driving `BP_CombatBody_Enemy`: a caller with the pointer parked on another
+monitor reached the editor, created a `Print String` node by right-click and typed name, landed
+three execution wires, and compiled clean, without saving.
+
+Two things that cost a session to learn and are now handled in the body: the pointer is brought
+back inside the frame before every action, and a window the target owns (a menu) counts as the
+target holding focus, so the next keystroke does not dismiss it.
+
+A pin is about ten pixels. Press two pixels off it and Unreal moves the node instead of wiring
+it, with no error; mark small targets on a zoomed crop and verify each wire by looking.
 - **No browser of the accessibility tree**, so a moved control means a re-grounding.
 - **Layer 3 (`request_diff`) and the `screenshot` action still work**, and the transcript under
   `artifacts/runs/<timestamp>-<tag>/` holds every frame and every prompt.
