@@ -52,7 +52,8 @@ def build():
     device = FakeDevice(None)
     app = make_app(device_factory=lambda hwnd: device,
                    locator=lambda _frame, instruction: {"x": 918, "y": 585},
-                   window_lister=lambda: WINDOWS)
+                   window_lister=lambda: WINDOWS,
+                   frame_provider=lambda hwnd: (-100, -50, 1820, 1030))
     return app, device
 
 
@@ -62,11 +63,14 @@ def test_health_and_windows():
     r = c.get("/health")
     assert r.status_code == 200 and r.get_json() == {"ok": True}
     r = c.get("/windows")
-    got = r.get_json()
+    got = r.get_json()["windows"]
     assert r.status_code == 200 and len(got) == 2
     assert got[0]["id"] == "0x1a" and got[0]["foreground"] is True
     assert got[1]["foreground"] is False
-    print("PASS: /health and /windows answer from the injected lister")
+    # screen rect minus the frame origin: this is the space a click is measured in
+    assert got[0]["image_rect"] == [100, 50, 2020, 1090], got[0]["image_rect"]
+    assert got[0]["frame"] == {"origin": [-100, -50], "size": [1920, 1080]}
+    print("PASS: /health and /windows answer from the injected lister, with frame-space rects")
 
 
 def test_screenshot():

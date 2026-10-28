@@ -49,13 +49,12 @@ first visual head: "WINDOWS UI ELEMENTS:"   (the base merged, then the editor la
 python test_profiles.py -> ALL PASS (19 checks), including "every catalog path resolves on disk"
 ```
 
-## The One Item Held
+## The One Item Held, Now Landed
 
-The `## windows` section in `profiles/index.md` is **not added yet**, deliberately.
+The `## windows` section in `profiles/index.md` was held while R9 was in flight, because listing the body is what lets a bare goal select the real desktop.
 
-- **Why**: council decision 1 chose to list the body, but listing it is what lets a bare goal select the real desktop. R9's refusal (a host run must name a window) is SP-2's and is still in progress. Listing before the refusal would open the unguarded path the decision was written to close.
-- **What works meanwhile**: forcing `profile="windows/unreal-editor"` resolves and loads both files, verified above, so nothing is blocked on the listing.
-- **When it lands**: once SP-2's R9 is in, add the section and re-run `test_profiles.py`, whose catalog check asserts that every listed path exists on disk.
+- **It landed** once SP-2 merged. `_make_device` now refuses a host body that names no window ("refusing to drive the real desktop without a target window"), so the catalog can name the body without opening the unguarded path.
+- **Verified**: `python test_profiles.py` -> ALL PASS, including "every catalog path resolves on disk".
 
 ## Debts
 

@@ -85,7 +85,7 @@ Let an agent outside BRYES drive the screen with primitives: list the windows, t
 |---|----------|--------|--------|
 | 1 | Transport and authentication | HTTP on loopback, no token, JSON bodies only (any other content type is refused) | Alvi's call: "1. C". The JSON-only rule is the one line that keeps a browser form post out without adding authentication, and it preserves the choice he made |
 | 2 | Session or per-call window | Per call. Every request names a window id from `GET /windows`; a lock serialises calls | The caller is one agent, and a session is only bookkeeping the server does on the caller's behalf. The single-driver intent of the task API survives as a lock, and a window id comes from a handle rather than a title, which is the host body's own rule |
-| 3 | Which frame the surface returns | Whatever `device.screenshot()` produces, unchanged, with the caller's pixels passed straight to `device.act` | The body already translates image pixels to screen pixels, so the surface inherits R10's monitor frame without an edit. Pinning a frame shape here would duplicate a decision SP-2 owns |
+| 3 | Which frame the surface returns | Whatever `device.screenshot()` produces, unchanged, with the caller's pixels passed straight to `device.act`, plus each window's `frame` and `image_rect` so the caller never has to convert | The body already translates image pixels to screen pixels, so the surface inherits R10's monitor frame without an edit. The frame descriptor exists because the live run proved a caller cannot otherwise map a Windows screen rect into the image it is given |
 | 4 | Where the window enumerator lives | Inside `api/bridge.py`, not `devices/windows.py` | SP-2 is editing that file for R10; a second edit in the same file is a merge fight for no gain. Recorded as debt to consolidate when SP-2 closes |
 
 ---
@@ -190,11 +190,12 @@ I have to use this document as my **ONLY** source of truth to execute and track 
   - **Result**: every read-only route answers against the real machine.
 
 ### Phase 2:
-- [ ] **Step 2.1**: One real click through the bridge
-  - **Implementation Log**: not started.
-  - **Testing Log**: —
-  - **Success Criteria**: not met yet.
-  - **Result**: pending `BRYES_ALLOW_HOST=1` and a throwaway target.
+- [x] **Step 2.1**: One real click through the bridge
+  - **Implementation Log**: a throwaway driver launched `api/bridge.py` and the probe window, drove both over HTTP only, and tore both down. Nothing in it imports BRYES.
+  - **Testing Log**: first attempt refused the click at `(-275,229)`: the probe's rect came from Windows in SCREEN coordinates while `/screenshot` and `/act` speak the frame's coordinates. That is the defect the live run existed to find, and it was structural, not the probe's.
+  - **Resolution**: `/windows` now reports each window's `frame` (origin and size, from `monitor_rect`, which SP-2 shipped) and an `image_rect` already translated into that frame. Second run: click at (508,229) returned 200, type returned 200, the probe's title became `bryes-probe-target|hello`, and a click at (1266,709) was refused with `outside the target window (150,150)-(866,309)`.
+  - **Success Criteria**: pass, on the real desktop, with the guard refusing a point outside.
+  - **Result**: a click and a keystroke from outside BRYES changed a real window.
 
 ---
 

@@ -4,7 +4,8 @@ No Brain, no goal, no loop. The caller lists the windows, screenshots one, point
 by description, and acts at a pixel; BRYES does as it is told and reports what is there.
 
   GET  /health                            -> {ok: true}
-  GET  /windows                           -> [{id, title, rect, foreground, ...}]
+  GET  /windows                           -> {frame: {origin, size}, windows: [{id, title, rect,
+                                              image_rect, foreground, ...}]}
   GET  /screenshot?window=<id>            -> PNG of the body's current frame
   POST /act      {window, type, x?, y?, x2?, y2?, text?, key?, seconds?, direction?}
   POST /locate   {window, instruction}    -> {x, y}
@@ -15,6 +16,11 @@ that already knows what to do needs the layer below that, and nothing of the lay
 Coordinates are pixels of whatever frame `device.screenshot()` returns; the body translates
 them to screen pixels itself, so this surface stays correct when SP-2 makes the frame the
 target's monitor.
+
+Rectangles: Windows reports a window rect in SCREEN coordinates. The frame the caller receives
+is the grabbed image, whose origin is the virtual screen's, not (0,0) on a multi-monitor desk.
+So every window carries `image_rect` as well, which is the rectangle in the frame the caller
+actually gets, and that is what a click coordinate must be measured in.
 
 Auth: none, by Alvi's call (council decision). What stands in its place is that a body must be
 JSON: a cross-origin form post is a "simple request" the browser does not preflight, so
@@ -34,7 +40,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from flask import Flask, abort, jsonify, request, send_file  # noqa: E402
 from werkzeug.exceptions import HTTPException  # noqa: E402
 
-from devices.windows import WindowsDevice  # noqa: E402
+from devices.windows import WindowsDevice, monitor_rect  # noqa: E402
 from eyes.client import locate as eyes_locate  # noqa: E402
 from profiles import load_profiles, profile_exists  # noqa: E402
 
@@ -94,6 +100,22 @@ def _device_factory(hwnd):
     return WindowsDevice(hwnd=hwnd)
 
 
+def frame_rect_for(hwnd):
+    """(left, top, right, bottom) of the image `screenshot()` returns for this window.
+
+    SP-2 narrowed the frame to the monitor holding the target (R10), so the origin a caller's
+    pixels are measured from is that monitor's, not the desktop's. `monitor_rect` answers it
+    from the OS; with no handle, or no answer, the whole virtual desktop is still the frame.
+    """
+    rect = monitor_rect(hwnd) if hwnd else None
+    if rect:
+        return rect
+    user32 = ctypes.windll.user32
+    ox, oy = user32.GetSystemMetrics(76), user32.GetSystemMetrics(77)
+    w, h = user32.GetSystemMetrics(78), user32.GetSystemMetrics(79)
+    return (ox, oy, ox + w, oy + h)
+
+
 def _parse_window_id(raw):
     try:
         return int(str(raw), 16)
@@ -101,11 +123,12 @@ def _parse_window_id(raw):
         return None
 
 
-def make_app(device_factory=None, locator=None, window_lister=None):
+def make_app(device_factory=None, locator=None, window_lister=None, frame_provider=None):
     """The Flask app, with every outside dependency injectable so the surface tests model-free."""
     factory = device_factory or _device_factory
     eyes = locator or eyes_locate
     lister = window_lister or list_windows_with_handles
+    frame_of = frame_provider or frame_rect_for
 
     app = Flask(__name__)
 
@@ -125,7 +148,22 @@ def make_app(device_factory=None, locator=None, window_lister=None):
 
     @app.get("/windows")
     def windows():
-        return jsonify(lister())
+        """Every targetable window, each with the rectangle IN THE FRAME its screenshot returns.
+
+        Windows reports a rect in screen coordinates, and the frame is the target's monitor, so
+        the two differ by that monitor's origin. `image_rect` is the one a click is measured in.
+        """
+        out = []
+        for w in lister():
+            hwnd = _parse_window_id(w["id"])
+            left, top, right, bottom = frame_of(hwnd)
+            rx1, ry1, rx2, ry2 = w["rect"]
+            out.append({"id": w["id"], "title": w["title"], "foreground": w["foreground"],
+                        "rect": w["rect"],
+                        "frame": {"origin": [left, top],
+                                  "size": [right - left, bottom - top]},
+                        "image_rect": [rx1 - left, ry1 - top, rx2 - left, ry2 - top]})
+        return jsonify({"windows": out})
 
     @app.get("/screenshot")
     def screenshot():

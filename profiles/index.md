@@ -15,3 +15,10 @@ path, so picking `android/whatsapp` also loads `android`.
 - `linux` — base desktop conventions (windows, mouse + keyboard, a shell for command-line tasks)
 - `linux/browser` — browsing the web in Google Chrome (address bar, tabs, on-page search, lazy-loading pages)
 - `linux/browser/tokopedia` — shopping on Tokopedia (search box, product result grid, "Rp" price format)
+
+## windows — the real Windows desktop (body): Unreal Editor and ordinary apps
+- `windows` — base Windows desktop conventions (taskbar, title bar, active window, dialogs, one monitor per frame)
+- `windows/unreal-editor` — the Unreal Editor (toolbar, graph canvas, nodes and pins, Details panel, Content Browser, Ctrl+P and right-click-create)
+
+Picking a `windows` profile selects the host body, and `_make_device` refuses any host run that
+names no window, so a goal alone can never reach this desktop.
