@@ -1,7 +1,7 @@
 """BRYES task-invocation API -- the Flask surface (ADR-008).
 
 Two task routes over the JobManager, plus a health check, bound to LOCALHOST:
-  POST /tasks {goal, device?, profile?, max_steps?}
+  POST /tasks {goal, device?, profile?, window?, max_steps?}
        -> 202 {task_id, status:"pending"}
        -> 409 {error:"busy", active_task_id}   if a task is already running
        -> 400 {error}                           if goal is missing/empty

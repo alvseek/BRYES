@@ -131,7 +131,7 @@ Two layers move. The body decides what it looks at and where a coordinate lands:
 
 - [x] **Step 2.2**: Pointer aimed by pixel
   - **Action**: Add `move_to` and `click_at` to the vocabulary.
-  - **Implementation**: `ALL_VERBS` plus the bodies' advertised sets; the loop's act branch skips `locate`; the Brain schema gains `x`/`y` with a prompt rule saying when a coordinate beats a description.
+  - **Implementation**: the coordinate verbs are DERIVED in `_actions_for` from the pointer a body already advertises (`hover` -> `move_to`, `click` -> `click_at`), so no body's verb set is widened and a phone never offers a move it cannot make; the loop's act branch skips `locate`; the Brain schema gains `x`/`y` with a prompt rule saying when a coordinate beats a description.
   - **Testing**: model-free vocabulary test plus a fake-input drive test.
   - **Success Criteria**: a coordinate action reaches the device with no `locate` call.
 
