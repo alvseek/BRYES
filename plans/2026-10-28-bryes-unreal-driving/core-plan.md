@@ -168,7 +168,7 @@ I have to use this document as my **ONLY** source of truth to track which sub-pl
 | SP-2 | DONE | 2026-10-28 | 2026-10-28 | software-architect | Host frame (monitor), window-selects-body and the no-window refusal, delta drag, coordinate verbs, post-drag diff. Quality review fixed 5 findings. **Runtime verification NOT done** — no live host run yet |
 | SP-3 | DROPPED | — | 2026-10-28 | — | Alvi dropped the Unreal API channel at wrap-up. No work had started; R5 is no longer being delivered |
 | SP-4 | DONE | 2026-10-28 | 2026-10-28 | software-architect | Both profiles and the catalog section, listed now that R9 refuses a host run with no window. `test_profiles.py` ALL PASS |
-| SP-5 | IN PROGRESS | 2026-10-28 | - | software-architect | Planning at high-wizard Phase 1: what this sub-plan can honestly prove, since R7's three wires have no exact channel |
+| SP-5 | IN PROGRESS | 2026-10-28 | - | software-architect | Three of three wires and a clean compile, proven live through the bridge. Remainder: the session record and the map entry |
 | SP-6 | DONE | 2026-10-28 | 2026-10-28 | software-architect | Six routes, five model-free tests, and a live proof: a real click and keystroke through the bridge changed a probe window while a point outside it was refused |
 
 **Status values**: NOT STARTED → IN PROGRESS → DONE → BLOCKED (with reason in Notes)
