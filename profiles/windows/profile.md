@@ -18,6 +18,8 @@ Base profile for the real Windows desktop body (`WindowsDevice`). Inherited by e
 - A window's content sits inside its border. The taskbar and the desktop behind the windows
   belong to no app.
 - The active window is drawn on top with its title bar lit; an inactive one is dimmed.
+- A frame shrunk for a cheap look loses the small controls: a button or a row that reads fine
+  on screen becomes a blur of pixels. Orientation comes from a shrunken frame, aiming does not.
 
 ## Operating
 - Click a window's title bar before sending it keys. Keys reach the ACTIVE window, never a
@@ -28,6 +30,9 @@ Base profile for the real Windows desktop body (`WindowsDevice`). Inherited by e
 - Coordinates are image pixels of the captured monitor. The body refuses a point outside the
   target window's rectangle, so a far-off point fails rather than clicking beside the target.
 - Prefer the app's own keyboard shortcuts over hunting through its menus.
+- Aim small controls from a 1:1 or enlarged view, not from a shrunken frame. Measured: a
+  twelve-pixel target read from a downscaled screenshot was missed by seventeen pixels, and the
+  miss landed somewhere valid, so nothing reported it.
 - The pointer is part of the frame: before every action the body checks where the pointer is and
   moves it back inside the target window if it was left on another display. Ask for
   `GET /pointer` to see where it is and whether it is inside.

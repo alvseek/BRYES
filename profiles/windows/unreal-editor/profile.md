@@ -31,20 +31,32 @@ The Unreal Editor running on the Windows desktop. Inherits `profiles/windows/pro
   title bar.
 - Content Browser tiles show a thumbnail with the name underneath; the selected tile has a
   bright border.
-- A context menu opened in the canvas floats over it and hides part of the graph.
+- A context menu opened in the canvas floats over it and hides part of the graph. It is a wide
+  panel with a search field at its top and grouped results under it.
+- A dropdown in Details opens a narrow list under the field, with its own search box and one
+  row per choice.
 
 ## Operating
 - Open an asset by name: `Ctrl+P`, type the asset name, press Enter. More exact than hunting
   the Content Browser.
 - Create a node: right-click the canvas where it belongs, type the node's name, press Enter.
-  Prefer this over dragging one in from a palette.
+  Measured: the menu's search box already has focus, typing filters the list, and Enter creates
+  the highlighted result. Prefer this over dragging one in from a palette.
 - Wire two pins: press on the output pin and release on the input pin. A menu opening instead
   means the press began on canvas rather than on the pin.
-- Choose a Details value: click the field, then click the row in the list that opens. The list
-  covers part of the panel while it is open.
-- Compile with the toolbar's Compile button. A green check means clean; an error badge means
-  read the log at the bottom.
+- A pin is about ten to fourteen pixels. Measured: a press seventeen pixels to its right landed
+  on the node body and MOVED the node instead of wiring it, with no error anywhere. Aim at the
+  pin measured on a zoomed crop, then confirm the wire appeared rather than trusting the drag.
+- Choose a Details value: click the centre of the field, not its label, then click the row in
+  the list that opens. Measured: clicking the empty space left of a combo does nothing at all.
+- Compile with the toolbar's Compile button. Its tooltip reads `Good to go` after a clean
+  compile, and `Dirty, needs to be recompiled` once the graph changes again.
 - Save with `Ctrl+S`. The status bar at the bottom right reports how many assets are unsaved.
+- `Ctrl+Z` undoes the last graph change and names it in a toast, e.g. `Undo: Move Node`, which
+  is the fastest way to tell what an accidental drag actually did.
+- Project Settings opens as its OWN window with its own tab and close button, not a panel. Its
+  left tree is grouped (PROJECT, GAME, ENGINE) and a project's own classes appear under GAME by
+  name. Its header names the ini file the shown values are saved in.
 - Unreal opens Project Settings and some dialogs in a **new window on the primary monitor**,
   even when the editor itself is on another screen. Move the editor to the primary monitor
   before a run, or the new window appears on a screen the run is not capturing.
