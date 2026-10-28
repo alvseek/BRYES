@@ -55,12 +55,13 @@
 | R2 | Windows and Unreal Editor visual profiles | `profiles/windows/profile.md` (base real-desktop conventions) and `profiles/windows/unreal-editor/profile.md` (how the editor looks: graph canvas versus Details panel, node header versus pin, Content Browser), each with its Visual and Operating halves, inheriting up the path exactly as android and linux do. Listed in `profiles/index.md` by SP-2, so a named window plus a goal is enough to reach them. Unreal mechanics stay with `agent-lsgi-unreal`; these profiles describe appearance. |
 | R3 | Delta drag | Extend the drag action so the drop point can be an offset from the located start point instead of a second described target, so a drop onto empty graph canvas needs no ungroundable description. Opt-in per action, because a delta on a normal window means nothing. |
 | R4 | Pointer aimed by absolute pixel | The Brain can aim the pointer at a coordinate (click, move and drag from a pixel) without describing a target for the Eyes to locate. Requires the action schema, the prompt's coordinate rule, the per-body action vocabulary, and the loop branch; the host body's inside-the-window guard still applies to every coordinate. |
-| R5 | Unreal API channel | A channel that performs Blueprint work through the `lsgi` editor's Python or Remote Control API, callable from the same loop, so the API-first order of ADR-001 is available beside the pixels. Which Unreal version and whether the plugin is enabled come from `agent-lsgi-unreal`, not from detection inside BRYES. |
+| R5 | ~~Unreal API channel~~ **RETIRED 2026-10-28** | Retired with SP-3: the outside agent calls Unreal's own API directly when an API is the right channel. Routing that through BRYES adds a hop and no value. Superseded by R11. |
 | R6 | Proof that a drop landed | A named expectation over a `visual_focus` region that can settle whether a drag changed the graph (for example "the node named Basic Attack sits left of the Print String node"), so a drop is never trusted because nothing errored. |
-| R7 | Live end-to-end build in `lsgi` | The agent builds the small real blueprint chosen as the first target: 4 nodes created, 3 pinned connections wired, compile clean, with the channel per step chosen by R1's number, and a screenshot proving the final graph. |
+| R7 | Live end-to-end build in `lsgi` | An outside agent builds the small real blueprint end to end (4 nodes created, 3 pinned connections wired, compile clean), using BRYES for the visual steps and Unreal's own API for the steps vision cannot do, with a screenshot proving the final graph. |
 | R8 | Record and documentation | Update `docs/procedures/drive-the-desktop.md` (its "what this body cannot do" section is no longer wholly true), the orientation map entries the work touches, and the session record in `.agents/session/`, so the next session inherits measurement rather than folklore. |
 | R9 | Host-body reachability | A named window selects the host body, so a caller does not have to name the device, and a host run that names no window is refused before the first action, because both host guards are no-ops without a target. The catalog entry that lists the body is R2's, and ships after this. |
 | R10 | Host frame scope | The host body screenshots the monitor that holds the target window rather than the whole virtual desktop, so the editor keeps its resolution through the model's rescale. The monitor is resolved by `MonitorFromWindow`, not inferred from a title or a guess. |
+| R11 | Bridge surface | A primitive-level surface (HTTP or MCP) that lets an outside agent compose visual actions without BRYES's Brain: screenshot, act at a coordinate (click, drag, key chord, type), locate by description, focus a window, and read the profile text both sides share. Each call returns pixels or coordinates. No goal, no loop, no decision. |
 
 ---
 
@@ -95,6 +96,7 @@
 | 6 | What the host body screenshots | The monitor that holds the target window, resolved by `MonitorFromWindow` | His words: "the WindowsDevice.screenshot() should only screenshot that only monitor tho". Measured twice in this session and the layout moved between readings: first 3440x1440 at (0,0) with 1920x1080 above at y=-1080, later 1920x1080 at (0,0) with 3440x1440 at (-783,1080). Either way a whole-desktop frame spans both screens, and the rect must be read at capture time rather than cached |
 | 7 | Where Unreal puts a new window | Unreal opens child windows on the primary monitor, so the editor must already be on that monitor before a run, or the profile's Operating half says to move it there first | His words: "unreal always want to show new window inside main monitor. so just in case the editor is opening not in main monitor, it needs to be moved first, or the new window (opening blueprint, project settings, etc) will show in the main monitor." Our own two captures show it: frame 01 caught the main editor on the secondary screen with Project Settings open there, and frame 02 caught the blueprint he opened on the primary |
 | 8 | The Unreal API channel | Dropped. R5 is not being delivered, so SP-3 is closed with no work done | His words at wrap-up: "SP-3 is dropped". Consequence for SP-5: wiring now has no exact channel. Vision measured 1/5 on pins, so R7's three connections must be made either by eye with the graph zoomed and verified, or by hand with the agent doing the rest |
+| 9 | What BRYES is in this feature | Hands and eyes for an outside agent, not a decision-maker: BRYES exposes visual primitives and shared vocabulary, and the outside agent composes them. The profiles are the vocabulary both sides use, inside for reading the screen and outside for naming what to click | His words: "making sure BRYES can act as a bridge from agent outside BRYES to do visual thing", and the correction that followed: "both inside and outside agent need to have those vocabulary so they can communicate well, especially the locate by description". This is why the surface is primitives rather than another channel BRYES decides on |
 
 ---
 
@@ -105,9 +107,10 @@
 |----|--------------|-------------|--------------|----------|-----------|
 | SP-1 | Grounding measurement rig | Score the Eyes' `locate()` on the committed `lsgi` lesson frames for three probe kinds (node header, pin, empty canvas point), hand-label the ground truth, and emit the report the other sub-plans read | R1 | HW | `SP-1-grounding-measurement.md` |
 | SP-2 | Action surface and host reachability | Delta drag, a pointer the Brain can aim by absolute pixel, a way to prove a drop landed, the loop change that lets a profile travel with a pinned window, host-body selection (a named window selects the body, and a host run with no window is refused), and the host frame scoped to the target's monitor | R3, R4, R6, R9, R10 | HW | `SP-2-action-surface.md` |
-| SP-3 | Unreal API channel | The `unreal` action on the host body, advertised as a capability beside the pointer verbs and reaching the editor through its Python or Remote Control API, with the editor facts supplied by `agent-lsgi-unreal` | R5 | HW | `SP-3-unreal-api-channel.md` |
+| SP-3 | ~~Unreal API channel~~ | RETIRED 2026-10-28 with R5: the outside agent calls Unreal's own API directly | — | — | — |
 | SP-4 | Windows and Unreal profiles | `profiles/windows/profile.md`, `profiles/windows/unreal-editor/profile.md`, and the `windows` section in `profiles/index.md` that lists them, authored from basic Windows and Unreal Editor knowledge the way the android and linux profiles were written, deliberately not derived from the `lsgi` lessons | R2 | QW | `SP-4-profiles.md` |
-| SP-5 | Live `lsgi` build and record | Build the 4-node, 3-wire blueprint in the real editor with the channel per step taken from SP-1, prove it by screenshot, then bring the procedures, the orientation map and the session record up to date | R7, R8 | HW | `SP-5-live-build-and-record.md` |
+| SP-5 | Live `lsgi` build and record | An outside agent drives one real blueprint build through the bridge, with pins going through Unreal's own API, proven by screenshot, then the procedures, the map and the session record brought up to date | R7, R8 | HW | `SP-5-live-build-and-record.md` |
+| SP-6 | The bridge surface | The primitive-level API an outside agent drives: screenshot, coordinate action, locate, focus, and the profile text both sides share. No Brain, no goal, no decision | R11 | HW | `SP-6-bridge-surface.md` |
 
 **How to fill**: Each sub-plan groups related requirements into a coherent deliverable. Protocol column indicates `/high-wizard` (complex), `/pixel-wizard` (design-driven, with a visual reference to match), or `/quick-wizard` (simple). `Plan File` links to the sub-plan's file inside this folder once created. A `/quick-wizard` sub-plan keeps its plan in plan mode or in conversation rather than on disk, so its finished plan is written to that path once approved.
 
@@ -139,14 +142,15 @@
 graph LR
     SP1[SP-1: measurement] --> SP4[SP-4: profiles]
     SP1 --> SP5[SP-5: live build and record]
-    SP2[SP-2: action surface] --> SP5
-    SP3[SP-3: API channel] --> SP5
+    SP2[SP-2: action surface] --> SP6[SP-6: bridge surface]
+    SP4 --> SP6
+    SP6 --> SP5
     SP4 --> SP5
 ```
 
-**Parallel opportunities**: SP-1, SP-2 and SP-3 have no dependency on each other and can start together. SP-4 can start as soon as SP-1 reports, in parallel with whichever of SP-2 and SP-3 is still running.
+**Parallel opportunities**: SP-2 and SP-4 have no dependency on each other, so the profiles can be written while the action surface is being built. SP-6 needs both.
 
-**Critical path**: whichever of SP-2 and SP-3 runs longer, then SP-5. SP-1 is the shortest of the three builds and still gates SP-4, which is why it goes first in the chosen strategy rather than alongside the heavy ones.
+**Critical path**: SP-2 (already in progress) then SP-6, then SP-5. SP-4 runs alongside and only has to land before SP-6 serves the profile text.
 
 **How to fill**: Draw dependencies based on which sub-plans produce outputs that others consume (linked to Integration Contracts). Sub-plans with no dependency between them can run in parallel — highlight these opportunities. The critical path is the longest chain of sequential dependencies.
 
@@ -165,6 +169,7 @@ I have to use this document as my **ONLY** source of truth to track which sub-pl
 | SP-3 | DROPPED | — | 2026-10-28 | — | Alvi dropped the Unreal API channel at wrap-up. No work had started; R5 is no longer being delivered |
 | SP-4 | NOT STARTED | — | — | — | — |
 | SP-5 | NOT STARTED | — | — | — | — |
+| SP-6 | NOT STARTED | — | — | — | — |
 
 **Status values**: NOT STARTED → IN PROGRESS → DONE → BLOCKED (with reason in Notes)
 
