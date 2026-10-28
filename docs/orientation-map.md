@@ -274,10 +274,22 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 - **roles**: []
 - **status**: useful
 - **tags**: [procedure, host-body, windows, driving, pyautogui, gates, adr-009]
-- **last_verified**: "2026-10-26"
+- **last_verified**: "2026-10-28"
 - **verified_by**: "claude-software-architect"
 - **update_trigger**: "when the host body's entry points, gates, harness rules, or measured timings change, or when an element-level (UIA) path lands"
-- **notes**: "How another agent drives a real Windows application through the host body, also served as `/drive-desktop`. Opens with the ADR-001 ceiling (an application's own API beats pixels, so Unreal's Python/Remote Control API should be preferred). Covers both entry points and when each applies: Python with a window **handle** (`WindowsDevice(hwnd=...)`, safe) versus `POST /tasks {device:'windows', window:'<title>'}` (title-based, fine only when one window can match). Carries the three harness rules that exist because they were violated on 2026-10-21 (handle targeting, kill only what you started, act only inside the target rect), the measured timings (describe 3.7-10.6 s, decide 15-31 s, so the Brain dominates a run), the failure modes (UIPI silence, focus theft, rect refusal, non-ASCII typing), and the note that the environment gates are a stopgap until a dedicated user session exists. Updated 2026-10-26: also installed as a full copy by `setup-scripts/` for use from other projects, so every relative link must resolve from `docs/procedures/` (the ADR-001 link was dead until then; the installer's test now checks every rewritten target exists)."
+- **notes**: "How another agent drives a real Windows application through the host body, also served as `/drive-desktop`. Opens with the ADR-001 ceiling (an application's own API beats pixels, so Unreal's Python/Remote Control API should be preferred). Covers both entry points and when each applies: Python with a window **handle** (`WindowsDevice(hwnd=...)`, safe) versus `POST /tasks {window:'<title>'}` (a named window now selects the host body on its own, allowed only when exactly one window can match). Carries the three harness rules that exist because they were violated on 2026-10-21 (handle targeting, kill only what you started, act only inside the target rect), the measured timings (describe 3.7-10.6 s, decide 15-31 s, so the Brain dominates a run), the failure modes (UIPI silence, focus theft, rect refusal, non-ASCII typing), and the note that the environment gates are a stopgap until a dedicated user session exists. Updated 2026-10-26: also installed as a full copy by `setup-scripts/` for use from other projects, so every relative link must resolve from `docs/procedures/` (the ADR-001 link was dead until then; the installer's test now checks every rewritten target exists). Updated 2026-10-28 for the frame and the pointer: the body now screenshots the **monitor** holding the target (resolved by `MonitorFromWindow`) instead of the whole desk, `caps` reports that frame, and a host run that names no window is refused — but this file's own text has not been rewritten for either yet, which is the pass the live build owes."
+
+### `grounding.py`
+
+- **type**: other
+- **scope**: shared
+- **roles**: []
+- **status**: useful
+- **tags**: [grounding, measurement, eyes, locate, unrel, regression, snapshot-test]
+- **last_verified**: "2026-10-28"
+- **verified_by**: "claude-software-architect"
+- **update_trigger**: "when locate()'s model changes, when the probe kinds change, or when a new app's grounding is measured"
+- **notes**: "The snapshot grounding tester: one frame plus a labels JSON (kind, instruction, box in pixels), one `locate()` call per target, a hit when the point lands inside the box. Emits the council's measurement report (per-kind rate, median error, the model recorded) and an overlay that draws every box and every returned point. `--check-labels` draws the key and spends no model call, which is the step that caught the author's own mis-marked pins on 2026-10-28. Measured then on the Unreal editor: headers 2/3, pins 1/5, asset tiles 6/6, empty canvas 0/6. Model-free tests live in `test_grounding.py`; the numbers and the re-measure recipe are in [.agents/knowledge/grounding-measurement.md](../.agents/knowledge/grounding-measurement.md)."
 
 ### `setup-scripts/`
 

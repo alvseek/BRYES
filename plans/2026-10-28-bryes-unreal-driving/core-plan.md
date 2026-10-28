@@ -94,6 +94,7 @@
 | 5 | Where the profile knowledge comes from | Basic Windows and Unreal Editor knowledge, the way the android, linux, whatsapp and chrome profiles were written; never derived from the `lsgi` lessons | His words: "lessons are for me, not for agents, the knowledge should be populated from basic windows + unreal knowledge (like the previous android / linux / whatsapp / chrome)" |
 | 6 | What the host body screenshots | The monitor that holds the target window, resolved by `MonitorFromWindow` | His words: "the WindowsDevice.screenshot() should only screenshot that only monitor tho". Measured twice in this session and the layout moved between readings: first 3440x1440 at (0,0) with 1920x1080 above at y=-1080, later 1920x1080 at (0,0) with 3440x1440 at (-783,1080). Either way a whole-desktop frame spans both screens, and the rect must be read at capture time rather than cached |
 | 7 | Where Unreal puts a new window | Unreal opens child windows on the primary monitor, so the editor must already be on that monitor before a run, or the profile's Operating half says to move it there first | His words: "unreal always want to show new window inside main monitor. so just in case the editor is opening not in main monitor, it needs to be moved first, or the new window (opening blueprint, project settings, etc) will show in the main monitor." Our own two captures show it: frame 01 caught the main editor on the secondary screen with Project Settings open there, and frame 02 caught the blueprint he opened on the primary |
+| 8 | The Unreal API channel | Dropped. R5 is not being delivered, so SP-3 is closed with no work done | His words at wrap-up: "SP-3 is dropped". Consequence for SP-5: wiring now has no exact channel. Vision measured 1/5 on pins, so R7's three connections must be made either by eye with the graph zoomed and verified, or by hand with the agent doing the rest |
 
 ---
 
@@ -161,7 +162,7 @@ I have to use this document as my **ONLY** source of truth to track which sub-pl
 |----------|--------|---------|-----------|---------------|-------|
 | SP-1 | DONE | 2026-10-28 | 2026-10-28 | software-architect | Harness plus two frames. Corrected, reproducible: headers 2/3, pins 1/5 (median 10.6 px), asset tiles 6/6, empty canvas 0/6. One screen measured |
 | SP-2 | DONE | 2026-10-28 | 2026-10-28 | software-architect | Host frame (monitor), window-selects-body and the no-window refusal, delta drag, coordinate verbs, post-drag diff. Quality review fixed 5 findings. **Runtime verification NOT done** — no live host run yet |
-| SP-3 | NOT STARTED | — | — | — | — |
+| SP-3 | DROPPED | — | 2026-10-28 | — | Alvi dropped the Unreal API channel at wrap-up. No work had started; R5 is no longer being delivered |
 | SP-4 | NOT STARTED | — | — | — | — |
 | SP-5 | NOT STARTED | — | — | — | — |
 
