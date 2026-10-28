@@ -122,9 +122,12 @@ def main():
     ok &= check("container body resolves with no kwargs",
                 L._make_device("linux").caps.name == "docker-desktop")
 
-    # 10. window means nothing on any other body: refuse, do not silently ignore
-    ok &= check("window without device='windows' is refused",
-                _raises(lambda: L.run("g", window="Unreal", verbose=False), "window names"))
+    # 10. a named window SELECTS the host body (R9). With the gate closed the run must die at
+    #     the gate, which is itself the proof that the window chose the body rather than being
+    #     silently ignored on some other one.
+    ok &= check("window without device resolves to the host body (the gate refuses it)",
+                _raises(lambda: L.run("g", window="Unreal", verbose=False),
+                        "BRYES_ALLOW_HOST"))
 
     print("\nALL PASS" if ok else "\nSOME FAILED")
     return ok

@@ -93,7 +93,7 @@ def main():
         set_flags(host=True)
         fake = FakeInput()
         d = WindowsDevice(input=fake)
-        d._origin_xy = lambda: (100, -200)          # a desk with a monitor above the primary
+        d._frame_rect = lambda: (100, -200, 1100, 600)   # the frame the Eyes read: one monitor
         d.act({"type": "click", "x": 10, "y": 20})
         assert fake.calls[-1] == ("click", 110, -180, "left"), fake.calls[-1]
         d.act({"type": "double_click", "x": 1, "y": 2})
@@ -139,14 +139,13 @@ def main():
 
         # ---- the focus guard ------------------------------------------------------------
         d = WindowsDevice(window="NoSuchWindowAnywhere", input=FakeInput())
-        d._origin_xy = lambda: (0, 0)
         expect_raise(lambda: d.act({"type": "click", "x": 1, "y": 1}), "act on a missing window")
         print("PASS: with a window named but absent, acting refuses instead of clicking blind")
 
         # ---- the target rect guard ------------------------------------------------------
         fake = FakeInput()
         d = WindowsDevice(hwnd=4242, input=fake)
-        d._origin_xy = lambda: (0, 0)
+        d._frame_rect = lambda: (0, 0, 1000, 800)
         d._ensure_foreground = lambda *a, **k: None     # focus is a separate, live property
         d._target_rect = lambda: (100, 100, 400, 300)
         d.act({"type": "click", "x": 150, "y": 150})

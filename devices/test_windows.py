@@ -66,14 +66,17 @@ def main():
         f"png {w}x{h} != caps {d.caps.width}x{d.caps.height} (virtual-screen space)"
     print(f"PASS: full-desktop grab -> PNG {w}x{h} ({len(png)} bytes), matches caps")
 
-    # Driving depends on this: with a window named, the frame must STILL be the whole desktop,
-    # because the Eyes' pixels are turned back into screen coordinates. A window crop would
-    # shift every click by the window's own offset.
-    png_win = WindowsDevice(window="NoSuchWindowAnywhere").screenshot()
-    ww, wh = Image.open(io.BytesIO(png_win)).size
-    assert (ww, wh) == (d.caps.width, d.caps.height), \
-        f"a named window changed the frame to {ww}x{wh}; image space must stay screen space"
-    print("PASS: naming a window does not crop the frame (image space == screen space)")
+    # R10 moved the frame to the target's MONITOR, so image space stays screen space by the
+    # frame's own origin (covered model-free in devices/test_host_frame.py). What must hold here
+    # is the loud half: a named window that is gone raises, rather than quietly grabbing the
+    # desktop and leaving every coordinate valid in the wrong space.
+    try:
+        WindowsDevice(window="NoSuchWindowAnywhere").screenshot()
+    except RuntimeError as exc:
+        assert "frame is unknown" in str(exc), str(exc)
+    else:
+        raise AssertionError("a vanished window grabbed a frame instead of raising")
+    print("PASS: a named-but-missing window raises instead of grabbing the wrong frame")
 
     # The shell channel now sits behind its own gate; this smoke proves the transport, so it
     # opens both gates for the length of the call and restores whatever was there.

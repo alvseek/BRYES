@@ -2,17 +2,19 @@
 
 Two jobs in one body, gated separately:
 
-- **Capture always works.** `screenshot()` grabs the whole virtual desktop (or one window),
-  which is what `capture.py` and the lesson pipeline need.
+- **Capture always works.** `screenshot()` grabs the monitor that holds the target window (or the
+  whole virtual desktop when no window is named), which is what `capture.py` and the lesson
+  pipeline need.
 - **Driving needs `BRYES_ALLOW_HOST=1`**, and `shell()` needs `BRYES_ALLOW_HOST_SHELL=1` on top.
   Nothing above the body knows this: `_make_device` refuses early with a readable error, and any
   other caller meets the gate at the verb itself. The gate is deliberately not in the
   constructor, because capture constructs this body too.
 
 Coordinates arrive in IMAGE space (what the Eyes saw) and are translated to SCREEN space by
-`screen_xy`, which reads the virtual-desktop origin on every action. Measured reason: on a desk
-with a monitor above the primary the origin was (0,−1080), and a cached origin would put every
-click on that monitor 1080 px off after any display change.
+`screen_xy`, which adds the FRAME origin on every action. The frame is the target's monitor
+(R10), so a two-screen desk no longer hands the Eyes a 3440x2520 image with the editor in half
+of it. The origin is read per action, never cached: on a desk with a monitor above the primary
+it was once (0,-1080), and the layout moved again during the session that wrote this.
 
 DPI is the other trap this file defuses. Unless the process declares per-monitor DPI awareness,
 `GetWindowRect` answers in logical pixels while `ImageGrab` returns physical ones, so the crop
@@ -25,6 +27,7 @@ import subprocess
 import sys
 import time
 from ctypes import wintypes
+from dataclasses import replace
 
 from PIL import ImageGrab
 
@@ -62,6 +65,32 @@ def _virtual_screen():
 
 
 _W, _H = _virtual_screen()
+
+
+class _MONITORINFO(ctypes.Structure):
+    _fields_ = [("cbSize", wintypes.DWORD), ("rcMonitor", wintypes.RECT),
+                ("rcWork", wintypes.RECT), ("dwFlags", wintypes.DWORD)]
+
+
+def monitor_rect(hwnd):
+    """(left, top, right, bottom) of the monitor holding `hwnd`, or None.
+
+    Deterministic: the OS answers which display a window is on, so nothing here matches titles
+    or guesses from geometry. A window straddling two displays resolves to the one holding most
+    of it, which is what MONITOR_DEFAULTTONEAREST means.
+    """
+    if not _IS_WINDOWS or not hwnd:
+        return None
+    user32 = ctypes.windll.user32
+    handle = user32.MonitorFromWindow(wintypes.HWND(hwnd), 2)   # MONITOR_DEFAULTTONEAREST
+    if not handle:
+        return None
+    info = _MONITORINFO()
+    info.cbSize = ctypes.sizeof(_MONITORINFO)
+    if not user32.GetMonitorInfoW(handle, ctypes.byref(info)):
+        return None
+    m = info.rcMonitor
+    return (m.left, m.top, m.right, m.bottom)
 
 # A full desktop body: every pointer verb, and a PowerShell channel. Driving is gated at the
 # verb, not here, because capture constructs this same body and must keep working.
@@ -248,6 +277,23 @@ class WindowsDevice:
                 "A click can be undone by noticing it; a recursive delete cannot.")
 
     # ---- geometry ----------------------------------------------------------------------
+    @property
+    def caps(self):
+        """What this body can do, sized to the frame it will actually hand back.
+
+        A run names one window (R9), so the frame is that window's monitor and the Brain is told
+        the truth about the image it sees. Without a target the virtual desktop is still the
+        frame, which is what capture wants. Never raises: if the window vanished, this reports
+        the desktop size and `screenshot()` is where the loud failure belongs.
+        """
+        rect = self._frame_rect_or_none()
+        if rect is None:
+            return WINDOWS_CAPS
+        width, height = rect[2] - rect[0], rect[3] - rect[1]
+        if (width, height) == (WINDOWS_CAPS.width, WINDOWS_CAPS.height):
+            return WINDOWS_CAPS
+        return replace(WINDOWS_CAPS, width=width, height=height)
+
     def _origin_xy(self):
         """The live virtual-desktop origin. Never cached: a display can change mid-run."""
         if not _IS_WINDOWS:
@@ -255,10 +301,41 @@ class WindowsDevice:
         user32 = ctypes.windll.user32
         return (user32.GetSystemMetrics(76), user32.GetSystemMetrics(77))
 
+    def _desktop_rect(self):
+        """The whole virtual desktop in screen coordinates, origin included (read live)."""
+        origin_x, origin_y = self._origin_xy()
+        width, height = _virtual_screen()
+        return (origin_x, origin_y, origin_x + width, origin_y + height)
+
+    def _frame_rect_or_none(self):
+        """The rect `screenshot()` grabs: the target's monitor, or the desktop when none is named.
+
+        Returns None only when a window WAS named and can no longer be found, so callers that
+        must not raise (the caps property) can fall back.
+        """
+        if not self._window and not self._hwnd:
+            return self._desktop_rect()
+        hwnd = self._target_hwnd()
+        if hwnd is None:
+            return None
+        return monitor_rect(hwnd)
+
+    def _frame_rect(self):
+        """The rect `screenshot()` grabs, raising rather than silently changing shape.
+
+        A frame that quietly switches from a monitor to the desktop keeps every coordinate valid
+        in the wrong space, which is a click 1000 px away with no error anywhere.
+        """
+        rect = self._frame_rect_or_none()
+        if rect is None:
+            raise RuntimeError(
+                f"no visible window matching {self._window!r} any more, so the frame is unknown")
+        return rect
+
     def screen_xy(self, x, y):
         """Image-space pixel (what the Eyes saw) -> absolute screen pixel (what the OS uses)."""
-        origin_x, origin_y = self._origin_xy()
-        return (int(x) + origin_x, int(y) + origin_y)
+        left, top, _right, _bottom = self._frame_rect()
+        return (int(x) + left, int(y) + top)
 
     def _get_input(self):
         if self._input is None:
@@ -355,14 +432,13 @@ class WindowsDevice:
         return buf.getvalue()
 
     def screenshot(self):
-        """The WHOLE virtual desktop, always.
+        """The frame the Eyes read: the target's monitor, or the whole desktop with no target.
 
-        Deliberately not cropped even when `window` is set: the loop feeds these frames to the
-        Eyes and then turns the Eyes' pixels back into clicks, so the image space and the screen
-        space must be the same frame (decision 4 of the host-body plan). `grab_window()` is the
-        cropped variant, and only capture uses it.
+        The frame and the coordinate space are the same rect, so a pixel the Eyes return maps
+        back through `screen_xy` by the frame origin (R10). `grab_window()` stays the tighter
+        window-rect grab, and only capture uses it.
         """
-        img = ImageGrab.grab(all_screens=True)
+        img = ImageGrab.grab(bbox=self._frame_rect(), all_screens=True)
         buf = io.BytesIO()
         img.save(buf, "PNG")
         return buf.getvalue()

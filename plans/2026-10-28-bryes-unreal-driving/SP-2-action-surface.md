@@ -44,23 +44,37 @@
 ---
 
 ## **OBJECTIVES**
-[Clear, concise statement of what we want to achieve]
+Let the body be aimed at a pixel, let a drag end at an offset instead of a description, catch a drag that landed somewhere else, and make the host body reachable by naming a window while refusing to run without one.
 
 ### **Related Documents**
-- [Document 1](path/to/document1.md) - Brief description
+- [core-plan.md](core-plan.md) - the council; this plan owns R9, R10, R3, R4, R6
+- [contracts/action-contract.schema.json](contracts/action-contract.schema.json) and [contracts/run-invocation.schema.json](contracts/run-invocation.schema.json) - produced here
+- [SP-1-grounding-measurement.md](SP-1-grounding-measurement.md) - the numbers that decided pins go through the API
 
 ### **SUCCESS CRITERIA**
-- [ ] [Primary goal achieved]
+- [ ] A named window selects the host body, and a host run with no window is refused before any action
+- [ ] The host frame is the target's monitor, and `caps` reports that frame rather than the desktop
+- [ ] A drag can end at `destination_offset`, with no second locate
+- [ ] `move_to` and `click_at` are offered as verbs and act at a coordinate without a description
+- [ ] A drag automatically produces a before/after diff on the next step
+- [ ] Every rule above has a model-free test, and the existing suites stay green
 
 ---
 
 ## **SCOPE**
 
 ### In Scope
-- [Specific deliverable or feature]
+- `devices/windows.py`: the monitor frame, the frame origin, and `caps` sized to the frame.
+- `agent/loop.py`: window-selects-body, the refusal, the delta drag branch, the post-drag diff.
+- `devices/base.py` and `brain/client.py`: the two pointer verbs and their prompt rule.
+- `api/server.py`: `window` accepted as the body selector.
+- Tests: `devices/test_host_frame.py` plus updates to the suites whose assumptions this reverses.
 
 ### Out of Scope
-- [Explicitly excluded item and why]
+- The Unreal API channel, which is SP-3.
+- The profiles, which are SP-4.
+- Any change to `locate()` or its model.
+- Making the pointer verbs available on the phone or container bodies beyond what they already accept (they take x and y already, so they inherit them for free).
 
 ---
 
@@ -70,29 +84,62 @@
 
 | # | Decision | Chosen | Reason |
 |---|----------|--------|--------|
-| 1 | [Decision topic] | [Chosen option] | [Evidence-based reason] |
+| 1 | How a coordinate reaches the pointer | Two new verbs, `move_to` and `click_at`, taking `x` and `y`, advertised through `Capabilities` | Alvi chose A. A verb is the unit this Brain reasons in, and `_actions_for` already offers only what a body advertises, so the verbs are filtered per body for free. Aiming by description keeps working unchanged |
+| 2 | What proves a drag landed | The loop requests the before/after diff itself when the action was a drag | Alvi chose A. A misplaced wire is the most expensive silent failure here, and a drag is the one action whose failure still changes the screen. One extra vision call per drag is affordable because a build contains few drags |
+| 3 | Where the no-window refusal lives | `_make_device`, the one place a run builds a host body | That is the single point every run-built host body passes through, so one check covers the picker, a forced profile and a named device. `capture.py` builds `WindowsDevice` directly and keeps working, which is the boundary R9 asks for |
+| 4 | What `caps` reports | The frame's size, resolved live from the target's monitor | `brain/client.py` tells the Brain "a WxH pixel screen". With R10 the frame is the monitor, so the advertised size had to follow it or the Brain would be told the wrong image size |
+| 5 | The frame origin | The frame rect's own corner, read per action | The image is the frame, so the translation is `frame.left + x`. A vanished target raises instead of silently falling back to the desktop, because a silent frame change keeps every coordinate valid in the wrong space |
 
 ---
 
 ## **SOLUTION**
 
 ### Architecture Overview
-[High-level system design and component interaction, built from confirmed decisions]
+Two layers move. The body decides what it looks at and where a coordinate lands: one frame rect, one origin, one `caps` that describes it. The loop decides what the Brain may ask for: a window may select the body, a drag may end at an offset, a coordinate may be aimed directly, and a drag asks for its own proof. Nothing above the loop changes, and the API gains one accepted field.
 
-### Component 1: [Name]
-- **Purpose**: [What problem it solves]
-- **Key Files**: [Files to create/modify]
+### Component 1: The frame and the origin
+- **Purpose**: hand the Eyes one monitor instead of the whole desk, and map its pixels back exactly.
+- **Key Files**: `devices/windows.py` (`monitor_rect`, `_frame_rect`, `_desktop_rect`, `screen_xy`, `caps`), `devices/test_host_frame.py`
+
+### Component 2: The action surface
+- **Purpose**: let the Brain aim a coordinate, drop at an offset, and hear about a drag that went wrong.
+- **Key Files**: `agent/loop.py`, `brain/client.py`, `devices/base.py`, `devices/windows.py`, `devices/test_host_frame.py`, `devices/test_windows_drive.py`
 
 ---
 
 ## **IMPLEMENTATION PHASES**
 
-### Phase 1: [Name]
-- [ ] **Step 1.1**: [Overview]
-  - **Action**: [What to do]
-  - **Implementation**: [How to do it]
-  - **Testing**: [How to verify]
-  - **Success Criteria**: [When it's done]
+### Phase 1: Host reachability and the frame
+- [ ] **Step 1.1**: The frame is the target's monitor
+  - **Action**: Add `monitor_rect(hwnd)` and make `screenshot()`, `screen_xy()` and `caps` agree on one rect.
+  - **Implementation**: `MonitorFromWindow` + `GetMonitorInfoW`; `_frame_rect()` raises when a named target vanished; `_desktop_rect()` stays live for the no-target case; `caps` is a property built with `dataclasses.replace`.
+  - **Testing**: `python devices/test_host_frame.py` with injected geometry; `python devices/test_windows.py`.
+  - **Success Criteria**: frame, caps and origin all follow the monitor; a vanished target raises.
+
+- [ ] **Step 1.2**: A window selects the body, and no window is refused
+  - **Action**: `run(window=...)` resolves to the host body; `_make_device("windows")` without a target refuses.
+  - **Implementation**: window implies `device="windows"` when neither device nor profile was named; the forced-profile path forwards `window`; the refusal sits in `_make_device`.
+  - **Testing**: `python agent/test_run_selection.py`, `python devices/test_host_frame.py`.
+  - **Success Criteria**: the window alone selects the host; no window fails with a readable message naming the window.
+
+### Phase 2: The action surface
+- [ ] **Step 2.1**: Delta drag
+  - **Action**: Accept `destination_offset` on a drag and act at `start + delta`.
+  - **Implementation**: loop branch beside the two-locate drag; bodies take `x2`, `y2` as computed, so no body change.
+  - **Testing**: extend `devices/test_windows_drive.py` with a delta drag and assert the translated endpoints.
+  - **Success Criteria**: one locate instead of two, and the release point is exact.
+
+- [ ] **Step 2.2**: Pointer aimed by pixel
+  - **Action**: Add `move_to` and `click_at` to the vocabulary.
+  - **Implementation**: `ALL_VERBS` plus the bodies' advertised sets; the loop's act branch skips `locate`; the Brain schema gains `x`/`y` with a prompt rule saying when a coordinate beats a description.
+  - **Testing**: model-free vocabulary test plus a fake-input drive test.
+  - **Success Criteria**: a coordinate action reaches the device with no `locate` call.
+
+- [ ] **Step 2.3**: A drag proves itself
+  - **Action**: After a drag, the loop asks for the diff on the next step.
+  - **Implementation**: set `want_diff` when the last action was a drag and the screen changed, without overriding a Brain request.
+  - **Testing**: a model-free test that the flag is set for drags and not for clicks.
+  - **Success Criteria**: a drag always produces `CHANGES SINCE YOUR LAST ACTION`.
 
 ---
 
@@ -107,12 +154,26 @@ I have to use this document as my **ONLY** source of truth to execute and track 
 - 🚫 **Blocked**: Get input from [USER-NAME] before assuming
 
 ### Phase 1:
-- [ ] **Step 1.1**: [link to step above]
-  - **Implementation Log**: [What was done]
-  - **Testing Log**: [What was tested and results]
-  - **Success Criteria**: [Pass/Fail against step's success criteria]
-  - **Tech Debts**: [Optional]
-  - **Result**: [Outcome compared to success criteria]
+- [x] **Step 1.1**: The frame is the target's monitor
+  - **Implementation Log**: `monitor_rect(hwnd)` added (`MonitorFromWindow` + `GetMonitorInfoW`); `_frame_rect_or_none` / `_frame_rect` / `_desktop_rect` added; `screen_xy` now adds the frame's corner; `screenshot()` grabs the frame rect; `caps` became a property sized to the frame via `dataclasses.replace`. `_origin_xy` kept for the no-target desktop rect.
+  - **Testing Log**: `devices/test_host_frame.py` green on all four rules (frame, caps, origin, vanished target). `devices/test_windows.py` green after its old "naming a window must not crop" assertion was replaced by "a named-but-missing window raises".
+  - **Success Criteria**: Pass.
+  - **Tech Debts**: `WINDOWS_CAPS` still carries the virtual-desktop size as a fallback for the no-target case, which is correct for capture but means `caps` is only the frame size when a target exists.
+  - **Result**: One frame rect, one origin, one advertised size.
+
+- [x] **Step 1.2**: A window selects the body, and no window is refused
+  - **Implementation Log**: `run()` resolves `window` to `device="windows"` when neither device nor profile was given, and the forced-profile path now forwards `window`; `_make_device` refuses a windows body with no window; `api/server.py` accepts `window` alone and rejects contradictions with a device or a profile.
+  - **Testing Log**: `agent/test_run_selection.py` ALL PASS after its old refusal assertion was rewritten (a window now selects the body, and the gate is what refuses); `devices/test_host_frame.py` covers the refusal directly.
+  - **Success Criteria**: Pass.
+  - **Tech Debts**: The API's `window` + `profile` check reads the profile paths as strings only; it does not resolve them, and `run()` does that afterwards.
+  - **Result**: `{goal, window}` is a valid invocation, and `{goal}` cannot reach the desktop.
+
+### Phase 2:
+- [ ] **Step 2.1**: Delta drag
+  - **Implementation Log**: [pending]
+  - **Testing Log**: [pending]
+  - **Success Criteria**: [pending]
+  - **Result**: [pending]
 
 ---
 

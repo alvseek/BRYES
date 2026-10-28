@@ -86,6 +86,14 @@ def _make_device(root, **kw):
         raise RuntimeError(
             "device 'windows' drives the REAL desktop; set BRYES_ALLOW_HOST=1 to allow it "
             "(the container body needs no such switch)")
+    if root == "windows" and not kw.get("window"):
+        # R9: the host guards are no-ops without a target. `_ensure_foreground` returns early and
+        # `_require_inside_target` cannot even compute a rect, so a host run with no window clicks
+        # the whole desktop unchecked. Refuse here, where every run-built body passes.
+        raise RuntimeError(
+            "refusing to drive the real desktop without a target window: name it with "
+            "window='<title substring>' so the frame, the foreground guard and the rect guard "
+            "all have something to hold on to")
     # Drop None so a body with no such parameter is not handed one: `window=None` used to
     # reach ContainerDevice and break every non-host run.
     kw = {name: value for name, value in kw.items() if value is not None}
@@ -161,10 +169,11 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
 
     # A body NAME (e.g. "windows") is materialised here so `window` can reach it; an already
     # built Device instance passes through untouched, and keeps the loop transport-blind.
-    if window is not None and (not isinstance(device, str) or device != "windows"):
-        raise ValueError(
-            "window names a surface on the host body: pass it with device='windows', or build "
-            f"the Device yourself. Got device={device!r}, window={window!r}")
+    # A named window SELECTS the host body (R9): a caller who knows which window to drive should
+    # not also have to name the device. A built Device instance is still an override, and a forced
+    # profile still derives the body from its own root.
+    if window is not None and device is None and profile is None:
+        device = "windows"
     if isinstance(device, str):
         device = _make_device(device, window=window)
 
@@ -187,7 +196,7 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
         profile_paths = [profile] if isinstance(profile, str) else list(profile)
         root = _root_of(profile_paths)
         _validate_under(root, profile_paths)
-        device = device or _make_device(root)
+        device = device or _make_device(root, window=window)
         embodiment_note = f"forced profiles={profile_paths} on body={root}"
     else:
         # Forced device instance, no profile.

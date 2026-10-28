@@ -56,10 +56,16 @@ def create_app(manager=None):
             kw["profile"] = body["profile"]
         window = body.get("window")
         if window is not None:
-            # The host body names a surface; on any other body the field would do nothing,
-            # and "silently ignored" is the failure this check exists to prevent.
-            if device != "windows":
-                return jsonify({"error": "'window' only applies to \"device\": \"windows\""}), 400
+            # A named window SELECTS the host body, so it may stand alone (contract C-3). What it
+            # may not do is contradict a device or profile that says otherwise.
+            if device is not None and device != "windows":
+                return jsonify({"error": "'window' selects the host body: omit 'device' or set it "
+                                         "to \"windows\""}), 400
+            chosen = kw.get("profile")
+            if chosen is not None:
+                paths = [chosen] if isinstance(chosen, str) else list(chosen)
+                if not all(str(p).startswith("windows/") for p in paths):
+                    return jsonify({"error": f"'window' requires a windows profile, got {chosen!r}"}), 400
             kw["window"] = window
         try:
             task_id = manager.submit(goal, **kw)
