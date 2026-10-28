@@ -254,8 +254,8 @@ class BrainAction(BaseModel):
         None, description="An on-screen element, described so the Eyes can locate it (a drop point).")
     destination_offset: DragOffset | None = Field(
         None, description="A drop point on empty space, as an offset from the drag's start, so no "
-                          "second locate is needed. Use it instead of `destination` when the release "
-                          "lands on nothing nameable.")
+                          "second locate is needed. Use it instead of `destination` when the "
+                          "release lands on nothing nameable.")
     x: int | None = Field(
         None, description="A pixel column to act at, for move_to and click_at.")
     y: int | None = Field(

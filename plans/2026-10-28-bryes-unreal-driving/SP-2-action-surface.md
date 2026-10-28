@@ -191,24 +191,29 @@ I have to use this document as my **ONLY** source of truth to execute and track 
 ---
 
 ## **QUALITY REVIEW**
-*Filled by procedure Step 16 after all execution phases are complete. **Static** review — answers "is the code clean?".*
+*Embedded `/analyze-code-quality` over the nine files this sub-plan changed.*
 
-- **Scope**: [Files reviewed]
-- **Quality Standard**: [quality-standard.md found / not found]
-- **Findings**: [Issues found, or "No findings"]
-- **Fixed**: [What was fixed, or "N/A"]
+- **Scope**: `agent/loop.py`, `brain/client.py`, `devices/windows.py`, `devices/base.py`, `api/server.py`, `devices/test_host_frame.py`, `agent/test_drag_and_pointer.py`, `devices/test_windows.py`, `devices/test_windows_drive.py`, `agent/test_run_selection.py`. Scope reconciliation: the working tree was clean at review time because the work was already committed, so the ground truth was the branch diff `d6ecbd8..HEAD`; every Execution Log file appears in it and nothing appears that the log omits.
+- **Quality Standard**: [docs/quality-standard.md](../../../docs/quality-standard.md), all nine dimensions.
+- **Findings**:
+  1. **Medium** `agent/loop.py` run(): a caller-built `Device` passed together with `window` was accepted and the window silently ignored. That reintroduces the failure the old `ValueError` existed for, one call short. Fixed: refuse, and a test drives it.
+  2. **Medium** `api/server.py`: the `window` + `profile` check required `windows/` as a prefix, so the bare `windows` base profile (a legitimate host profile) was rejected with a 400. Fixed: accepts `windows` and `windows/...`.
+  3. **Low** `agent/loop.py` drag branch: the log line read `offset (x,y)` while carrying absolute coordinates, so HISTORY would show a misleading label. Fixed: `(x,y) via destination_offset`.
+  4. **Low** `devices/base.py`: `Capabilities.width/height` was documented as "screen coordinate space", which R10 changed to the frame. Fixed.
+  5. **Low** four new lines exceeded the project's 99-character rule. Nothing would have caught them: `ruff` is not installed on this machine, which is a carried debt. Fixed by reflowing.
+- **Fixed**: all five, in one pass. Clean areas worth recording: no secrets touched, console output stays ASCII, files are LF, names are snake_case, tests sit beside their modules, and every failure path added here raises rather than degrading silently.
 
 ---
 
 ## **QA HANDOFF**
-*Filled by procedure Step 17. This plan is **not** runtime-verified.*
+*This plan is **not** runtime-verified.*
 
-- **Scope**: [Modules touched]
-- **QA instrument**: [Set up / NOT SET UP]
-- **Integration coverage**: [Filled at Step 14]
-- **Checklist**: [path, or "none — skipped, reason"]
-- **Coverage split**: [N automated / N manual]
-- **Runtime verification**: **NOT DONE.** Next action: [...]
+- **Scope**: `devices/windows.py` (frame, origin, caps), `agent/loop.py` (invocation, delta drag, coordinate verbs, post-drag diff), `brain/client.py` (schema and vocabulary), `api/server.py` (window as a selector), `devices/base.py` (docstring).
+- **QA instrument**: **NOT SET UP.** This repo has no `qa/` bench: no runbook, no checklist, no screenshot rig of its own.
+- **Integration coverage**: NONE — the loop-to-body integration is covered only by model-free tests. No integration bench exists to carry it, and no live host run has exercised the new frame, the delta drag or the coordinate verbs.
+- **Checklist**: none — skipped because there is no QA instrument to hang it on.
+- **Coverage split**: 9 automated model-free suites green; 0 manual, 0 UI-bound exercised. The one UI-bound item, a real host run, is unproven.
+- **Runtime verification**: **NOT DONE.** Next action: a live host run with `BRYES_ALLOW_HOST=1` against a window this harness launched (`devices/smoke_windows_drive.py`), with a goal that makes the Brain use `click_at` and a delta drag, then read the transcript for `CHANGES SINCE YOUR LAST ACTION`. That belongs to SP-5's first live build.
 
 ---
 

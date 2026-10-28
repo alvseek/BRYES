@@ -43,7 +43,7 @@ class Capabilities:
     """What one specific body can do — read by the Brain to shape its action vocabulary
     and by the loop/Eyes for the coordinate space."""
     name: str                                   # e.g. "docker-desktop", "android-phone"
-    width: int                                  # screen coordinate space (pixels)
+    width: int                                  # the frame this body hands back (pixels)
     height: int
     verbs: frozenset[str]                       # subset of ALL_VERBS this body supports
     has_shell: bool = False                     # is shell() available? (Tier-2)

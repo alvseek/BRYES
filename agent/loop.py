@@ -207,6 +207,13 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
     # A named window SELECTS the host body (R9): a caller who knows which window to drive should
     # not also have to name the device. A built Device instance is still an override, and a forced
     # profile still derives the body from its own root.
+    if window is not None and device is not None and not isinstance(device, str):
+        # A body you built yourself already carries its target (or does not). Accepting `window`
+        # here would drop it on the floor, and a silently ignored target is how a run drives the
+        # wrong thing.
+        raise ValueError(
+            "window cannot be applied to a Device you built: give that body its target "
+            "(WindowsDevice(hwnd=...)), or pass device='windows' with window=... instead")
     if window is not None and device is None and profile is None:
         device = "windows"
     if isinstance(device, str):
@@ -448,14 +455,14 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
                     a = timed_locate(shot, target)                         # Eyes: start point
                     end = drag_endpoint(action, a)
                     if end is None:
-                        # A named drop point: the second locate, for a target that exists on screen.
+                        # A named drop point: the second locate, for a target that exists.
                         dest = action.get("destination", "")
                         b = timed_locate(shot, dest)
                         end = (b["x"], b["y"])
                         where = f"'{dest}' ({end[0]},{end[1]})"
                     else:
-                        # A canvas drop: a delta from the start, with no element to locate.
-                        where = f"offset ({end[0]},{end[1]})"
+                        # A canvas drop: a delta from the start, with nothing to locate.
+                        where = f"({end[0]},{end[1]}) via destination_offset"
                     device.act({"type": "drag", "x": a["x"], "y": a["y"],
                                 "x2": end[0], "y2": end[1]})
                     did = f"dragged '{target}' ({a['x']},{a['y']}) -> {where}"

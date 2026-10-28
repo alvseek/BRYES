@@ -64,8 +64,10 @@ def create_app(manager=None):
             chosen = kw.get("profile")
             if chosen is not None:
                 paths = [chosen] if isinstance(chosen, str) else list(chosen)
-                if not all(str(p).startswith("windows/") for p in paths):
-                    return jsonify({"error": f"'window' requires a windows profile, got {chosen!r}"}), 400
+                hosted = all(str(p) == "windows" or str(p).startswith("windows/") for p in paths)
+                if not hosted:
+                    return jsonify({"error": "'window' needs a windows profile, got "
+                                             f"{chosen!r}"}), 400
             kw["window"] = window
         try:
             task_id = manager.submit(goal, **kw)

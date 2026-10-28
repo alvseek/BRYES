@@ -52,7 +52,7 @@ def test_frame_is_the_monitor_and_the_origin_follows_it():
         assert fake.calls == [(MONITOR, True)], fake.calls
         width, height = Image.open(__import__("io").BytesIO(png)).size
         assert (width, height) == (1920, 1080), (width, height)
-        assert (device.caps.width, device.caps.height) == (1920, 1080), "caps must describe the frame"
+        assert (device.caps.width, device.caps.height) == (1920, 1080), "caps is the frame"
         assert device.screen_xy(10, 20) == (785 + 10, -1080 + 20), device.screen_xy(10, 20)
     finally:
         win.ImageGrab = saved_grab
@@ -106,6 +106,14 @@ def test_host_run_without_a_target_is_refused():
             raise AssertionError("a windows body was built with no window")
         device = loop._make_device("windows", window="Unreal Editor")
         assert device.caps.name == "windows-desktop", device.caps.name
+        # A body you built yourself already carries its target (or does not). Accepting `window`
+        # here would drop it, so it must refuse rather than ignore.
+        try:
+            loop.run("g", device=device, window="Unreal Editor", verbose=False)
+        except ValueError as e:
+            assert "cannot be applied" in str(e), str(e)
+        else:
+            raise AssertionError("a built Device plus window was accepted silently")
     finally:
         if saved is None:
             os.environ.pop("BRYES_ALLOW_HOST", None)

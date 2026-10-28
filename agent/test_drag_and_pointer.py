@@ -18,7 +18,7 @@ from brain.client import _actions_for  # noqa: E402
 
 def test_drag_endpoint_offsets_from_the_start():
     start = {"x": 100, "y": 200}
-    assert loop.drag_endpoint({"target": "a node"}, start) is None, "no offset means locate a target"
+    assert loop.drag_endpoint({"target": "a node"}, start) is None, "no offset locates a target"
     assert loop.drag_endpoint({"destination_offset": {"dx": 0, "dy": 0}}, start) == (100, 200)
     assert loop.drag_endpoint({"destination_offset": {"dx": 40, "dy": -15}}, start) == (140, 185)
     assert loop.drag_endpoint({"destination_offset": {"dx": -300, "dy": 12}}, start) == (-200, 212)
