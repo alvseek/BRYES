@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "bryes/measurement-report.schema.json",
+  "title": "Grounding measurement report",
+  "description": "Produced by SP-1, consumed by SP-4 (which screen regions the Eyes misread, so the profile can target them) and by SP-5 (which channel to use per step). The report is the feature's evidence: it says how often the Eyes actually hit each kind of target on real editor frames, so no later step has to argue from intuition.",
+  "type": "object",
+  "required": ["generated_at", "source", "probes"],
+  "additionalProperties": false,
+  "properties": {
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "source": {
+      "type": "object",
+      "required": ["project", "frames"],
+      "additionalProperties": false,
+      "properties": {
+        "project": {
+          "const": "lsgi"
+        },
+        "frames": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Repo-relative paths of the lesson screenshots that were measured.",
+          "items": { "type": "string" }
+        },
+        "ground_model": {
+          "type": "string",
+          "description": "The model the Eyes used for locate(), recorded so a later model change invalidates the number rather than silently inheriting it."
+        }
+      }
+    },
+    "probes": {
+      "type": "array",
+      "minItems": 3,
+      "description": "One entry per probe kind. All three kinds are required: a report missing one cannot answer which parts of the editor vision is good for.",
+      "items": {
+        "type": "object",
+        "required": ["kind", "attempts", "hits", "rate"],
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "enum": ["node_header", "pin", "empty_canvas", "asset_tile"]
+          },
+          "attempts": { "type": "integer", "minimum": 1 },
+          "hits": { "type": "integer", "minimum": 0 },
+          "rate": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "hits / attempts. A hit means the returned point falls inside the hand-labelled target region, not that it is close to it."
+          },
+          "median_error_px": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Median distance from the returned point to the labelled region, across all attempts including misses."
+          },
+          "notes": { "type": "string" }
+        }
+      }
+    },
+    "verdict": {
+      "type": "string",
+      "description": "One paragraph in channel terms: which steps SP-5 should attempt by vision and which by the API. It is a reading of the numbers, never a replacement for them."
+    }
+  }
+}

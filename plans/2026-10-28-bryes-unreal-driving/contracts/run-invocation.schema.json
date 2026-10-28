@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "bryes/run-invocation.schema.json",
+  "title": "How a run names its body, its profile and its target window",
+  "description": "Produced by SP-2 (a loop change), consumed by SP-4 and SP-5. Today these three cannot be combined: `window` is rejected unless device is the literal string 'windows' (agent/loop.py:164), a forced profile builds its body with no window (agent/loop.py:190), a Device instance means no profile loads at all (agent/loop.py:192), and the task API rejects `window` without an explicit device (api/server.py:61). After SP-2, a named window selects the host body, the catalog supplies the app profile, and a host run with no window is refused rather than run unguarded.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "device": {
+      "type": "string",
+      "description": "A body name: android, linux, windows. Omit to let the picker choose."
+    },
+    "profile": {
+      "description": "A profile path, or several; each must resolve to profiles/<path>/profile.md. The top segment also names the body.",
+      "oneOf": [
+        { "type": "string" },
+        { "type": "array", "minItems": 1, "items": { "type": "string" } }
+      ]
+    },
+    "window": {
+      "type": "string",
+      "description": "A window title substring or an hwnd selector. Naming it selects the host body, so a caller does not have to name the device, and it is what keeps a title match from landing on the wrong document. A host run without one is refused, because both host guards are no-ops when no target is named."
+    }
+  },
+  "allOf": [
+    {
+      "if": { "required": ["window"] },
+      "then": {
+        "properties": {
+          "device": { "const": "windows" },
+          "profile": { "type": "string", "pattern": "^windows(/|$)" }
+        },
+        "description": "When a window is named, anything else named must agree that this is the host body; window alone is valid and selects it."
+      }
+    }
+  ],
+  "x-invariants": [
+    "A run whose resolved body is windows MUST name a window; otherwise it is refused before the first action.",
+    "RESERVED: `unreal` calls go through the action contract, not this one."
+  ]
+}

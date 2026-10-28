@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "bryes/action-contract.schema.json",
+  "title": "The action object the loop and every body share",
+  "description": "Produced by SP-2 (delta drag, pixel-aimed pointer) and extended by SP-3 (the unreal action), consumed by SP-5. Fields are additive: a body that ignores a field it does not know must keep working, because four bodies already implement this contract and only the host body gains the new verbs now.",
+  "type": "object",
+  "required": ["type"],
+  "properties": {
+    "type": {
+      "enum": [
+        "click",
+        "double_click",
+        "right_click",
+        "hover",
+        "scroll",
+        "drag",
+        "type",
+        "key",
+        "key_hold",
+        "unreal"
+      ],
+      "description": "unreal is the API channel added by SP-3, advertised through Capabilities so the Brain is offered it only on a body that has it."
+    },
+    "x": { "type": "integer", "description": "Image-space x, the same frame the Eyes saw." },
+    "y": { "type": "integer", "description": "Image-space y." },
+    "x2": { "type": "integer", "description": "Image-space x of the drop point, when it is a named target." },
+    "y2": { "type": "integer", "description": "Image-space y of the drop point, when it is a named target." },
+    "destination_offset": {
+      "type": "object",
+      "description": "Delta drag: release at (x + dx, y + dy). This is how a drop onto empty graph canvas is expressed, because there is no element there for the Eyes to locate. Mutually exclusive with x2/y2.",
+      "required": ["dx", "dy"],
+      "additionalProperties": false,
+      "properties": {
+        "dx": { "type": "integer" },
+        "dy": { "type": "integer" }
+      }
+    },
+    "direction": { "enum": ["up", "down"] },
+    "text": { "type": "string" },
+    "key": { "type": "string" },
+    "seconds": { "type": "number" },
+    "method": {
+      "type": "string",
+      "description": "The unreal action's API method name, passed through to the editor unchanged."
+    },
+    "params": {
+      "type": "object",
+      "description": "The unreal action's parameters, passed through unchanged. The loop never interprets them; the editor's API owns the meaning."
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "type": { "const": "drag" } }, "required": ["type"] },
+      "then": {
+        "oneOf": [
+          { "required": ["x", "y", "x2", "y2"] },
+          { "required": ["x", "y", "destination_offset"] }
+        ]
+      }
+    },
+    {
+      "if": { "properties": { "type": { "const": "unreal" } }, "required": ["type"] },
+      "then": { "required": ["method"] }
+    }
+  ]
+}
