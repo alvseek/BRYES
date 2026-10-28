@@ -162,8 +162,16 @@ Rules:
         required:  target: the element to hover over
     scroll        — bring off-screen content into view
         required:  target: where to scroll  |  direction: "up" or "down"
-    drag          — sliders, moving items
+    drag          — sliders, moving items, wiring a pin
         required:  target: element to press on  |  destination: where to release
+        OR:        target: element to press on  |  destination_offset: {dx, dy} from that point
+                   Use the offset when the release point is empty space (a graph canvas), because
+                   there is nothing there for the Eyes to find; use `destination` only when the
+                   release lands on something you can name.
+    move_to       — put the pointer on a pixel without clicking (no Eyes call)
+        required:  x: pixel column  |  y: pixel row
+    click_at      — click a pixel directly, skipping the Eyes (no Eyes call)
+        required:  x: pixel column  |  y: pixel row
     key           — press a key or chord
         required:  key: e.g. Return, Escape, Tab, ctrl+a
     key_hold      — press AND HOLD a key so continuous behaviour happens (a game character
@@ -178,6 +186,10 @@ Rules:
     done          — the goal is already satisfied (no fields)
     fail          — truly stuck, or the goal is impossible (no fields)
   On ANY acting action you MAY also set the perception controls: visual_focus, visual_expectation, recheck, request_diff (see above).
+- COORDINATES ONLY WHEN YOU ALREADY KNOW THEM. `move_to` and `click_at` take a pixel instead of
+  a description, so they skip the Eyes entirely. Use them when the pixel is already in CONFIRMED
+  FINDINGS or you just saw it in a VERIFICATION report; when you know the thing by name, describe
+  it with `target` and let the Eyes find it. A pixel you guessed is a click you cannot audit.
 - WAIT FOR LOADING, DON'T GUESS. If the screen is still loading (a spinner, or a blank/partial
   page with content not yet rendered), do NOT act on it or finish — use action "wait" and set
   "seconds" to how long to pause before looking again (e.g. 2-4s for a heavy web page, more if
@@ -200,6 +212,17 @@ Rules:
 - Return your decision as a SINGLE JSON object matching the decide_action schema — only the
   JSON object, no prose, no markdown fences.
 """
+
+class DragOffset(BaseModel):
+    """A drag's release point as an offset from its start, for a drop onto empty space.
+
+    A canvas has no element at the release point, so a description there is unanswerable. The
+    offset says where to let go in the same coordinate space the start was located in.
+    """
+
+    dx: int = Field(description="Horizontal offset in pixels from the drag's start point.")
+    dy: int = Field(description="Vertical offset in pixels from the drag's start point.")
+
 
 class BrainAction(BaseModel):
     """The Brain's single next action (ADR-005: returned via response_format json_schema and
@@ -229,6 +252,14 @@ class BrainAction(BaseModel):
         None, description="An on-screen element, described so the Eyes can locate it.")
     destination: str | None = Field(
         None, description="An on-screen element, described so the Eyes can locate it (a drop point).")
+    destination_offset: DragOffset | None = Field(
+        None, description="A drop point on empty space, as an offset from the drag's start, so no "
+                          "second locate is needed. Use it instead of `destination` when the release "
+                          "lands on nothing nameable.")
+    x: int | None = Field(
+        None, description="A pixel column to act at, for move_to and click_at.")
+    y: int | None = Field(
+        None, description="A pixel row to act at, for move_to and click_at.")
     direction: str | None = Field(
         None, description="A direction: 'up' or 'down'.")
     seconds: float | None = Field(
@@ -290,6 +321,12 @@ def _actions_for(caps):
     acts = [v for v in _VERB_ORDER if v in verbs]
     if {"click", "type", "key"} <= verbs:
         acts.append("type_into")      # loop-grounded, device-composed field-entry combo
+    # Coordinate verbs are DERIVED from the pointer a body already has: a phone gets click_at and
+    # no move_to, and a body that cannot hover is never offered a threadbare move.
+    if "hover" in verbs:
+        acts.append("move_to")
+    if "click" in verbs:
+        acts.append("click_at")
     acts += ["wait", "screenshot"]
     if has_shell:
         acts.append("shell")

@@ -48,6 +48,14 @@ _POINT_VERB = {
     "hover": "hovered",
 }
 
+# Coordinate verbs: the Brain names a pixel instead of a description, so the Eyes are skipped.
+# Each rides on a pointer the body already advertises, which is why they are DERIVED in
+# _actions_for rather than added to a body's verb set.
+_COORD_VERB = {
+    "move_to": "hover",     # a pure move: every desk body's hover is a moveTo
+    "click_at": "click",
+}
+
 # Which actions leave the SCREEN unchanged (ADR-007): shell + screenshot never touch it, and a
 # FAILED action leaves it as-is. Everything else — INCLUDING `wait`, whose whole purpose is to
 # let content load — may change the screen. Drives the channel-aware CURRENT CONDITION and
@@ -58,6 +66,33 @@ _SCREEN_UNCHANGED_ACTS = frozenset({"shell", "screenshot"})
 def _changes_screen(act, failed):
     """True if this action may have changed the screen (so the next observation is worth reading)."""
     return not failed and act not in _SCREEN_UNCHANGED_ACTS
+
+
+def wants_diff(action, after_drag):
+    """Whether the next observation carries a before/after diff.
+
+    The Brain may ask for one itself; a completed drag asks automatically (R6), because a drag
+    that released somewhere else still changed the screen and nothing else would say so.
+    """
+    return bool(action.get("request_diff")) or bool(after_drag)
+
+
+def drag_endpoint(action, start):
+    """Where a drag releases: `start` plus `destination_offset`, or None to locate `destination`.
+
+    A canvas has no element at the drop point, so describing it asks the Eyes a question they
+    cannot answer (measured: 0 of 6 on empty-canvas requests). An offset is what a coordinate
+    space actually offers. A malformed offset raises rather than silently falling back to a
+    description nobody supplied.
+    """
+    offset = action.get("destination_offset")
+    if not offset:
+        return None
+    try:
+        dx, dy = int(offset["dx"]), int(offset["dy"])
+    except (KeyError, TypeError, ValueError) as e:
+        raise ValueError(f"destination_offset needs integer dx and dy, got {offset!r}") from e
+    return (int(start["x"]) + dx, int(start["y"]) + dy)
 
 # Recovery backstop (Phase 5): the Brain now judges progress itself, by comparing the Eyes'
 # VERIFICATION report to what it expected. The loop keeps only a dumb, ADVISORY guard against
@@ -234,6 +269,7 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
     visual_focus = None
     visual_expectation = None    # the Brain's prediction for THIS step (set last step)
     want_diff = False            # did the last action ask for an expensive 2-image diff?
+    diff_after_drag = False      # R6: a drag's failure still changes the screen, so ask for one
     want_recheck = False         # did the last action ask for a careful 72B re-read? (recheck rung)
     captures = 0
     prev_shot = None             # last step's frame — kept for the Layer-3 2-image diff
@@ -348,7 +384,8 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
                 log(f"         findings+: {new_findings[:80].strip()}")
             visual_focus = action.get("visual_focus")   # per-step, NOT sticky: set -> TRIM there, omit -> OVERVIEW
             visual_expectation = action.get("visual_expectation")   # verified next step (not sticky)
-            want_diff = bool(action.get("request_diff"))   # 2-image diff next step (not sticky)
+            want_diff = wants_diff(action, diff_after_drag)   # 2-image diff next step
+            diff_after_drag = False
             want_recheck = bool(action.get("recheck"))     # careful 72B re-read next step (not sticky)
             # Track repeated identical actions for the advisory runaway guard above.
             sig = (act, action.get("target") or action.get("text")
@@ -387,6 +424,13 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
                     did = f"skipped '{act}': not supported by {device.caps.name}"
                 elif act == "shell" and not device.caps.has_shell:
                     did = f"skipped 'shell': {device.caps.name} has no shell channel"
+                elif act in _COORD_VERB:
+                    # A pixel the Brain already knows: no Eyes call, so no chance of a misread.
+                    x, y = action.get("x"), action.get("y")
+                    if x is None or y is None:
+                        raise ValueError(f"{act} needs x and y in pixels, got x={x!r} y={y!r}")
+                    device.act({"type": _COORD_VERB[act], "x": int(x), "y": int(y)})
+                    did = f"{act.replace('_', ' ')} at ({int(x)},{int(y)})"
                 elif act in _POINT_VERB:
                     # point-and-do: the Eyes locate the named target, the Hands act at that pixel
                     target = action.get("target", "")
@@ -401,11 +445,21 @@ def run(goal, max_steps=12, settle=0.6, verbose=True, tag="run", brain_model=Non
                     did = f"scrolled {direction} at '{target}' ({loc['x']},{loc['y']})"
                 elif act == "drag":
                     target = action.get("target", "")
-                    dest = action.get("destination", "")
                     a = timed_locate(shot, target)                         # Eyes: start point
-                    b = timed_locate(shot, dest)                      # Eyes: drop point
-                    device.act({"type": "drag", "x": a["x"], "y": a["y"], "x2": b["x"], "y2": b["y"]})
-                    did = f"dragged '{target}' ({a['x']},{a['y']}) -> '{dest}' ({b['x']},{b['y']})"
+                    end = drag_endpoint(action, a)
+                    if end is None:
+                        # A named drop point: the second locate, for a target that exists on screen.
+                        dest = action.get("destination", "")
+                        b = timed_locate(shot, dest)
+                        end = (b["x"], b["y"])
+                        where = f"'{dest}' ({end[0]},{end[1]})"
+                    else:
+                        # A canvas drop: a delta from the start, with no element to locate.
+                        where = f"offset ({end[0]},{end[1]})"
+                    device.act({"type": "drag", "x": a["x"], "y": a["y"],
+                                "x2": end[0], "y2": end[1]})
+                    did = f"dragged '{target}' ({a['x']},{a['y']}) -> {where}"
+                    diff_after_drag = True        # R6: the next step gets a before/after diff
                 elif act == "wait":
                     # Let a loading screen settle. No UI interaction — just pause and re-observe.
                     # The Brain chooses the duration; clamp to a sane range.

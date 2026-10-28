@@ -123,19 +123,19 @@ Two layers move. The body decides what it looks at and where a coordinate lands:
   - **Success Criteria**: the window alone selects the host; no window fails with a readable message naming the window.
 
 ### Phase 2: The action surface
-- [ ] **Step 2.1**: Delta drag
+- [x] **Step 2.1**: Delta drag
   - **Action**: Accept `destination_offset` on a drag and act at `start + delta`.
   - **Implementation**: loop branch beside the two-locate drag; bodies take `x2`, `y2` as computed, so no body change.
   - **Testing**: extend `devices/test_windows_drive.py` with a delta drag and assert the translated endpoints.
   - **Success Criteria**: one locate instead of two, and the release point is exact.
 
-- [ ] **Step 2.2**: Pointer aimed by pixel
+- [x] **Step 2.2**: Pointer aimed by pixel
   - **Action**: Add `move_to` and `click_at` to the vocabulary.
   - **Implementation**: `ALL_VERBS` plus the bodies' advertised sets; the loop's act branch skips `locate`; the Brain schema gains `x`/`y` with a prompt rule saying when a coordinate beats a description.
   - **Testing**: model-free vocabulary test plus a fake-input drive test.
   - **Success Criteria**: a coordinate action reaches the device with no `locate` call.
 
-- [ ] **Step 2.3**: A drag proves itself
+- [x] **Step 2.3**: A drag proves itself
   - **Action**: After a drag, the loop asks for the diff on the next step.
   - **Implementation**: set `want_diff` when the last action was a drag and the screen changed, without overriding a Brain request.
   - **Testing**: a model-free test that the flag is set for drags and not for clicks.
@@ -169,11 +169,24 @@ I have to use this document as my **ONLY** source of truth to execute and track 
   - **Result**: `{goal, window}` is a valid invocation, and `{goal}` cannot reach the desktop.
 
 ### Phase 2:
-- [ ] **Step 2.1**: Delta drag
-  - **Implementation Log**: [pending]
-  - **Testing Log**: [pending]
-  - **Success Criteria**: [pending]
-  - **Result**: [pending]
+- [x] **Step 2.1**: Delta drag
+  - **Implementation Log**: `drag_endpoint(action, start)` added; the drag branch locates the start once, then releases at `start + destination_offset` when an offset is given, and falls back to the second locate only for a named `destination`. `BrainAction` gained `destination_offset` (`DragOffset` with `dx`/`dy`), and the prompt says to use it when the release lands on empty space.
+  - **Testing Log**: `agent/test_drag_and_pointer.py` — offset math, zero offset, negative delta, and three malformed offsets each refused with a message.
+  - **Success Criteria**: Pass. One locate instead of two, and the release point is exact.
+  - **Result**: A canvas drop is a delta, which is the only form the measurement supports.
+
+- [x] **Step 2.2**: Pointer aimed by pixel
+  - **Implementation Log**: `_COORD_VERB` maps `move_to` -> the body's `hover` and `click_at` -> its `click`; a loop branch acts at `x`/`y` without calling `locate`; `_actions_for` DERIVES both verbs from the pointer a body advertises, so a phone gets `click_at` only and a body with no hover never sees `move_to`; `BrainAction` gained `x`/`y`; the prompt gained both actions and one rule saying to use a pixel only when it is already known.
+  - **Testing Log**: `agent/test_drag_and_pointer.py` — desk/phone/blind vocabularies, the full-vocabulary case lists it once, and the two branches land on `hover`/`click`.
+  - **Success Criteria**: Pass at the rule level. No live run has clicked a real desktop by pixel yet.
+  - **Result**: The Brain can aim a pixel; the body still only ever receives its own verbs.
+
+- [x] **Step 2.3**: A drag proves itself
+  - **Implementation Log**: `wants_diff(action, after_drag)` added; a completed drag sets `diff_after_drag`, which the next step ORs into `want_diff` and then clears, so a drag always produces `CHANGES SINCE YOUR LAST ACTION` and the Brain's own `request_diff` still works.
+  - **Testing Log**: `agent/test_drag_and_pointer.py` — the false/true matrix, including "the Brain asks for false but the drag happened".
+  - **Success Criteria**: Pass.
+  - **Tech Debts**: The flag is proven as a rule, not in a run. A failed drag raises before the flag is set, which is intended, but that path has no test.
+  - **Result**: A drag cannot be silently wrong without a report saying what changed.
 
 ---
 
