@@ -136,6 +136,19 @@ I have to use this document as my **ONLY** source of truth to execute and track 
 
   **The one code change this produced**: `foreground_is_target` in `devices/windows.py` now walks the owner chain rather than comparing handles. Measured: after a right-click the foreground window is an untitled `UnrealWindow` owned by the blueprint window, whose own owner is the main editor. The old equality test refused every action taken while a menu was open, and raising the window then dismissed the menu. Tested in `devices/test_windows_drive.py`.
 
+- [x] **Step 1.2**: The run after the guard fix, and after the pointer restore
+  - **Implementation Log**: with the owner-chain fix and `_ensure_pointer_in_frame` in place, a caller parked the pointer on the other monitor and drove the editor: a click to take the foreground, a right-click, typing `Pri`, typing `nt String`, Return, then three pin drags, a Compile click and one Ctrl+Z.
+  - **Testing Log**:
+    - Reaching the editor from the other monitor: pointer read `inside_frame: false`, the click returned 200, and afterwards the pointer was inside and the editor held the foreground.
+    - The context menu DOES work: typing filtered the list (`Pri` showed Play Sound and friends) and Return created a `Print String` node on the canvas.
+    - **Two of three wires landed**: `Event BeginPlay` → Print String exec, and `Event ActorBeginOverlap` → Print String exec, both visible as white wires.
+    - **The third attempt missed and did something else**: the press landed on `Event Tick`'s node body rather than its pin, so the graph MOVED the node instead of wiring it. Caught by the next screenshot, undone with Ctrl+Z (`Undo: Move Node`).
+    - Compile after the two wires: the Compile tooltip read `Good to go`. After the undo it read `Dirty, needs to be recompiled`.
+    - Nothing was saved; the status bar reads `1 Unsaved`.
+  - **Success Criteria**: A met for reach, screen reads and the compile. B met at 2 of 3 wires, with the third recorded as a miss.
+  - **Tech Debts**: the third wire is unproven; a pin press within a few pixels of the body moves the node with no error, which is the silent failure R6 exists to catch, now measured rather than assumed.
+  - **Result**: the method works. My earlier "blocked" reading was wrong, and the cause was the focus guard, not the menu.
+
 ---
 
 ## **QUALITY REVIEW**
