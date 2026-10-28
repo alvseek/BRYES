@@ -160,7 +160,7 @@ I have to use this document as my **ONLY** source of truth to track which sub-pl
 | Sub-Plan | Status | Started | Completed | Agent/Session | Notes |
 |----------|--------|---------|-----------|---------------|-------|
 | SP-1 | DONE | 2026-10-28 | 2026-10-28 | software-architect | Harness plus two frames. Corrected, reproducible: headers 2/3, pins 1/5 (median 10.6 px), asset tiles 6/6, empty canvas 0/6. One screen measured |
-| SP-2 | IN PROGRESS | 2026-10-28 | — | software-architect | Planning at high-wizard Phase 1; host work (R9, R10) phases before the action surface |
+| SP-2 | DONE | 2026-10-28 | 2026-10-28 | software-architect | Host frame (monitor), window-selects-body and the no-window refusal, delta drag, coordinate verbs, post-drag diff. Quality review fixed 5 findings. **Runtime verification NOT done** — no live host run yet |
 | SP-3 | NOT STARTED | — | — | — | — |
 | SP-4 | NOT STARTED | — | — | — | — |
 | SP-5 | NOT STARTED | — | — | — | — |
