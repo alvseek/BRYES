@@ -111,6 +111,7 @@ instruction:
   - Do not use the **Event Data** pin on the montage node. That one is the punch's own data, not the action's.
 why:
   `AM_Test_Combo` has three `Ability` markers, so Event Received fires three times. Each `ApplyActionDamage` call deals the action's full formula damage and rolls its own crit (`LSGICombatDamageLibrary`), so without Do Once one Basic Attack hits three times. And the payload must be the saved one: the montage's event carries the notify's data, with no targets and no action, so damage would find nothing to hit.
+  Do Once only resets when the ability object is new. AgateGAS abilities default to **Instanced Per Actor**, one object kept and reused for every turn, so the Do Once would stay closed after the first turn and the unit would never deal damage again. Step 9 sets the ability to a fresh object per use.
 expected:
   Event Received → Do Once → Apply Action Damage, with SavedEventData (Get) wired into Payload.
 
@@ -122,7 +123,8 @@ callout: 0.545,0.225,0.665,0.375 | Add End Ability here; all three wires go into
 callout: 0.122,0.077,0.155,0.106 | Then Compile, and Save
 instruction:
   Right-click an empty spot and add **End Ability**. Drag a wire from **On Completed** into its white input pin, then do the same from **On Interrupted** and **On Cancelled**. One input pin takes all three wires.
-  Leave **On Blend Out** and the white output of Apply Action Damage unconnected. Then click **Compile** and save (Ctrl+S).
+  Leave **On Blend Out** and the white output of Apply Action Damage unconnected.
+  Click **Class Defaults** in the toolbar and set **Instancing Policy** to **Instanced Per Execution**, so every turn gets a fresh ability and a fresh Do Once (step 8 says why). Then click **Compile** and save (Ctrl+S).
 why:
   The turn does not move on until this ability ends: the turn flow waits for the ability system's ended signal before the next combatant acts (`HandleAbilityEnded` in `LSGITurnBasedCombatSubsystem_Phases.cpp`). An ability that never calls End Ability leaves the battle stuck on this turn. Wiring only On Completed is not enough either: a montage that is interrupted or cancelled never completes.
 expected:
@@ -139,7 +141,7 @@ instruction:
   Read the graph left to right: the turn's event is saved, the montage plays, the first `Ability` hit deals damage once, and any way the montage stops ends the ability.
   A filled pin has a wire, a hollow pin does not; that is how you check On Blend Out is empty without tracing lines.
 why:
-  A Blueprint that compiles is not proof it works, only that its wiring is legal. The checks that matter here are the ones a compiler cannot see: damage behind Do Once, Payload from the saved variable, and every montage ending routed to End Ability.
+  A Blueprint that compiles is not proof it works, only that its wiring is legal. The checks that matter here are the ones a compiler cannot see: damage behind Do Once with Instancing Policy set to Instanced Per Execution, Payload from the saved variable, and every montage ending routed to End Ability.
 expected:
   Compiler Results says successful, the tab has no asterisk, and the only unsaved asset is one you did not mean to change.
 
