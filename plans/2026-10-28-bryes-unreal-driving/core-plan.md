@@ -169,7 +169,7 @@ I have to use this document as my **ONLY** source of truth to track which sub-pl
 | SP-3 | DROPPED | — | 2026-10-28 | — | Alvi dropped the Unreal API channel at wrap-up. No work had started; R5 is no longer being delivered |
 | SP-4 | IN PROGRESS | 2026-10-28 | — | software-architect | Both profile files written, loading and committed; the catalog section lands now that SP-2's R9 refusal has shipped |
 | SP-5 | NOT STARTED | — | — | — | — |
-| SP-6 | NOT STARTED | — | — | — | — |
+| SP-6 | IN PROGRESS | 2026-10-28 | — | software-architect | Planning at high-wizard Phase 1: technical-core round |
 
 **Status values**: NOT STARTED → IN PROGRESS → DONE → BLOCKED (with reason in Notes)
 
