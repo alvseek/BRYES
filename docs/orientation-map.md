@@ -70,10 +70,10 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 - **roles**: []
 - **status**: useful
 - **tags**: [screen, hands, shell, exec, docker, xvfb, xdotool, flask-api]
-- **last_verified**: "2026-10-23"
+- **last_verified**: "2026-10-29"
 - **verified_by**: "claude-software-architect"
 - **update_trigger**: "when the Screen container stack, the /screenshot|/action|/exec API, or ports change"
-- **notes**: "Phase 1 — the Screen+Hands: disposable Ubuntu container (Xvfb + fluxbox + xdotool + scrot) exposing screenshot + the full Hands action set (click/double_click/right_click/hover/scroll/drag/type/key/key_hold) over a Flask API (:8000) with noVNC live view (:6080). Also POST /exec — the Tier-2 shell effector (run a command in the sandboxed container; ADR-001). Apps: gnome-calculator, xterm, Chrome. Tests: test_hands.py + test_shell.py, and test_action_payloads.py (added 2026-10-23: /action payload validation and command shape, no Docker needed)."
+- **notes**: "Standalone Docker Linux desktop and HTTP control server on port 8000, with noVNC on 6080. Documents PNG response bytes, every input primitive including key_hold, shell results/timeouts, configuration, test commands, disposable state and security limits. The README refers only to Screen and its children, never sibling modules. Compose ports are not loopback-restricted and the screenshot handler leaves temporary files; documentation does not claim those limits are fixed."
 
 ### `eyes/README.md`
 
@@ -116,12 +116,24 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 - **type**: other
 - **scope**: shared
 - **roles**: []
-- **status**: useful
+- **status**: stale-but-valuable
 - **tags**: [api, task-invocation, flask, async, http, jobmanager]
-- **last_verified**: "2026-10-28"
+- **last_verified**: "2026-10-29"
 - **verified_by**: "claude-software-architect"
-- **update_trigger**: "when the task API endpoints, the JobManager lifecycle, the run() wrapping, or the bridge-windows.py primitive surface change"
-- **notes**: "The host-side Task-Invocation API (ADR-008): give BRYES a task over HTTP instead of a script. `python api/server.py` -> :8100; POST /tasks {goal,...} -> {task_id}, GET /tasks/<id> -> {status, steps, result} (result carries the findings ledger). Async (a daemon thread per task), single-flight (409 busy), localhost-only. Wraps agent/loop.py run() (the coarse 'hand off a whole goal' path); MCP adapter later. Distinct from screen/server/ (the container body API). Tests: api/test_jobs.py + api/test_server.py (model-free). Updated 2026-10-28 with the second surface, `api/bridge-windows.py` on :8110: primitives for a caller that is its own brain (windows, pointer, screenshot, downscaleshot, upscaleshot, act, locate, profiles), no auth with a JSON-only guard, one action at a time. The scaled shots carry `X-Bryes-Scale` / `X-Bryes-Origin` / `X-Bryes-Frame` headers, and the mapping is frame_px = origin + returned_px / scale. Proven live: a caller outside BRYES created a node and landed three wires in the Unreal editor."
+- **update_trigger**: "when task endpoints, supported device/window parameters, or the JobManager lifecycle change"
+- **notes**: "Task-Invocation API on port 8100: whole-goal submission and polling around the Brain-driven run loop. Bridge details have moved to api/README-Bridge.md, linked from this README. The original task API endpoint reference still omits Windows/window details; the current operator procedure distinguishes that path from direct Bridge driving."
+
+### `api/README-Bridge.md`
+
+- **type**: other
+- **scope**: shared
+- **roles**: []
+- **status**: useful
+- **tags**: [bridge, windows, http, screenshots, coordinates, external-agent]
+- **last_verified**: "2026-10-29"
+- **verified_by**: "claude-software-architect"
+- **update_trigger**: "when the Windows Bridge filename, routes, image headers, or runtime setup changes"
+- **notes**: "Dedicated reference for api/bridge-windows.py on loopback port 8110, separated from the Task API README. Lists primitive routes including downscaleshot and upscaleshot and their coordinate mapping. The full safety and observe-act-verify workflow lives in docs/procedures/drive-the-desktop.md."
 
 ### `docs/architecture-overview.md`
 
@@ -274,10 +286,10 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 - **roles**: []
 - **status**: useful
 - **tags**: [procedure, host-body, windows, driving, pyautogui, gates, adr-009]
-- **last_verified**: "2026-10-28"
+- **last_verified**: "2026-10-29"
 - **verified_by**: "claude-software-architect"
-- **update_trigger**: "when the host body's entry points, gates, harness rules, or measured timings change, or when an element-level (UIA) path lands"
-- **notes**: "How another agent drives a real Windows application through the host body, also served as `/drive-desktop`. Opens with the ADR-001 ceiling (an application's own API beats pixels, so Unreal's Python/Remote Control API should be preferred). Covers both entry points and when each applies: Python with a window **handle** (`WindowsDevice(hwnd=...)`, safe) versus `POST /tasks {window:'<title>'}` (a named window now selects the host body on its own, allowed only when exactly one window can match). Carries the three harness rules that exist because they were violated on 2026-10-21 (handle targeting, kill only what you started, act only inside the target rect), the measured timings (describe 3.7-10.6 s, decide 15-31 s, so the Brain dominates a run), the failure modes (UIPI silence, focus theft, rect refusal, non-ASCII typing), and the note that the environment gates are a stopgap until a dedicated user session exists. Updated 2026-10-26: also installed as a full copy by `setup-scripts/` for use from other projects, so every relative link must resolve from `docs/procedures/` (the ADR-001 link was dead until then; the installer's test now checks every rewritten target exists). Updated 2026-10-28 for the frame and the pointer: the body now screenshots the **monitor** holding the target (resolved by `MonitorFromWindow`) instead of the whole desk, `caps` reports that frame, and a host run that names no window is refused — and the file's own text now describes both. Same day, the bridge pass: the file gained the `api/bridge-windows.py` primitive surface (windows, pointer, screenshot, downscale, upscale, act, locate, profiles), the two focus lessons (a menu the target owns counts as focus; a background process can raise a window by borrowing the foreground thread), and the measured cost of pin aiming. The live run behind those notes: a caller outside BRYES created a `Print String` node and landed three execution wires in `BP_CombatBody_Enemy`, compiled clean, without saving."
+- **update_trigger**: "when Windows Bridge routes, coordinate mapping, input gates, or operator workflow change"
+- **notes**: "Canonical /drive-desktop operator procedure, rewritten Bridge-first on 2026-10-29. Start api/bridge-windows.py on loopback 8110, select a verified window handle, read profiles, observe PNGs, map downscaled or enlarged crop coordinates, act and verify. Records that screenshots do not foreground targets, each shot is fresh, input success is not app success, JSON is not authentication, and Bridge has no shell route. Whole-goal Python/Task API delegation is an explicitly separate alternative. Global commands/skills are generated copies refreshed by setup-scripts."
 
 ### `grounding.py`
 

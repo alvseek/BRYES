@@ -10,6 +10,16 @@ into `BP_CombatBody_Enemy`.
 knows what to do asks for a window list, a picture, a point, or an action. Distinct from
 `api/server.py` on `:8100`, which takes a goal and lets BRYES decide.
 
+The filename is Windows-specific as of 2026-10-29; tests load it by file path because a hyphen
+cannot appear in a normal Python import. Run it with `python api/bridge-windows.py`.
+The separate service under `screen/` controls only its Docker Linux desktop on port 8000;
+it is not in the Windows Bridge path. The calling agent owns decisions, while `/locate`
+optionally calls the Eyes. Direct screenshots and input need no model API key.
+
+The operator workflow is [drive-the-desktop.md](../../docs/procedures/drive-the-desktop.md),
+rewritten around the Bridge on 2026-10-29. API reference lives in
+[README-Bridge.md](../../api/README-Bridge.md), separately from the task API README.
+
 | Route | Returns |
 |---|---|
 | `GET /windows` | every targetable window: `id` (handle), `title`, `rect` (screen), `image_rect` (frame), `frame{origin,size}`, `foreground` |
@@ -25,8 +35,25 @@ knows what to do asks for a window list, a picture, a point, or an action. Disti
 `X-Bryes-Scale`, `X-Bryes-Origin` and `X-Bryes-Frame` as headers. A PNG cannot carry its own
 mapping, so the headers are the contract.
 
-**Auth:** none, by Alvi's choice; loopback only. The standing guard is that a body must be
-`application/json`, which stops a cross-origin form post. Actions serialise on a lock.
+**Auth:** none, by Alvi's choice; loopback only. POST bodies must be `application/json`, which
+rejects ordinary browser form posts but is not authentication or local-process isolation.
+Input needs `BRYES_ALLOW_HOST=1` in the server process. There is no Bridge shell endpoint.
+Actions serialize on a lock, not a workflow-wide reservation.
+
+Screenshots do not raise the window; they capture what is visible on the selected monitor.
+Each scaled request captures afresh. Only the scaled routes carry mapping headers, not the
+plain screenshot route. A viewer may resize the returned image again; undo that resizing
+before applying the Bridge mapping. Input success is not proof of application success.
+
+## Finding the current implementation and memory
+
+On 2026-10-29 the main checkout lacked the whole Bridge and its newer local memory because
+the work was still on `sp4-sp6-visual-bridge`. Alvi recalled the scaled routes and the live
+Unreal wiring correctly while the older main checkout's newest note still said no live run.
+`git worktree list` exposed the missing branch. It was fast-forwarded into main at `ec44d49`,
+pushed, and both clean, merged additional worktrees were removed; their branches were kept.
+When a recalled feature is missing, inspect worktrees and branch history before concluding
+it was never built. Central Munnin/Hermod reads do not contain these localized worktree files.
 
 ## The three body fixes this needed
 
