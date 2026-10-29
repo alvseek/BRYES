@@ -1,195 +1,201 @@
-# Drive the desktop with BRYES
+# Drive the Windows desktop with BRYES
 
-How another agent or a person drives a real Windows application through BRYES's host body.
-Everything here was run on 2026-10-21; the numbers are measured, not estimated.
+Use this procedure when you are the agent deciding what to do and need to see or operate a
+real Windows application. The [Windows Bridge](../../api/README-Bridge.md) exposes screenshots,
+pointer input, keyboard input, and optional visual target location over loopback HTTP.
+You observe, decide, act, and verify; the Bridge does not run a Brain or a task loop.
 
-## Read this first: is vision the right effector?
+Prefer an application's own API or command interface when it can perform the requested task
+reliably. Use visual driving when that channel is unavailable or when the visible interface
+is what you need to verify. The channel ordering is recorded in
+[ADR-001](../adr/2026-07-15-effector-hierarchy.md).
 
-[ADR-001](../adr/2026-07-15-effector-hierarchy.md) puts channels in order: **API, then shell, then
-vision**. Unreal Editor ships a Python plugin and a Remote Control API; an application that
-publishes one should be driven through it. This body exists for the case where no channel exists,
-or where the screen is the thing you must trust. Do not reach for pixels to do what an API does
-faster and exactly.
+## 1. Establish scope and safety
 
----
+This operates on the user's actual desktop, not an isolated sandbox. Before sending input:
 
-## Preconditions
+- Identify the application and the changes the user authorized. Do not save, delete, publish,
+  or close unrelated work as a side effect of driving.
+- Prefer a target you launched. If the task concerns an already-open application, confirm its
+  identity and select its exact window handle; never choose solely by a vague title match.
+- Close or save unrelated work before a risky run. A dedicated Windows session is the stronger
+  isolation boundary, but this procedure does not create one.
+- Kill only a process you created and know is disposable. A launcher pid does not prove you
+  own the resulting application: a single-instance editor can reuse the user's existing process.
+- Do not fight the user for the mouse or keyboard. Stop when concurrent interaction makes the
+  observed state unreliable.
 
-- Windows, with the repository's dependencies installed (`pip install -r requirements.txt`).
-- `OPENROUTER_API_KEY` in `.env` (the Eyes and the Brain both need it).
-- `BRYES_ALLOW_HOST=1` in the environment. Without it the body captures but refuses to act, and
-  `device="windows"` refuses before a body is even built.
-- `BRYES_ALLOW_HOST_SHELL=1` too, if the run may use the `shell` action.
+The body checks focus and pointer bounds, but it does not prove process ownership, understand
+which document is open, or judge whether a requested operation is safe. Its gates are defense
+in depth, not permission to act. See [ADR-009](../adr/2026-10-21-host-body-and-gates.md).
+
+## 2. Start or connect to the Bridge
+
+Use Windows with Python and the project dependencies installed. Commands below run from the
+BRYES clone directory:
 
 ```powershell
+pip install -r requirements.txt
 $env:BRYES_ALLOW_HOST = "1"
-$env:BRYES_ALLOW_HOST_SHELL = "1"    # only if shell is wanted
+python api/bridge-windows.py
 ```
 
-## Entry point A: Python, targeting a window handle (recommended)
+The server stays in that terminal at `http://127.0.0.1:8110`. Use another terminal or an HTTP
+client for requests. If a Bridge is already running, check `/health` and `/windows` rather than
+starting another process. Health only confirms the HTTP service answers, not that a target
+is usable or its input gate is enabled.
 
-A **handle** pins the run to one window. That matters: a title substring matched the largest
-matching window on 2026-10-21 and drove the wrong document.
+`BRYES_ALLOW_HOST=1` must be set in the **server process's environment** for input. Screenshot
+capture is not gated. `OPENROUTER_API_KEY` is needed only if you call `/locate`; reading images
+yourself and sending input do not require model calls. The Bridge has **no shell endpoint**,
+so `BRYES_ALLOW_HOST_SHELL` is not needed for this workflow.
 
-```python
-from devices.windows import WindowsDevice, find_window
-from agent.loop import run
+The server has no authentication. Keep it on loopback and do not expose or tunnel it to an
+untrusted network. POST operations require `application/json`; that rejects ordinary browser
+form posts but is not authentication or protection against an untrusted local process. The
+server serializes device operations, not whole workflows; use one desktop driver at a time.
 
-found = find_window("Unreal Editor")        # (hwnd, title, rect), or None
-if not found:
-    raise SystemExit("open the editor first, or launch it below")
-hwnd, title, rect = found
+## 3. Select a window and load its vocabulary
 
-device = WindowsDevice(hwnd=hwnd)           # pins focus, clicks and the rect guard to this handle
-result = run("open the World Settings panel and report what it shows",
-             device=device, max_steps=5, verbose=True, tag="unreal")
-print(result["status"], result.get("steps"))
+```text
+GET /windows
+GET /profiles?path=windows
+GET /profiles?path=windows/unreal-editor
 ```
 
-To launch the application yourself and drive only what you launched:
+`/windows` returns a `windows` list. Each entry includes:
 
-```python
-import subprocess, sys, time
-from devices.windows import WindowsDevice, top_window_of_pid
-from agent.loop import run
+- `id`: a hexadecimal window handle, such as `0x1a`. Use the actual returned string as `window`
+  on subsequent requests; do not invent a handle or reuse one from an old session.
+- `title` and `foreground`: clues for identifying the correct window, not proof of ownership.
+- `rect`: the window rectangle in absolute Windows screen coordinates.
+- `frame.origin` and `frame.size`: the monitor origin and dimensions used for its screenshots.
+- `image_rect`: the window rectangle expressed in that screenshot's coordinates.
 
-proc = subprocess.Popen([r"<path-to-UnrealEditor.exe>", r"<path-to-your.uproject>"])
-hwnd = None
-for _ in range(120):                        # editors take a while to show a window
-    found = top_window_of_pid(proc.pid)
-    if found:
-        hwnd = found[0]
-        break
-    time.sleep(0.5)
-run("...", device=WindowsDevice(hwnd=hwnd), max_steps=5)
-proc.terminate()                            # only a process you started
-```
+Minimized and untitled windows are omitted. Restore a minimized application before selecting
+it. A dialog or another editor window may need its own handle; refresh `/windows` whenever
+the task changes windows or the selected one closes.
 
-Note that a launcher may own a different pid than the editor it spawns. If the window does not
-appear under the launcher's pid, launch the editor directly, or target the open window's handle.
+Profiles return `visual` and `operating` text. Read the relevant vocabulary before driving;
+the app-specific profile includes inherited desktop guidance. The Bridge does not automatically
+feed this text into `/locate` or make decisions from it.
 
-## Entry point B: the task API
+## 4. Observe and map coordinates
 
-```powershell
-python api/server.py        # http://127.0.0.1:8100, localhost only, no auth
+All screenshot requests require `window=<id>` and return PNG bytes directly in the HTTP
+response body (`Content-Type: image/png`), not a path or JSON image. Save or display the bytes
+with an image-capable tool and inspect the result before choosing an action.
 
-curl -X POST http://127.0.0.1:8100/tasks -H "Content-Type: application/json" -d '{
-  "goal": "open the World Settings panel and report what it shows",
-  "device": "windows",
-  "window": "Unreal Editor",
-  "max_steps": 5
-}'
-```
-
-The API takes a **title**, not a handle, because JSON has no hwnd. It is fine when exactly one
-window can match, and wrong when two can. For anything destructive, use entry point A.
-
-## The three harness rules
-
-They are in the code, not just good advice, and each one exists because it was violated.
-
-1. **Target a window you started, by handle.** `WindowsDevice(hwnd=...)` or `top_window_of_pid`.
-   A title substring once selected the user's own Notepad and typed into it.
-2. **Kill only a process you created.** `proc.terminate()` on your own `Popen`, never a pid you
-   found. That same accident closed a shared single-instance editor with someone's work in it.
-3. **Act only inside the target's rect.** The body refuses any pointer action outside the target
-   window's rectangle: `refusing to act at (x,y): outside the target window`. The step fails; it
-   does not click beside it.
-
-**The frame is the target's monitor.** `screenshot()` grabs the monitor that holds the target
-window (resolved by `MonitorFromWindow`), not the whole desk, so a two-screen machine no longer
-hands the Eyes an image with the app in half of it. Every coordinate is a pixel of that frame,
-and `screen_xy` adds the frame's origin. With no window named the frame is still the whole
-desktop, which is what capture wants. `caps` reports the same size the grab will produce.
-
-**The pointer is brought back before acting.** A pointer left on another display makes the next
-press land on whatever is under it, so before every action the body reads the pointer and moves
-it to the target's centre if it is outside. `GET /pointer` on the bridge reports the same test.
-
-## What a run costs
-
-Measured on this machine, frames of the target's monitor (3440×1440 on the ultrawide, 1920×1080 on the secondary):
-
-| Phase | Time |
+| Request | Use |
 |---|---|
-| screenshot | 0.2–0.4 s |
-| describe (the Eyes) | 3.7 s typical, 10.6 s on a dense desktop |
-| decide (the Brain) | 15–31 s |
-| action | 0.1–0.3 s |
+| `GET /screenshot?window=<id>` | Full-resolution image of the monitor holding the target |
+| `GET /downscaleshot?window=<id>&scale=0.5` | Smaller whole-monitor overview; scale range `0.05` to `1`, default `0.5` |
+| `GET /upscaleshot?window=<id>&x1=100&y1=200&x2=300&y2=400&scale=2` | Fresh capture, then crop and enlarge; scale range `1` to `4`, default `2` |
+| `GET /pointer?window=<id>` | Pointer in absolute screen and image coordinates, with `inside_frame` and `inside_window` flags |
 
-So a three-step run is roughly two minutes and a few cents, and the Brain dominates. If a task
-needs twenty steps, this is the wrong instrument; use the application's own API.
+A screenshot does **not** bring the window to the foreground. It records what is visible on
+that monitor, including other windows covering the target. Do not aim at a control you cannot
+see. Each screenshot endpoint makes a fresh capture; an overview and a later crop are not
+guaranteed to show the same moment.
 
-## Failure modes worth recognising
+Input coordinates use the **original monitor image**, whose top-left is `(0,0)`, not absolute
+Windows screen coordinates. Crop bounds also use that original frame. Scaled responses carry:
 
-- **Clicks do nothing and the run looks successful.** UIPI: synthetic input cannot reach a window
-  running at a higher integrity level than Python. If the editor runs as administrator, run the
-  harness the same way, or expect silence.
-- **`could not bring the target window to the foreground after 3 attempts`.** Something keeps
-  stealing focus; the body refuses rather than clicking into whatever is on top. A menu the app
-  opened counts as the app: the body walks the window's owner chain, so a context menu is not a
-  focus steal. If it still fires, a background process cannot raise a window it does not own.
-- **`no visible window matching ...`.** The window closed, or the title changed beyond the
-  substring (Unreal's title carries the open level).
-- **`refusing to act at (x,y): outside the target window`.** The Eyes pointed outside the handle.
-  The step fails rather than acting elsewhere; give the Brain a `visual_focus` or a clearer goal.
-- **Typed text arrives without accents or symbols.** Anything non-ASCII goes through the
-  clipboard; if the clipboard is unavailable to the target, it will not arrive.
-- **The pointer is outside the target.** Before every action the body reads the pointer and, if
-  it is outside the frame, moves it back to the target's centre before acting. `GET /pointer` on
-  the bridge reports the same test. A pointer that keeps needing to be brought back means a
-  coordinate upstream is wrong, not that the restore is broken.
+```text
+X-Bryes-Scale: scale factor
+X-Bryes-Origin: crop x,y in the original frame (0,0 for a downscaled overview)
+X-Bryes-Frame: original frame width,height
 
-## What this body cannot do
-
-- **No element addressing.** There is no UI Automation path yet, so a run cannot say "invoke the
-  button named Compile"; it clicks pixels. Unreal's Slate UI is unmeasured for a tree.
-
-## Driving it from another agent (the bridge)
-
-`api/bridge.py` exposes the same body as primitives over loopback HTTP, for a caller that
-already knows what to do and does not want the Brain in the path:
-
-```
-GET  /windows   -> {frame, windows:[{id, title, rect, image_rect, foreground}]}
-GET  /pointer?window=<id> -> {x, y, image_x, image_y, inside_frame, inside_window}
-GET  /screenshot?window=<id> -> PNG of the target's monitor
-POST /act      {window, type, x, y, ...}   one verb, at the caller's pixels
-POST /locate   {window, instruction}       one pixel from the Eyes
-GET  /profiles?path=windows/unreal-editor  the vocabulary both sides read
+frame_x = origin_x + returned_x / scale
+frame_y = origin_y + returned_y / scale
 ```
 
-Measured 2026-10-28 driving `BP_CombatBody_Enemy`: a caller with the pointer parked on another
-monitor reached the editor, created a `Print String` node by right-click and typed name, landed
-three execution wires, and compiled clean, without saving.
+Use the response headers, not remembered scaling settings. For example, on a crop starting at
+`(100,200)` enlarged by `2`, returned pixel `(40,60)` maps to frame pixel `(120,230)`.
+If your image viewer resizes the returned image again, undo that additional resize before
+applying the formula. Round the final frame coordinates to integer pixels for input.
 
-Two things that cost a session to learn and are now handled in the body: the pointer is brought
-back inside the frame before every action, and a window the target owns (a menu) counts as the
-target holding focus, so the next keystroke does not dismiss it.
+The plain `/screenshot` response is already 1:1 and does not carry those mapping headers.
+Do not add the monitor's Windows origin when sending `/act`: the body does that translation.
+Re-observe after moving the target between monitors, resizing it, or changing display layout.
 
-A pin is about ten pixels. Press two pixels off it and Unreal moves the node instead of wiring
-it, with no error; mark small targets on a zoomed crop and verify each wire by looking.
-- **No browser of the accessibility tree**, so a moved control means a re-grounding.
-- **Layer 3 (`request_diff`) and the `screenshot` action still work**, and the transcript under
-  `artifacts/runs/<timestamp>-<tag>/` holds every frame and every prompt.
+## 5. Send one action, then verify
 
-## Use it on your own machine without hurting yourself
+`POST /act` takes JSON containing the selected `window`, a `type`, and its fields:
 
-The two gates are a stopgap. They exist because BRYES runs as the same Windows user who owns the
-documents on this desktop. The structural fix is environment isolation: a dedicated user session
-where the desktop holds only what the task created. Until that exists, treat a host run as
-production: close or save your work, and prefer a target you launched.
+| Type | Fields | Effect |
+|---|---|---|
+| `click`, `double_click`, `right_click`, `hover` | `x`, `y` | Click or move at a frame pixel |
+| `scroll` | `x`, `y`, `direction` (`up` or `down`) | Scroll at a frame pixel |
+| `drag` | `x`, `y`, `x2`, `y2` | Press, move, and release between frame pixels |
+| `type` | `text` | Type into the currently focused control; does not focus or clear it |
+| `key` | `key` | Tap a key or chord, such as `enter`, `escape`, or `ctrl+a` |
+| `key_hold` | `key`, `seconds` | Hold then release; duration is clamped to `0.1` through `5` seconds |
 
-## Worked example
-
-`devices/smoke_windows_drive.py` is the shortest complete one:
+For example, with `$window` set to an id returned by `/windows` and `$x`, `$y` measured from
+the image:
 
 ```powershell
-$env:BRYES_ALLOW_HOST = "1"
-python devices/smoke_windows_drive.py --yes `
-    --launch "python artifacts/probe_target.py" `
-    --goal "Click inside the text field and type the word hello"
+$payload = @{ window = $window; type = "click"; x = $x; y = $y } | ConvertTo-Json
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8110/act `
+    -ContentType application/json -Body $payload
 ```
 
-It launches a throwaway window, drives it by handle, verifies by reading the window title, and
-prints the transcript path.
+Before input, the body restores an out-of-frame pointer and attempts to foreground the target.
+A menu owned by the target counts as its focus, so the next keystroke need not dismiss it.
+Pointer actions are refused outside the target window's rectangle; both endpoints of a drag
+must be inside it. These checks do not guarantee that a coordinate hits the intended control.
+
+After each meaningful action, capture again and inspect the expected effect. `ok:true` means
+the input call completed, not that the application accepted it or the task succeeded. For a
+drag, verify the connection or object at its destination, not merely the pointer's position.
+Do not repeatedly replay input after a timeout: first check whether it already took effect.
+
+### Optional: locate a named target
+
+`POST /locate` accepts `{window, instruction}` and returns `{x,y,instruction}`. It captures a
+fresh frame and calls the Eyes' grounding model, but does not click. It requires the model API
+key and currently has no crop or profile-context parameter. Treat the coordinate as a proposed
+target and verify it against the image before acting, especially for small controls.
+
+On the recorded Unreal run, a misplaced drag moved a node rather than connecting its pin,
+without an execution error. Use enlarged crops for pins and other small targets, map back to
+frame coordinates, and confirm the resulting wire visually. Enlargement helps inspection;
+it does not recover detail absent from the original capture.
+
+## 6. Handle refusals and finish deliberately
+
+- **HTTP 400:** inspect the JSON description for a missing window, invalid crop or scale, or
+  unsupported action. `/act` also checks whether the body supports the verb.
+- **HTTP 415:** send POST bodies as `application/json`.
+- **HTTP 409 from `/act`:** read the body refusal, such as a disabled host gate, focus failure,
+  or out-of-window point. Recheck the window, frame, and current image before retrying.
+- **HTTP 502 from `/locate`:** the model call failed. Inspect the cause or choose coordinates
+  yourself from a screenshot; do not pretend a failed location produced a target.
+- **Input completes but nothing changes:** check control focus and whether the target runs at
+  a higher Windows integrity level than Python. Windows can refuse synthetic input across that
+  boundary. Do not treat an unchanged screenshot as proof that retrying is safe.
+
+Record what visibly changed and what was verified on disk, separately. A successful compile
+does not prove an asset was saved, and closing a settings window does not establish persistence.
+Save only when authorized, then verify through the application's state or the resulting file.
+Stop only Bridge or application processes you started and own; leave shared processes running.
+
+## Alternative: delegate a whole goal
+
+Use these paths only when you want BRYES's own Brain to decide and run the loop, rather than
+driving individual operations yourself:
+
+- **Python:** construct `WindowsDevice(hwnd=<verified handle>)`, then pass it to
+  `agent.loop.run(goal, device=device, ...)`. This keeps the exact handle you selected.
+- **Task API:** start `python api/server.py` on port `8100` and submit a goal to `/tasks`.
+  Its `window` parameter is a title substring, not a handle; use it only when the target is
+  unambiguous. See the [Task API README](../../api/README.md) for submission and polling.
+
+Both alternatives need `OPENROUTER_API_KEY` and `BRYES_ALLOW_HOST=1`. If you authorize shell
+execution through those paths, also set `BRYES_ALLOW_HOST_SHELL=1` in their environment.
+The same ownership, targeting, and verification rules still apply. Loop transcripts are kept
+under `artifacts/runs/`; direct Bridge requests do not automatically create that loop transcript.
+
+For model-free checks of the Bridge contract, run `python api/test_bridge.py`. This does not
+drive a live desktop or prove an application's behavior.

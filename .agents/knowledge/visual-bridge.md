@@ -6,7 +6,7 @@ into `BP_CombatBody_Enemy`.
 
 ## What the bridge is
 
-`api/bridge.py`, Flask on `http://127.0.0.1:8110`, no Brain and no goal: a caller that already
+`api/bridge-windows.py`, Flask on `http://127.0.0.1:8110`, no Brain and no goal: a caller that already
 knows what to do asks for a window list, a picture, a point, or an action. Distinct from
 `api/server.py` on `:8100`, which takes a goal and lets BRYES decide.
 

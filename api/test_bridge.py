@@ -1,4 +1,4 @@
-"""Model-free tests for the visual bridge (api/bridge.py). No screen, no model, no desktop.
+"""Model-free tests for the visual bridge (api/bridge-windows.py). No screen, no model, no desktop.
 
     python api/test_bridge.py
 
@@ -7,6 +7,7 @@ and a locator, so a fake body and a fake locator are enough to prove it. What is
 here is the Windows enumeration (real windows) and the Eyes (a live call); both are exercised
 once by hand when the bridge is pointed at the editor.
 """
+import importlib.util
 import io
 import sys
 from pathlib import Path
@@ -15,7 +16,11 @@ from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from api.bridge import make_app  # noqa: E402
+_spec = importlib.util.spec_from_file_location(
+    "bridge_windows", Path(__file__).with_name("bridge-windows.py"))
+_bridge = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_bridge)
+make_app = _bridge.make_app
 
 
 def _png(width=100, height=100):

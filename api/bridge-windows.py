@@ -29,7 +29,7 @@ Auth: none, by Alvi's call (council decision). What stands in its place is that 
 JSON: a cross-origin form post is a "simple request" the browser does not preflight, so
 refusing every non-JSON content type is what keeps a page in a tab from clicking the desktop.
 
-Run: python api/bridge.py  ->  http://127.0.0.1:8110
+Run: python api/bridge-windows.py  ->  http://127.0.0.1:8110
 """
 import ctypes
 import io

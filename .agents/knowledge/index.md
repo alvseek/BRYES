@@ -10,6 +10,6 @@ rediscover.
 
 | File | Description | Source agent(s) |
 |---|---|---|
-| [visual-bridge.md](visual-bridge.md) | `api/bridge.py`: the primitive surface an outside agent calls (windows, pointer, screenshots at three scales, act, locate, profiles), the mapping rule for the scaled shots, the three host-body fixes it needed (owning-menu focus, background raise, pointer restore), and what driving Unreal by hand actually costs. | software-architect |
+| [visual-bridge.md](visual-bridge.md) | `api/bridge-windows.py`: the primitive surface an outside agent calls (windows, pointer, screenshots at three scales, act, locate, profiles), the mapping rule for the scaled shots, the three host-body fixes it needed (owning-menu focus, background raise, pointer restore), and what driving Unreal by hand actually costs. | software-architect |
 | [grounding-measurement.md](grounding-measurement.md) | What the Eyes actually hit on the Unreal editor (headers, pins, asset tiles, empty canvas), how to re-measure it with `grounding.py`, and the 4x-crop rule for marking small targets. | software-architect |
 | [container-and-keyboard.md](container-and-keyboard.md) | Why the Screen container fails to boot from a CRLF checkout, when it must be rebuilt (`--build`), how keyboard focus actually reaches a window, and how a held key was proved live. | software-architect |
