@@ -142,10 +142,10 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 - **roles**: []
 - **status**: useful
 - **tags**: [architecture, layers, devices, brain, eyes, hands, actions, effector-tiers]
-- **last_verified**: "2026-10-23"
+- **last_verified**: "2026-10-29"
 - **verified_by**: "claude-software-architect"
 - **update_trigger**: "when a layer, the Device abstraction, the Brain action set, or an effector tier changes"
-- **notes**: "The single-section architecture deep-dive: the four pieces, the Device abstraction and its three bodies, the effector tiers (API/MCP over shell over vision), the full Brain action set, `type_into` as the device-level text gesture, and the two-mode foveal describe. **It was missing from this map until 2026-10-23**, which is why it is being indexed here rather than only listed in the README. Updated the same day for `key_hold` (the one keyboard action that is not a tap) and its focus precondition on the container."
+- **notes**: "The single-section architecture deep-dive: the four pieces, the Device abstraction and its three bodies, the effector tiers, the full Brain action set, `type_into` as the device-level text gesture, and the two-mode foveal describe. Updated 2026-10-29 to split the two host HTTP surfaces it had previously conflated: the Brain-driven Task API on :8100 and the Windows Bridge on :8110, whose primitive routes include the downscaled and enlarged screenshots, with the screen/ container API on :8000 named as a third, separate surface."
 
 ### `docs/agent-loop-flow.md`
 
