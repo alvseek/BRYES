@@ -12,7 +12,21 @@ Run on the Windows host, from the directory containing `api/`:
 python api/bridge-windows.py
 ```
 
-It listens on `http://127.0.0.1:8110`.
+It listens on `http://127.0.0.1:8110`. Any HTTP client can drive it; [bridge_client.py](bridge_client.py)
+is the short one, one line per step, and it saves every image beside a `.json` holding its mapping
+so a pixel read off a crop goes straight back as an action:
+
+```powershell
+$env:BRIDGE_WINDOW = "0x1402aa"                                # an id from `windows`
+python api/bridge_client.py windows
+python api/bridge_client.py shot overview --raise              # bring the window forward first
+python api/bridge_client.py crop pins 1500 700 2580 1000 --scale 2
+python api/bridge_client.py act drag 600 260 900 300 --from pins   # crop pixels -> frame pixels
+python api/bridge_client.py act type --text "Event BeginPlay"
+```
+
+`--raise` hovers where the pointer already is when it is inside the window, so nothing moves;
+`act` waits `--settle` seconds (default 0.4) so the next look sees the UI after the change.
 
 ## Endpoints
 

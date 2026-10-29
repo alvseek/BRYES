@@ -132,8 +132,9 @@ Re-observe after moving the target between monitors, resizing it, or changing di
 | `key` | `key` | Tap a key or chord, such as `enter`, `escape`, or `ctrl+a` |
 | `key_hold` | `key`, `seconds` | Hold then release; duration is clamped to `0.1` through `5` seconds |
 
-For example, with `$window` set to an id returned by `/windows` and `$x`, `$y` measured from
-the image:
+[api/bridge_client.py](../../api/bridge_client.py) wraps all of this in one line per step, and its
+`--from <shot>` converts a crop's pixels for you. With plain HTTP, for example, with `$window` set to
+an id returned by `/windows` and `$x`, `$y` measured from the image:
 
 ```powershell
 $payload = @{ window = $window; type = "click"; x = $x; y = $y } | ConvertTo-Json
