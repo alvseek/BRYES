@@ -133,7 +133,7 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 - **last_verified**: "2026-10-30"
 - **verified_by**: "claude-software-architect"
 - **update_trigger**: "when the Windows Bridge filename, routes, image headers, or runtime setup changes"
-- **notes**: "Reference for the Windows Bridge server on loopback port 8110, including the windowless global pointer, optional window-relative coordinates, and scaled-shot mapping. The command-line client has its own README; the full safety and observe-act-verify workflow lives in docs/procedures/drive-the-desktop.md."
+- **notes**: "Reference for the Windows Bridge server on loopback port 8110, including the windowless global pointer, optional window-relative coordinates, scaled-shot mapping, and the `/act` contract: one action or an ordered `actions` batch, validated before any input, one lock, stop at the first failure with the completed prefix reported. The command-line client has its own README; the full safety and observe-act-verify workflow lives in docs/procedures/drive-the-desktop.md."
 
 ### `api/README-Bridge-Client.md`
 

@@ -5,7 +5,46 @@ fixes it forced, and the first real build driven through it.
 
 ---
 
-### 2026-10-30 11.59 - THE EXTERNAL AGENT AS BRAIN AND A SIMPLER POINTER (agent: software-architect)
+### 2026-10-30 15.01 - BATCH ACTIONS AND A HONEST README, THEN A HANDOFF PLAN (agent: software-architect)
+
+- **Summary**: Documented both scaled screenshot endpoints and the action surface properly, added ordered batch actions to `/act` with a stop-first failure contract, and wrote a handoff plan for moving target selection, focus and error handling into the server.
+- **Context**: Alvi asked to improve the Bridge README, then asked whether `/downscaleshot` should return `X-Bryes-Origin` at all, then wanted one endpoint able to run several actions. He asked why the command-line client exists instead of calling the API directly, and after a table of where each convenience belongs, chose to move every server-owned convenience to the server and have a cheaper agent implement it.
+- **Discussion**:
+  - **Screenshot mapping**: he asked whether an endpoint that never crops should carry an origin header. My answer was to keep it so one formula works for both endpoints; he accepted.
+  - **Batch shape**: he offered either a new `/multiple-act` or an `actions` array on `/act`, and said the keyboard fields had not been made clear. I recommended extending `/act`, and he chose to stop at the first failed action.
+  - **Client purpose**: he asked why `bridge_client.py` exists. The honest answer is that it is optional convenience for saved screenshot mappings, title selection and JSON, not another required layer.
+  - **Ownership**: after the table, he said to move everything classified server to the server and defer the rest.
+  - **Handoff**: he asked for a plan built from Hermod's plan template, to be implemented later by a cheaper agent.
+- **Key Interactions**: His corrections were one line each: "stop at the first failed action", "shouldn't return X-Bryes-Origin since there's no crop utility?", and the push to explain rather than assert. Each changed the artifact rather than producing an argument.
+- **Issues Encountered**:
+  - **Problem Description**: The first `/act` validation would have accepted a boolean as a coordinate and would have treated `scroll` as needing no point.
+  - **Root Cause**: The original single-action route checked only presence, not types, and its point-verb set predated `scroll` being a pointer action.
+  - **Resolution**: The batch rewrite validates types, finite numbers, text/key/direction and per-verb point requirements before any input.
+  - **Problem Description**: A PowerShell here-string piped into `git commit -F -` produced an empty message.
+  - **Root Cause**: `-F -` reads standard input, which a PowerShell variable does not supply.
+  - **Resolution**: Wrote the message to a file and committed with `-F <file>`, which is also the recorded fix for shell-driven text.
+- **Outcomes**:
+  - **Deliverables**: `api/bridge-windows.py` (`actions` batch, stricter validation), `api/test_bridge.py` (four batch tests), `api/README-Bridge.md` (both screenshot rows and a full `/act` contract), `plans/2026-10-30-bridge-server-conveniences.md`, and this session's knowledge update. Pushed `5a8552f`.
+  - **Progress Made**: `python api/test_bridge.py` and `python api/test_bridge_client.py` both pass model-free; `git diff --check` clean. The batch lock, stop-first behaviour and progress reporting are covered by tests, including an unexpected device exception and a concurrency control.
+  - **Tech Debts**:
+    - **[new] No live desktop run of the batch or the rewritten README contract.** Model-free tests prove the surface, not Windows foreground or pointer behaviour.
+    - **[new] The command-line client cannot send a batch**, and still does title selection and focus choreography locally; that move is the handoff plan, not built.
+    - **[carry] The Bridge exposes only `locate` from the Eyes**: no `describe`, `box`, or `diff`; `/locate` still sees the whole frame with no focus or profile priming.
+    - **[carry] Globally installed `/drive-desktop` is a separate copy and has not been refreshed** since the Bridge-first rewrite.
+    - **[carry] Unreal settings persistence and the Blueprint save remain unverified**; host environment isolation is not built; the broad lint gate and runtime QA are unrun.
+  - **Next Steps**:
+    - Implement the handoff plan in a Terra session, server first and client after.
+    - Verify a batch and a focused capture against an agent-started window when a live test is authorized.
+    - Refresh the installed procedure copies after the server contract changes.
+- **Insights**:
+  - **New Understanding**: Batch validation and batch execution are two different moments. Validating everything first means a malformed later action costs no input at all, while the stop point still has to be at execution because geometry and focus are live facts.
+  - **Pattern Recognition**: The client's conveniences split cleanly by owner: facts only the server can know (the live window list, focus, host gates) belong in the server, while files, local arithmetic and process exit codes belong with the caller.
+  - **Improvement Areas**: The first README pass documented fields but not what the return means; Alvi had to ask what the keyboard field was. Naming the exact JSON field for each verb should have been the first draft.
+- **Promotions**:
+  → Updated [visual bridge knowledge](../knowledge/visual-bridge.md) with the batch contract, the stop-first semantics and the per-verb field rules.
+
+---
+
 
 - **Summary**: Clarified the Windows Bridge and its command-line client as separate server and client. Added client commands for locate, profiles and key-hold duration; made the pointer endpoint usable without a window; separated and clarified their READMEs.
 - **Context**: Alvi wants external agents to reason and follow procedures while BRYES supplies eyes and hands. The existing Brain remains a separate standalone path; removing it was not requested.

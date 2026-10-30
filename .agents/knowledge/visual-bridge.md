@@ -27,7 +27,7 @@ rewritten around the Bridge on 2026-10-29. API reference lives in
 | `GET /screenshot?window=` | the target's monitor, 1:1 |
 | `GET /downscaleshot?window=&scale=0.5` | the frame scaled down (0.5 is the Eyes' own overview factor) |
 | `GET /upscaleshot?window=&x1=&y1=&x2=&y2=&scale=2` | one crop, enlarged |
-| `POST /act {window,type,...}` | one verb at the caller's pixels |
+| `POST /act {window,type,...}` or `{window,actions:[...]}` | one verb, or an ordered batch, at the caller's pixels |
 | `POST /locate {window,instruction}` | one pixel from the Eyes on a fresh frame |
 | `GET /profiles?path=` | the merged vocabulary text both sides read |
 
@@ -39,6 +39,20 @@ mapping, so the headers are the contract.
 rejects ordinary browser form posts but is not authentication or local-process isolation.
 Input needs `BRYES_ALLOW_HOST=1` in the server process. There is no Bridge shell endpoint.
 Actions serialize on a lock, not a workflow-wide reservation.
+
+**A batch is one request, one lock, and one stop point.** `/act` accepts either a single
+`type` at the request level or a non-empty `actions` array; sending both is refused. Every
+action is validated before any input, execution holds the lock for the whole batch so no other
+Bridge request can interleave, and the first failure ends it. A failed batch answers
+`ok:false` with the zero-based `failed_index`, the failing action, and `completed` holding the
+actions that returned. Nothing is rolled back and nothing is retried, and a failed action may
+have partially executed, so a caller must not resend the whole batch blind. A successful batch
+lists every executed action in order. There is no delay between actions and no check that the
+UI moved, so a batch is a sequence of inputs, not a sequence of verified steps.
+
+Coordinates are frame pixels, and points must be finite numbers; `scroll` is a point verb, so
+it needs `x` and `y` as well as `direction`. The keyboard fields are `text` for `type` and
+`key` for `key`/`key_hold`, the last of which clamps its optional `seconds` to 0.1-5.
 
 The command-line client `api/bridge_client.py` is documented separately in
 `api/README-Bridge-Client.md`. It provides `locate`, `profiles`, image mapping, and
