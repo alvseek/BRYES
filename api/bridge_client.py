@@ -1,17 +1,15 @@
 """Command-line client for the Windows Bridge (api/bridge-windows.py).
 
-One short line per step instead of hand-built JSON and curl. Every image it saves carries a mapping
-sidecar, so a pixel read off an enlarged crop can be sent back as an action without doing the
-`origin + x / scale` arithmetic by hand.
+Saves images with mapping sidecars and sends the server's action JSON unchanged, except for
+the selected target and optional `--from` coordinate conversion.
 
     python api/bridge_client.py windows
     python api/bridge_client.py shot overview [--scale 0.5] [--raise]
     python api/bridge_client.py crop pins 1500 700 2580 1000 [--scale 2]
-    python api/bridge_client.py act click 1700 900
-    python api/bridge_client.py act drag 600 260 900 300 --from pins     # crop pixels -> frame pixels
-    python api/bridge_client.py act key --key ctrl+a
-    python api/bridge_client.py act type --text "Event BeginPlay"
-    python api/bridge_client.py act scroll 1150 530 --dir up
+    python api/bridge_client.py act --json '{"type":"click","x":1700,"y":900}'
+    python api/bridge_client.py act --from pins --json '{"type":"drag","x":40,"y":60,"x2":80,"y2":100}'
+    python api/bridge_client.py act --json '{"type":"key","key":"ctrl+a"}'
+    python api/bridge_client.py act --json '{"type":"delay","miliseconds":1000}'
 
 Target window: --window <id>, or BRIDGE_WINDOW, or --title <substring> (must match exactly one
 window). Server: BRIDGE_URL (default http://127.0.0.1:8110). Images go to --out (default
@@ -19,9 +17,9 @@ artifacts/bridge-shots), each as <name>.png beside <name>.json holding its mappi
 """
 import argparse
 import json
+import math
 import os
 import sys
-import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -29,7 +27,6 @@ from pathlib import Path
 
 DEFAULT_URL = "http://127.0.0.1:8110"
 DEFAULT_OUT = Path(__file__).resolve().parent.parent / "artifacts" / "bridge-shots"
-POINTER_VERBS = {"click", "double_click", "right_click", "hover", "scroll"}
 
 
 class BridgeError(RuntimeError):
@@ -56,41 +53,39 @@ def to_frame(mapping, x, y):
     return round(ox + x / s), round(oy + y / s)
 
 
-def build_action(window, kind, coords=(), key=None, text=None, direction=None, mapping=None,
-                 seconds=None):
-    """The /act payload. With a mapping, every coordinate pair is converted to frame pixels."""
-    payload = {"window": window, "type": kind}
-    pts = list(coords)
-    if len(pts) % 2:
-        raise ValueError("coordinates come in x y pairs")
-    if mapping:
-        conv = []
-        for i in range(0, len(pts), 2):
-            conv.extend(to_frame(mapping, pts[i], pts[i + 1]))
-        pts = conv
-    if kind == "drag":
-        if len(pts) != 4:
-            raise ValueError("drag needs x y x2 y2")
-        payload.update(x=pts[0], y=pts[1], x2=pts[2], y2=pts[3])
-    elif kind in POINTER_VERBS:
-        if len(pts) != 2:
-            raise ValueError(f"{kind} needs x y")
-        payload.update(x=pts[0], y=pts[1])
-    if kind == "scroll":
-        payload["direction"] = direction or "down"
-    if kind in ("key", "key_hold"):
-        if not key:
-            raise ValueError(f"{kind} needs --key")
-        payload["key"] = key
-    if seconds is not None:
-        if kind != "key_hold":
-            raise ValueError("--seconds is only valid for key_hold")
-        payload["seconds"] = seconds
-    if kind == "type":
-        if text is None:
-            raise ValueError("type needs --text")
-        payload["text"] = text
-    return payload
+def build_payload(selector, payload, mapping=None):
+    """Add the CLI target and optionally map coordinate pairs; the server validates actions."""
+    if not isinstance(payload, dict):
+        raise ValueError("--json must contain a JSON object")
+    if "window" in payload or "title" in payload:
+        raise ValueError("select the target with --window, --title, or BRIDGE_WINDOW, not --json")
+    result = {**payload, **selector}
+    if mapping is None:
+        return result
+
+    def mapped(action):
+        if not isinstance(action, dict):
+            raise ValueError("--from requires action objects")
+        action = dict(action)
+        for x, y in (("x", "y"), ("x2", "y2")):
+            if x not in action and y not in action:
+                continue
+            try:
+                values = (action[x], action[y])
+                if any(isinstance(v, bool) or not isinstance(v, (int, float))
+                       or not math.isfinite(v) for v in values):
+                    raise ValueError
+                action[x], action[y] = to_frame(mapping, *values)
+            except (KeyError, TypeError, ValueError, OverflowError, ZeroDivisionError):
+                raise ValueError(f"--from needs finite numeric {x}, {y} and a valid mapping") from None
+        return action
+
+    if "actions" in result:
+        if not isinstance(result["actions"], list):
+            raise ValueError("--from requires an actions array")
+        result["actions"] = [mapped(action) for action in result["actions"]]
+        return result
+    return mapped(result)
 
 
 # ---- HTTP -------------------------------------------------------------------------------------
@@ -179,15 +174,9 @@ def main(argv=None):
     c.add_argument("--scale", default="2")
     c.add_argument("--raise", dest="raise_", action="store_true")
 
-    a = sub.add_parser("act", help="one action")
-    a.add_argument("kind")
-    a.add_argument("coords", nargs="*", type=int)
-    a.add_argument("--key")
-    a.add_argument("--text")
-    a.add_argument("--dir", dest="direction")
-    a.add_argument("--seconds", type=float, help="duration for key_hold (body clamps to 0.1-5 seconds)")
+    a = sub.add_parser("act", help="send one action or a batch as the server's JSON")
+    a.add_argument("--json", required=True, help="action object or object containing an actions array")
     a.add_argument("--from", dest="from_shot", help="coords are pixels of this saved shot")
-    a.add_argument("--settle", type=float, default=0.4, help="seconds to wait after acting")
 
     args = p.parse_args(argv)
     client = BridgeClient(out=args.out)
@@ -220,12 +209,8 @@ def main(argv=None):
             print(f"{png}  scale={m['scale']} origin={m['origin']} frame={m['frame']}")
         elif args.cmd == "act":
             mapping = client.load_mapping(args.from_shot) if args.from_shot else None
-            payload = build_action(selector.get("window"), args.kind, args.coords, args.key, args.text,
-                                   args.direction, mapping, args.seconds)
-            payload.pop("window")
-            payload.update(selector)
+            payload = build_payload(selector, json.loads(args.json), mapping)
             print(json.dumps(client.act(payload)))
-            time.sleep(args.settle)
         return 0
     except (BridgeError, ValueError) as e:
         print(f"FAIL: {e}", file=sys.stderr)

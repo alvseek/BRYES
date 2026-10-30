@@ -10,7 +10,7 @@ by description, and acts at a pixel; BRYES does as it is told and reports what i
   GET  /screenshot?window=<id>            -> PNG of the body's current frame, 1:1
   GET  /downscaleshot?window=&scale=0.5   -> PNG scaled down, with the mapping headers
   GET  /upscaleshot?window=&x1=&y1=&x2=&y2=&scale=2 -> PNG of that crop, enlarged, same headers
-  POST /act      {window, type, x?, y?, x2?, y2?, text?, key?, seconds?, direction?}
+  POST /act      {window, type, x?, y?, x2?, y2?, text?, key?, seconds?, direction?, miliseconds?}
   POST /locate   {window, instruction}    -> {x, y}
   GET  /profiles?path=<a/b>               -> {path, visual, operating}
 
@@ -57,10 +57,10 @@ PORT = 8110
 # One action at a time, the way the task API allows one task at a time: one desktop, one driver.
 _LOCK = threading.Lock()
 
-# Verbs the surface will forward. The body's Capabilities are the second check, so a verb that
-# exists here but not on this body is refused with the body's own reason.
+# Input verbs are checked against the body's capabilities. Delay is handled by the Bridge,
+# without forwarding it to the body or sending desktop input.
 _POINT_VERBS = {"click", "double_click", "right_click", "hover", "scroll"}
-_VERBS = _POINT_VERBS | {"drag", "scroll", "type", "key", "key_hold"}
+_VERBS = _POINT_VERBS | {"drag", "scroll", "type", "key", "key_hold", "delay"}
 
 
 class RECT(ctypes.Structure):
@@ -390,6 +390,19 @@ def make_app(device_factory=None, locator=None, window_lister=None, frame_provid
                 refuse(f"type must be one of {sorted(_VERBS)}")
             if batch and ("window" in item or "title" in item):
                 refuse("window and title belong at the request level")
+            if verb == "delay":
+                value = item.get("miliseconds")
+                if (isinstance(value, bool) or not isinstance(value, (int, float))
+                        or value < 0):
+                    refuse("delay needs finite nonnegative numeric miliseconds")
+                try:
+                    finite = math.isfinite(value)
+                except OverflowError:
+                    finite = False
+                if not finite:
+                    refuse("delay needs finite nonnegative numeric miliseconds")
+                actions.append({"type": verb, "miliseconds": value})
+                continue
             if verb not in device.caps.verbs:
                 refuse(f"{device.caps.name} cannot perform {verb}")
             action = {"type": verb}
@@ -420,7 +433,10 @@ def make_app(device_factory=None, locator=None, window_lister=None, frame_provid
         with _LOCK:
             for index, action in enumerate(actions):
                 try:
-                    device.act(action)
+                    if action["type"] == "delay":
+                        time.sleep(action["miliseconds"] / 1000)
+                    else:
+                        device.act(action)
                 except Exception as e:
                     status = 409 if isinstance(e, (RuntimeError, ValueError)) else 500
                     if status == 500:

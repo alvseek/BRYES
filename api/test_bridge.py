@@ -383,6 +383,53 @@ def test_act_batch_validates_before_input():
     print("PASS: malformed batches and later invalid actions send no input")
 
 
+def test_act_delay():
+    app, device = build()
+    events = []
+    device.act = lambda action: events.append(action)
+    sleep = _bridge.time.sleep
+    actions = [{"type": "key", "key": "a"},
+               {"type": "delay", "miliseconds": 1000},
+               {"type": "key", "key": "b"}]
+
+    def record_sleep(seconds):
+        assert _bridge._LOCK.locked()
+        events.append(("sleep", seconds))
+
+    _bridge.time.sleep = record_sleep
+    try:
+        c = app.test_client()
+        r = c.post("/act", json={"window": "0x1a", "actions": actions})
+        assert r.status_code == 200 and r.get_json() == {"ok": True, "actions": actions}
+        assert events == [actions[0], ("sleep", 1.0), actions[2]]
+        for value in (0, 0.5):
+            events.clear()
+            action = {"type": "delay", "miliseconds": value}
+            r = c.post("/act", json={"window": "0x1a", **action})
+            assert r.status_code == 200 and r.get_json() == {"ok": True, "action": action}
+            assert events == [("sleep", value / 1000)]
+        # A later malformed delay must prevent both earlier input and sleeping.
+        for value in (None, True, -1, "1000", [], float("nan"), float("inf"), 10**400):
+            events.clear()
+            r = c.post("/act", json={"window": "0x1a", "actions": [
+                actions[0], {"type": "delay", "miliseconds": value}]})
+            assert r.status_code == 400 and "actions[1]" in r.get_json()["description"]
+            assert events == []
+        assert c.post("/act", json={"window": "0x1a", "type": "delay"}).status_code == 400
+        # A preceding input failure stops before the delay; a later failure includes it.
+        device.act = lambda _: (_ for _ in ()).throw(RuntimeError("gate refused"))
+        events.clear()
+        r = c.post("/act", json={"window": "0x1a", "actions": actions})
+        assert r.status_code == 409 and r.get_json()["completed"] == [] and events == []
+        r = c.post("/act", json={"window": "0x1a", "actions": actions[1:]})
+        assert r.status_code == 409 and r.get_json()["completed"] == actions[1:2]
+        assert r.get_json()["failed_index"] == 1 and events == [("sleep", 1.0)]
+        assert not _bridge._LOCK.locked()
+    finally:
+        _bridge.time.sleep = sleep
+    print("PASS: delay waits in order under the batch lock, validates first and preserves progress")
+
+
 def test_act_batch_stops_on_failure():
     for failed_index in (0, 1, 2):
         app, device = build()
@@ -497,6 +544,7 @@ if __name__ == "__main__":
     test_act_forwards_and_refuses()
     test_act_batch()
     test_act_batch_validates_before_input()
+    test_act_delay()
     test_act_batch_stops_on_failure()
     test_act_batch_lock()
     test_locate()

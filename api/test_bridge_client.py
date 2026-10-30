@@ -2,9 +2,8 @@
 
     python api/test_bridge_client.py
 
-What is tested is the arithmetic and the payload shapes the client owns: the frame mapping read
-from the image headers, the crop-to-frame conversion, the /act payload per verb, window picking
-and the raise point. The HTTP calls themselves are thin and are exercised against a live Bridge.
+Tests cover image mappings, generic action JSON, target forwarding, HTTP requests and CLI errors.
+Server contract checks use Flask's test client with fake dependencies, never a real desktop.
 """
 import sys
 import json
@@ -12,6 +11,7 @@ import io
 import tempfile
 import urllib.error
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -36,29 +36,38 @@ def test_to_frame():
     print("PASS: crop pixels map to frame pixels as origin + px / scale")
 
 
-def test_build_action():
-    assert bc.build_action("0x1", "click", (10, 20)) == {"window": "0x1", "type": "click", "x": 10, "y": 20}
+def test_build_payload():
+    selector = {"window": "0x1"}
     m = {"scale": 2.0, "origin": [100, 200]}
-    assert bc.build_action("0x1", "drag", (40, 60, 80, 100), mapping=m) == {
-        "window": "0x1", "type": "drag", "x": 120, "y": 230, "x2": 140, "y2": 250}
-    assert bc.build_action("0x1", "scroll", (5, 5), direction="up")["direction"] == "up"
-    assert bc.build_action("0x1", "scroll", (5, 5))["direction"] == "down"
-    assert bc.build_action("0x1", "key", key="ctrl+a") == {"window": "0x1", "type": "key", "key": "ctrl+a"}
-    assert bc.build_action("0x1", "key_hold", key="w", seconds=1.5) == {
-        "window": "0x1", "type": "key_hold", "key": "w", "seconds": 1.5}
-    assert "seconds" not in bc.build_action("0x1", "key_hold", key="w")
-    assert bc.build_action("0x1", "type", text="Event BeginPlay")["text"] == "Event BeginPlay"
-    for bad in (lambda: bc.build_action("0x1", "click", (1,)),
-                lambda: bc.build_action("0x1", "drag", (1, 2)),
-                lambda: bc.build_action("0x1", "key"),
-                lambda: bc.build_action("0x1", "key", key="w", seconds=1),
-                lambda: bc.build_action("0x1", "type")):
+    drag = {"type": "drag", "x": 40, "y": 60, "x2": 80, "y2": 100}
+    converted = {"type": "drag", "x": 120, "y": 230, "x2": 140, "y2": 250}
+    assert bc.build_payload(selector, drag, m) == {**selector, **converted}
+    assert drag["x"] == 40  # caller-owned JSON is not mutated
+    delay = {"type": "delay", "miliseconds": 1000}
+    future = {"type": "future-server-verb", "new_field": {"keep": True}}
+    batch = {"actions": [drag, delay, future]}
+    assert bc.build_payload(selector, batch, m) == {
+        **selector, "actions": [converted, delay, future]}
+    assert batch["actions"][0] == drag
+    assert bc.build_payload({"title": "App"}, future) == {"title": "App", **future}
+    # The server, not the CLI, validates verbs, required fields and batch semantics.
+    for action in ({"type": "key"}, {"actions": []}, future):
+        assert bc.build_payload(selector, action) == {**selector, **action}
+    for bad in (lambda: bc.build_payload(selector, []),
+                lambda: bc.build_payload(selector, {"window": "0x2"}),
+                lambda: bc.build_payload(selector, {"title": "Other"}),
+                lambda: bc.build_payload(selector, {"actions": None}, m),
+                lambda: bc.build_payload(selector, {"actions": [None]}, m),
+                lambda: bc.build_payload(selector, {"x": 1}, m),
+                lambda: bc.build_payload(selector, {"x": True, "y": 1}, m),
+                lambda: bc.build_payload(selector, {"x": "1", "y": 1}, m),
+                lambda: bc.build_payload(selector, {"x": float("inf"), "y": 1}, m)):
         try:
             bad()
         except ValueError:
             continue
-        raise AssertionError("a malformed action was accepted")
-    print("PASS: /act payloads per verb, converted through a mapping, malformed ones refused")
+        raise AssertionError("an invalid local payload or mapping was accepted")
+    print("PASS: generic payloads preserve server fields and map single or batch coordinates")
 
 
 def test_client_commands():
@@ -80,14 +89,16 @@ def test_client_commands():
             calls.append(("act", payload))
             return {"ok": True}
 
-    original_client, original_sleep = bc.BridgeClient, bc.time.sleep
+    original_client = bc.BridgeClient
     try:
-        bc.BridgeClient, bc.time.sleep = FakeClient, lambda _: None
+        bc.BridgeClient = FakeClient
         assert bc.main(["--window", "0x1", "locate", "the Submit button"]) == 0
         assert bc.main(["profiles", "windows/unreal-editor"]) == 0
-        assert bc.main(["--window", "0x1", "act", "key_hold", "--key", "w", "--seconds", "1.5"]) == 0
+        with patch("time.sleep", side_effect=AssertionError("no automatic client wait")):
+            assert bc.main(["--window", "0x1", "act", "--json",
+                            '{"type":"key_hold","key":"w","seconds":1.5}']) == 0
     finally:
-        bc.BridgeClient, bc.time.sleep = original_client, original_sleep
+        bc.BridgeClient = original_client
     assert calls == [("locate", {"window": "0x1"}, "the Submit button"),
                      ("profiles", "windows/unreal-editor"),
                      ("act", {"window": "0x1", "type": "key_hold", "key": "w", "seconds": 1.5})]
@@ -130,13 +141,14 @@ def test_server_owned_targeting():
             calls.append(("act", payload))
             return {}
 
-    original, sleep, old_env = bc.BridgeClient, bc.time.sleep, bc.os.environ.pop("BRIDGE_WINDOW", None)
+    original, old_env = bc.BridgeClient, bc.os.environ.pop("BRIDGE_WINDOW", None)
     try:
-        bc.BridgeClient, bc.time.sleep = FakeClient, lambda _: None
+        bc.BridgeClient = FakeClient
         assert bc.main(["--title", "Example App", "shot", "one", "--raise"]) == 0
         assert bc.main(["--title", "Example App", "crop", "two", "1", "2", "3", "4", "--raise"]) == 0
         assert bc.main(["--title", "Example App", "locate", "button"]) == 0
-        assert bc.main(["--title", "Example App", "act", "key", "--key", "a"]) == 0
+        assert bc.main(["--title", "Example App", "act", "--json",
+                        '{"type":"key","key":"a"}']) == 0
         assert calls[0] == ("/downscaleshot", {"title": "Example App", "scale": "0.5", "raise": True})
         assert calls[1][1] == {"title": "Example App", "x1": 1, "y1": 2, "x2": 3, "y2": 4, "scale": "2", "raise": True}
         assert calls[2] == ("locate", {"title": "Example App"}, "button")
@@ -145,7 +157,7 @@ def test_server_owned_targeting():
         assert bc.main(["--title", "ignored", "shot", "three", "--raise"]) == 0
         assert calls[-1][1]["window"] == "0x1" and "title" not in calls[-1][1]
     finally:
-        bc.BridgeClient, bc.time.sleep = original, sleep
+        bc.BridgeClient = original
         if old_env is None:
             bc.os.environ.pop("BRIDGE_WINDOW", None)
         else:
@@ -202,6 +214,78 @@ def test_cli_error_exit():
     print("PASS: CLI prints HTTP error and returns failure")
 
 
+def test_settle_option_removed():
+    with patch("sys.stderr", new_callable=io.StringIO) as stderr:
+        try:
+            bc.main(["--window", "0x1", "act", "--json",
+                     '{"type":"key","key":"enter"}', "--settle", "1"])
+        except SystemExit as exc:
+            assert exc.code == 2
+        else:
+            raise AssertionError("removed --settle option was accepted")
+        assert "unrecognized arguments: --settle" in stderr.getvalue()
+    print("PASS: removed --settle option is rejected rather than silently ignored")
+
+
+def test_json_action_requests():
+    from test_bridge import build
+
+    app, device = build()
+    requests, waits = [], []
+    with tempfile.TemporaryDirectory() as directory:
+        client = bc.BridgeClient(base="http://example.test", out=directory)
+        (Path(directory) / "pins.json").write_text(
+            '{"scale":2,"origin":[100,200]}', encoding="utf-8", newline="\n")
+
+        def open_request(req):
+            requests.append(req)
+            assert req.get_method() == "POST" and req.full_url == "http://example.test/act"
+            assert req.get_header("Content-type") == "application/json"
+            r = app.test_client().post("/act", data=req.data, content_type="application/json")
+            if r.status_code != 200:
+                raise bc.BridgeError(f"HTTP {r.status_code}: {r.get_data(as_text=True)}")
+            return io.BytesIO(r.data)
+
+        client._open = open_request
+        with patch.object(bc, "BridgeClient", return_value=client), patch("time.sleep", waits.append):
+            single = {"type": "key", "key": "enter"}
+            assert bc.main(["--window", "0x1a", "act", "--json", json.dumps(single)]) == 0
+            assert json.loads(requests[-1].data) == {"window": "0x1a", **single}
+            actions = [{"type": "click", "x": 40, "y": 60},
+                       {"type": "delay", "miliseconds": 1000},
+                       {"type": "drag", "x": 40, "y": 60, "x2": 80, "y2": 100}]
+            assert bc.main(["--window", "0x1a", "act", "--from", "pins", "--json",
+                            json.dumps({"actions": actions})]) == 0
+            expected = [{"type": "click", "x": 120, "y": 230}, actions[1],
+                        {"type": "drag", "x": 120, "y": 230, "x2": 140, "y2": 250}]
+            assert json.loads(requests[-1].data) == {"window": "0x1a", "actions": expected}
+            assert device.actions == [single, expected[0], expected[2]] and waits == [1.0]
+            assert bc.main(["--window", "0x1a", "act", "--json",
+                            '{"type":"delay","miliseconds":0}']) == 0
+            assert waits == [1.0, 0]
+            # Semantic errors still reach the server and are printed with a failing exit.
+            before = len(device.actions)
+            with patch("sys.stderr", new_callable=io.StringIO) as stderr:
+                assert bc.main(["--window", "0x1a", "act", "--json",
+                                '{"actions":[{"type":"key","key":"a"},{"type":"unknown"}]}']) == 1
+                assert "HTTP 400" in stderr.getvalue()
+            assert len(device.actions) == before
+            before = len(requests)
+            for value in ("{", "[]", '{"window":"0x2","type":"key"}'):
+                with patch("sys.stderr", new_callable=io.StringIO):
+                    assert bc.main(["--window", "0x1a", "act", "--json", value]) == 1
+            assert len(requests) == before
+            for legacy in (["key", "--key", "enter"], ["--json", "{}", "--seconds", "1"]):
+                with patch("sys.stderr", new_callable=io.StringIO):
+                    try:
+                        bc.main(["--window", "0x1a", "act", *legacy])
+                    except SystemExit as exc:
+                        assert exc.code == 2
+                    else:
+                        raise AssertionError("legacy action syntax accepted")
+    print("PASS: JSON CLI sends single, delay and mapped batch requests through the server contract")
+
+
 def test_mapping_sidecar_round_trip(tmp=Path(__file__).resolve().parent.parent / "artifacts" / "bridge-client-test"):
     client = bc.BridgeClient(out=tmp)
     tmp.mkdir(parents=True, exist_ok=True)
@@ -218,10 +302,12 @@ def test_mapping_sidecar_round_trip(tmp=Path(__file__).resolve().parent.parent /
 if __name__ == "__main__":
     test_mapping_from_headers()
     test_to_frame()
-    test_build_action()
+    test_build_payload()
     test_client_commands()
     test_server_owned_targeting()
     test_focused_http_request()
     test_cli_error_exit()
+    test_settle_option_removed()
+    test_json_action_requests()
     test_mapping_sidecar_round_trip()
     print("PASS: all bridge client tests green")
