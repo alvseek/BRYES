@@ -5,13 +5,5 @@ description: Drive a real Windows application through BRYES's Windows Bridge (ga
 
 Read [`docs/procedures/drive-the-desktop.md`](../../../docs/procedures/drive-the-desktop.md) and follow it exactly.
 
-That file is the canonical procedure and the only copy. This file exists so the skill is
-discoverable as `/drive-desktop`; it deliberately carries no procedure text of its own.
+That file is the canonical procedure and the only copy. This file exists so the skill is discoverable as `/drive-desktop`; it deliberately carries no procedure text of its own.
 
-The four facts that matter before anything else:
-
-- `BRYES_ALLOW_HOST=1` is required in the Bridge server's environment to act; the Bridge has no shell endpoint.
-- Select the exact window handle from `/windows`; prefer a target you launched and verify any existing target before acting.
-- Kill only a process you created.
-- If the application publishes an API (Unreal's Python / Remote Control API), use that instead of
-  pixels; see ADR-001.

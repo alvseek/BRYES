@@ -131,9 +131,9 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 - **status**: useful
 - **tags**: [bridge, windows, http, screenshots, coordinates, external-agent]
 - **last_verified**: "2026-10-30"
-- **verified_by**: "software-architect / Bridge server conveniences"
+- **verified_by**: "software-architect / explicit delay and server coordinate mapping"
 - **update_trigger**: "when the Windows Bridge filename, routes, image headers, or runtime setup changes"
-- **implementation note**: "The Bridge now resolves unique titles and live handles server-side; capture POST can focus under the host gate before grabbing. Model-free proof only; live behavior remains unverified."
+- **implementation note**: "Documents explicit delay actions and optional request-level mapping on /act; conversion and validation are server-owned. Restarted 2026-10-30; health and no-input mapping refusal verified, live input not tested."
 - **notes**: "Reference for the Windows Bridge server on loopback port 8110, including the windowless global pointer, optional window-relative coordinates, scaled-shot mapping, and the `/act` contract: one action or an ordered `actions` batch, validated before any input, one lock, stop at the first failure with the completed prefix reported. The command-line client has its own README; the full safety and observe-act-verify workflow lives in docs/procedures/drive-the-desktop.md."
 
 ### `api/README-Bridge-Client.md`
@@ -144,10 +144,10 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 - **status**: useful
 - **tags**: [bridge, windows, client, cli, screenshots, coordinates]
 - **last_verified**: "2026-10-30"
-- **verified_by**: "software-architect / Bridge server conveniences"
+- **verified_by**: "software-architect / thin JSON client"
 - **update_trigger**: "when the Bridge client commands, target selection, or image mapping change"
-- **implementation note**: "The client delegates title resolution and focused captures to the updated server; local image mapping remains client-owned."
-- **notes**: "Command-line client for the Windows Bridge server: target selection, screenshots and saved coordinate mapping, actions, locate, profiles, and held-key duration. Separate from the server API reference."
+- **implementation note**: "Actions use --json, including batches and delays. --from attaches a sidecar for server conversion; old action flags and --settle are removed. Requires the updated server for mapping."
+- **notes**: "Optional terminal client for the Windows Bridge: local image/sidecar saving, target defaults, JSON actions and mapping attachment, locate and profiles. No local coordinate arithmetic, action-schema rules or automatic wait. Separate from the server API reference."
 
 ### `docs/architecture-overview.md`
 
@@ -301,9 +301,9 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 - **status**: useful
 - **tags**: [procedure, host-body, windows, driving, pyautogui, gates, adr-009]
 - **last_verified**: "2026-10-30"
-- **verified_by**: "software-architect / Bridge server conveniences"
+- **verified_by**: "software-architect / partial procedure alignment"
 - **update_trigger**: "when Windows Bridge routes, coordinate mapping, input gates, or operator workflow change"
-- **notes**: "Canonical /drive-desktop operator procedure: select a verified handle, read profiles, observe PNGs, map coordinates, act and verify. Documents unique title selection and focused POST captures. Global OpenCode and Claude Code copies were refreshed on 2026-10-30; refresh again after future edits."
+- **notes**: "Canonical /drive-desktop operator procedure: targeting, profiles, observe-act-verify and focused POST capture. This session added server mapping guidance, but full alignment with delay/batches and the thin JSON client is explicitly next session. Global copies were last refreshed before these changes and have not been reinstalled."
 
 ### `grounding.py`
 

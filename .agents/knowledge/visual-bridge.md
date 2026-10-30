@@ -50,9 +50,19 @@ have partially executed, so a caller must not resend the whole batch blind. A su
 lists every executed action in order. There is no delay between actions and no check that the
 UI moved, so a batch is a sequence of inputs, not a sequence of verified steps.
 
-Coordinates are frame pixels, and points must be finite numbers; `scroll` is a point verb, so
-it needs `x` and `y` as well as `direction`. The keyboard fields are `text` for `type` and
-`key` for `key`/`key_hold`, the last of which clamps its optional `seconds` to 0.1-5.
+Coordinates default to frame pixels, and points must be finite numbers; `scroll` is a point
+verb, so it needs `x` and `y` as well as `direction`. Optional request-level
+`mapping: {scale, origin: [x,y]}` changes pointer coordinates to image pixels. The server applies
+`origin + coordinate / scale` and rounds to frame pixels for point verbs and both drag endpoints.
+The mapping is shared across the batch, validated before any input or waiting, and never stored.
+Responses and failure progress echo converted frame coordinates. Scale must be finite and
+positive; origin is two finite numbers. Mapping does not detect that the UI moved.
+
+The keyboard fields are `text` for `type` and `key` for `key`/`key_hold`, the last of which
+clamps optional `seconds` to 0.1-5. A separate `{"type":"delay","miliseconds":1000}` action
+waits one second at its position in the batch, holding the same lock without sending input.
+The wire field is intentionally spelled `miliseconds`. It is required, finite, numeric and
+nonnegative. A delay is not a UI-readiness check.
 
 The server resolves exactly one `window` handle or `title` substring per request. A missing
 target is 404; an ambiguous title is 409 with candidates. POST capture variants can focus by
@@ -61,10 +71,30 @@ focus requests directly rather than selecting windows or choreographing focus it
 covered by model-free tests on 2026-10-30, not by a live Bridge desktop run.
 
 The command-line client `api/bridge_client.py` is documented separately in
-`api/README-Bridge-Client.md`. It provides `locate`, `profiles`, image mapping, and
-`key_hold --seconds`; the server and client remain separate. `/pointer` without a window
-returns only desktop `x` and `y`. With a window, `image_x` and `image_y` are relative to the
-top-left of that window's monitor; the pointer request does not capture an image.
+`api/README-Bridge-Client.md`. It saves PNGs and mapping sidecars and provides terminal shortcuts
+for windows, profiles, captures and locate. Actions now use `act --json '<object>'`, accepting
+single actions, batches and delay without per-verb client rules. The old positional action
+syntax, verb flags and `--settle` were removed. There is no automatic post-action wait.
+`--from <shot>` loads a sidecar and attaches it as request-level `mapping`; coordinate arithmetic
+and semantic validation now live in the server. Supplying both JSON mapping and `--from` is
+refused. Updated clients require the updated server for mapping: an older server could ignore
+the mapping and act at the wrong point. The HTTP timeout remains 60 seconds and does not cancel
+server execution.
+
+`/pointer` without a window returns only desktop `x` and `y`. With a window, `image_x` and
+`image_y` are relative to the top-left of that window's monitor; it does not capture an image.
+
+On 2026-10-30 the changes shipped as `9ce452b` (delay and JSON client) and `dd68f1a`
+(server-owned coordinate mapping). The Bridge was restarted with `BRYES_ALLOW_HOST=1`;
+`/health` answered `ok:true`, and a no-input invalid-mapping request returned the new
+`mapping.scale must be a finite positive number` refusal, proving the updated route is loaded.
+Model-free Bridge/client suites and installer fixtures passed. Live action testing was declined;
+Ruff is unavailable in the current Python environment. Next session is explicitly for bringing
+the desktop procedures and globally installed copies into line with these contracts.
+
+Capture IDs and retained screenshots/mappings were rejected as unnecessary, not deferred.
+Extra Eyes endpoints (`describe`, `box`, `diff`) remain deferred. Do not resurrect either as
+the automatic next task; the requested follow-up is procedure alignment.
 
 Plain screenshots do not raise the window; focused POST captures do so through a gated hover.
 Both capture what is visible on the selected monitor.

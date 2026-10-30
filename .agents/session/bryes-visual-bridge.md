@@ -5,6 +5,39 @@ fixes it forced, and the first real build driven through it.
 
 ---
 
+### 2026-10-30 17.55 - EXPLICIT DELAYS, A THIN JSON CLIENT AND SERVER-OWNED COORDINATE MAPPING (agent: software-architect)
+
+- **Summary**: Added delay actions, replaced per-verb CLI syntax with server JSON, moved image-to-frame conversion into `/act`, pushed the changes and restarted the Bridge. Next session is procedure alignment, not another feature or a forced live test.
+- **Context**: Alvi returned to the previous implementation and asked which conveniences still belonged in the client versus server. The session began with recovery of a tool-truncated local index row; both READMEs were confirmed changed in the prior implementation commit.
+- **Discussion**:
+  - **Ownership**: The client retains local PNG/sidecar files, terminal output, target defaults and request construction. The server owns desktop targeting, focus, input, delay and coordinate conversion. Thin one-to-one HTTP wrappers are optional shortcuts, not new capabilities.
+  - **Delay**: Alvi corrected my initial reading of a per-action delay attribute: "the action itself is type: delay, miliseconds: 1000". Implemented that separate action exactly, preserving the wire spelling. Removed `--settle` and the client's automatic post-request wait on his instruction.
+  - **Client simplification**: Replaced positional verbs and `--key`/`--text`/`--dir`/`--seconds` with `act --json`, accepting batches and future server fields without local action-schema rules. Existing scripts using the old syntax must change.
+  - **Mapping**: Optional request-level `mapping:{scale,origin}` converts point verbs and both drag endpoints before execution; one mapping applies to a batch. Validation precedes input/waiting, device bounds still apply, and progress responses echo frame coordinates. `--from` now attaches the saved sidecar without doing arithmetic. No server capture storage exists.
+  - **What is not next**: Alvi rejected capture IDs as unnecessary, deferred extra Eyes endpoints, and declined the offered disposable-window action test. After I repeatedly suggested those as next work, he settled on procedure alignment next session.
+- **Key Interactions**: "not even defer. this is no need" for capture IDs; "oh no need" for live testing; "We will continue next session updating the procedures so it's on point with what we have adjusted." His final request orders commit/push, restart, wrap-up, then hibernate through Bridge.
+- **Issues Encountered**:
+  - **Problem Description**: The reader truncated a long local session-index row, and my first UTF-8 recovery attempt hit Windows console encoding. Recovered the complete row using `python -X utf8` with wrapped display lines, without editing the file.
+  - **Problem Description**: New tests initially assumed argparse would quote all rejected arguments and that the fake device supported scroll. Adjusted the assertions/fixture, then reran the complete affected suites successfully.
+- **Outcomes**:
+  - **Deliverables**: `9ce452b` ships explicit delay and JSON CLI; `dd68f1a` ships server mapping and client delegation. Both were pushed to main. READMEs and partial canonical procedure guidance were updated; global procedure copies were not refreshed.
+  - **Progress Made**: Bridge/client model-free scripts, installer fixtures and scoped whitespace checks passed. Restarted only the verified Python listener for port 8110, retaining `BRYES_ALLOW_HOST=1`. `/health` returned `ok:true`; a no-input invalid-mapping request returned `mapping.scale must be a finite positive number`, proving the updated route loaded. No live input correctness test was performed.
+  - **Tech Debts**:
+    - Live Bridge focus, title resolution, batch/delay and mapped-pointer behavior remain unverified on a disposable window; Alvi declined that test this session. Do not repeatedly re-propose it as the required next step.
+    - Ruff remains unavailable on PATH/as a Python module, so scoped lint did not run.
+    - Extra Eyes endpoints are deferred; focus/profile-aware locate and host environment isolation remain unbuilt.
+    - Unreal settings persistence and the Blueprint save remain unverified; broad runtime QA is unrun.
+    - Canonical desktop procedures and globally installed copies need alignment with JSON actions, explicit delays and server-owned mapping. Old servers can ignore mapping, so restart/update the server before using the new client's `--from`.
+  - **Next Steps**: Next session, align the desktop procedures with the adjusted Bridge/client contracts and deliberately refresh their global copies. Capture IDs are rejected, not deferred. Hibernation is authorized only after wrap-up is saved; its eventual result is not pre-claimed in this record.
+- **Insights**:
+  - **New Understanding**: Moving responsibility does not require deleting terminal shortcuts. Backend mapping accepts caller-supplied metadata without introducing retained captures.
+  - **Improvement Areas**: State the scope of completion explicitly (server versus client), and stop offering rejected/deferred work as the next task. A discussion about separate delay actions did not need an attribute-timing questionnaire.
+- **Promotions**:
+  → Updated `docs/context-index.md` with the current public contract and next-session scope.
+  → Updated `.agents/knowledge/visual-bridge.md` and its index with ownership, breaking CLI changes, mapping, restart evidence and explicit deferrals/rejection.
+
+---
+
 ### 2026-10-30 16.11 - SERVER-OWNED TARGETING AND FOCUSED CAPTURES (agent: software-architect)
 
 - **Summary**: Implemented the Bridge handoff plan: unique server-side title/handle resolution, focused capture POSTs, safe JSON errors, and client delegation. Refreshed the global OpenCode and Claude Code desktop-driving copies.
