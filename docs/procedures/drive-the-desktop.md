@@ -91,7 +91,7 @@ with an image-capable tool and inspect the result before choosing an action.
 | `GET /screenshot?window=<id>` | Full-resolution image of the monitor holding the target |
 | `GET /downscaleshot?window=<id>&scale=0.5` | Smaller whole-monitor overview; scale range `0.05` to `1`, default `0.5` |
 | `GET /upscaleshot?window=<id>&x1=100&y1=200&x2=300&y2=400&scale=2` | Fresh capture, then crop and enlarge; scale range `1` to `4`, default `2` |
-| `GET /pointer?window=<id>` | Pointer in absolute screen and image coordinates, with `inside_frame` and `inside_window` flags |
+| `GET /pointer` | Pointer in absolute screen coordinates; add `?window=<id>` for image coordinates and the `inside_frame` and `inside_window` flags |
 
 A screenshot does **not** bring the window to the foreground. It records what is visible on
 that monitor, including other windows covering the target. Do not aim at a control you cannot

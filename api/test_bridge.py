@@ -171,6 +171,9 @@ def test_locate():
 def test_pointer():
     app, device = build()
     c = app.test_client()
+    r = c.get("/pointer")
+    assert r.status_code == 200 and r.get_json() == {"x": 960, "y": 540}
+    assert c.get("/pointer?window=invalid").status_code == 400
     r = c.get("/pointer?window=0x1a")
     body = r.get_json()
     assert r.status_code == 200, body
@@ -180,9 +183,12 @@ def test_pointer():
     assert body["inside_frame"] is True
     assert body["inside_window"] is True
     device.pos = (-900, -900)                    # parked on another display
+    assert c.get("/pointer").get_json() == {"x": -900, "y": -900}
     body = c.get("/pointer?window=0x1a").get_json()
     assert body["inside_frame"] is False and body["inside_window"] is False
-    print("PASS: /pointer reports both spaces and whether the pointer is outside the window")
+    device.pos = None
+    assert c.get("/pointer").status_code == 503
+    print("PASS: /pointer reports global position and optional window-relative details")
 
 
 def test_profiles():

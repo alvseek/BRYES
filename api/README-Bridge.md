@@ -12,40 +12,34 @@ Run on the Windows host, from the directory containing `api/`:
 python api/bridge-windows.py
 ```
 
-It listens on `http://127.0.0.1:8110`. Any HTTP client can drive it; [bridge_client.py](bridge_client.py)
-is the short one, one line per step, and it saves every image beside a `.json` holding its mapping
-so a pixel read off a crop goes straight back as an action:
+It listens on `http://127.0.0.1:8110`. Any HTTP client can call it. The separate
+[Bridge client](README-Bridge-Client.md) provides a command-line interface and coordinate mapping.
 
-```powershell
-$env:BRIDGE_WINDOW = "0x1402aa"                                # an id from `windows`
-python api/bridge_client.py windows
-python api/bridge_client.py shot overview --raise              # bring the window forward first
-python api/bridge_client.py crop pins 1500 700 2580 1000 --scale 2
-python api/bridge_client.py act drag 600 260 900 300 --from pins   # crop pixels -> frame pixels
-python api/bridge_client.py act type --text "Event BeginPlay"
-```
+## Window, frame, and coordinates
 
-`--raise` hovers where the pointer already is when it is inside the window, so nothing moves;
-`act` waits `--settle` seconds (default 0.4) so the next look sees the UI after the change.
+A **window** is the selected application's rectangle on the desktop. Its ID selects the target
+for screenshots and input. A **frame** is the entire monitor containing that window, not a crop
+of the window. A frame can therefore include other windows visible on the same monitor.
+
+**Screen coordinates** are positions in Windows' overall desktop space, which can span multiple
+monitors. **Image coordinates** are positions in the frame, measured from that monitor image's
+top-left corner. Input actions use image coordinates; the Windows body translates them to screen
+coordinates.
 
 ## Endpoints
 
-```
-GET  /windows                            every targetable window: id, title, rect,
-                                         image_rect (in the frame's own pixels), foreground
-GET  /pointer?window=<id>                where the pointer is, in screen and image space, and
-                                         whether it is inside the frame and inside the window
-GET  /screenshot?window=<id>              PNG of the target's monitor, 1:1
-GET  /downscaleshot?window=&scale=0.5     the frame scaled down (default 0.5, as the Eyes'
-                                          own overview does)
-GET  /upscaleshot?window=&x1=&y1=&x2=&y2=&scale=2   one crop, enlarged
-POST /act      {window, type, x, y, ...}  one verb at the caller's pixels
-POST /locate   {window, instruction}      one pixel from the Eyes (UI-TARS) on a fresh frame
-GET  /profiles?path=windows/unreal-editor the vocabulary both sides read
-```
+| Method | Endpoint | Description | Returns |
+|---|---|---|---|
+| GET | `/health` | Check whether the HTTP service is responding. | JSON: `ok`. |
+| GET | `/windows` | List targetable windows. | JSON: `windows`, each with `id`, `title`, `rect`, `image_rect`, `frame`, and `foreground`. |
+| GET | `/pointer` | Read the global pointer position; optionally add `?window=<id>` for window-relative details. No screenshot is taken or returned. | JSON: `x`, `y` in desktop coordinates. With a window ID, `image_x`, `image_y` are relative to the top-left of that window's monitor; `inside_frame` and `inside_window` indicate whether the pointer is inside that monitor and window. For example, monitor origin `(1920, 0)` and pointer `(2020, 50)` give image coordinates `(100, 50)`. |
+| GET | `/screenshot?window=<id>` | Capture the target's monitor at full resolution. | PNG image. |
+| GET | `/downscaleshot?window=<id>&scale=0.5` | Capture a full scaled-down frame; the default scale is 0.5. | PNG image with mapping headers: `X-Bryes-Scale` is the resize factor, `X-Bryes-Origin` is the image's top-left in the original frame (`0,0` here), and `X-Bryes-Frame` is the original width and height. Convert each axis to `/act` coordinates using `frame_px = origin + returned_px / scale`. |
+| GET | `/upscaleshot?window=<id>&x1=&y1=&x2=&y2=&scale=2` | Capture and enlarge a region of the frame; the default scale is 2. You can also crop a section from large monitor with scale = 1. | PNG image with mapping headers: `X-Bryes-Scale` is the resize factor, `X-Bryes-Origin` is the crop's top-left in the original frame, and `X-Bryes-Frame` is the original width and height. Convert each axis to `/act` coordinates using `frame_px = origin + returned_px / scale`: crop origin `(100, 200)`, scale `2`, and image point `(40, 60)` give frame point `(120, 230)`. |
+| POST | `/act` | Perform one input action using a JSON body with `window`, `type`, and the action's fields. | JSON: `ok` and the forwarded `action`. |
+| POST | `/locate` | Find one point on a fresh frame using the Eyes (UI-TARS). The JSON body contains `window` and `instruction`. | JSON: frame coordinates `x`, `y`, and the `instruction`. |
+| GET | `/profiles?path=windows/unreal-editor` | Read the visual and operating vocabulary for a profile. | JSON: `path`, `visual`, and `operating`. |
 
-- **Mapping rule for the two scaled shots:** `frame_px = origin + returned_px / scale`, with
-  `X-Bryes-Scale`, `X-Bryes-Origin` and `X-Bryes-Frame` returned as headers on every image.
 - **No auth, loopback only**; the standing guard is that a body must be
   `application/json`, which keeps a cross-origin form post out.
 - **One action at a time** — a lock, the same intent as the task API's single-flight.

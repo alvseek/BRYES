@@ -56,7 +56,8 @@ def to_frame(mapping, x, y):
     return round(ox + x / s), round(oy + y / s)
 
 
-def build_action(window, kind, coords=(), key=None, text=None, direction=None, mapping=None):
+def build_action(window, kind, coords=(), key=None, text=None, direction=None, mapping=None,
+                 seconds=None):
     """The /act payload. With a mapping, every coordinate pair is converted to frame pixels."""
     payload = {"window": window, "type": kind}
     pts = list(coords)
@@ -81,6 +82,10 @@ def build_action(window, kind, coords=(), key=None, text=None, direction=None, m
         if not key:
             raise ValueError(f"{kind} needs --key")
         payload["key"] = key
+    if seconds is not None:
+        if kind != "key_hold":
+            raise ValueError("--seconds is only valid for key_hold")
+        payload["seconds"] = seconds
     if kind == "type":
         if text is None:
             raise ValueError("type needs --text")
@@ -132,6 +137,16 @@ class BridgeClient:
         with self._open(req) as r:
             return json.loads(r.read().decode())
 
+    def locate(self, window, instruction):
+        req = urllib.request.Request(
+            self.base + "/locate", data=json.dumps({"window": window, "instruction": instruction}).encode(),
+            headers={"Content-Type": "application/json"})
+        with self._open(req) as r:
+            return json.loads(r.read().decode())
+
+    def profiles(self, path):
+        return self.get_json("/profiles?" + urllib.parse.urlencode({"path": path}))
+
     def raise_window(self, window):
         entry = next((w for w in self.windows() if w["id"] == window), None)
         if entry is None:
@@ -169,6 +184,12 @@ def main(argv=None):
 
     sub.add_parser("windows", help="list targetable windows")
 
+    loc = sub.add_parser("locate", help="locate an element by description")
+    loc.add_argument("instruction")
+
+    prof = sub.add_parser("profiles", help="read a profile's visual and operating vocabulary")
+    prof.add_argument("path")
+
     s = sub.add_parser("shot", help="downscaled overview of the target's monitor")
     s.add_argument("name")
     s.add_argument("--scale", default="0.5")
@@ -186,6 +207,7 @@ def main(argv=None):
     a.add_argument("--key")
     a.add_argument("--text")
     a.add_argument("--dir", dest="direction")
+    a.add_argument("--seconds", type=float, help="duration for key_hold (body clamps to 0.1-5 seconds)")
     a.add_argument("--from", dest="from_shot", help="coords are pixels of this saved shot")
     a.add_argument("--settle", type=float, default=0.4, help="seconds to wait after acting")
 
@@ -197,13 +219,18 @@ def main(argv=None):
                 mark = "*" if w.get("foreground") else " "
                 print(f"{mark} {w['id']:>10}  {w['title'][:70]}  image_rect={w['image_rect']}")
             return 0
+        if args.cmd == "profiles":
+            print(json.dumps(client.profiles(args.path), ensure_ascii=False))
+            return 0
         window = args.window or (pick_window(client.windows(), args.title) if args.title else None)
         if not window:
             raise BridgeError("no target: pass --window, --title, or set BRIDGE_WINDOW")
         if args.cmd in ("shot", "crop") and args.raise_:
             client.raise_window(window)
             time.sleep(0.3)
-        if args.cmd == "shot":
+        if args.cmd == "locate":
+            print(json.dumps(client.locate(window, args.instruction), ensure_ascii=False))
+        elif args.cmd == "shot":
             png, m = client.save_image(f"/downscaleshot?window={window}&scale={args.scale}", args.name)
             print(f"{png}  scale={m['scale']} origin={m['origin']} frame={m['frame']}")
         elif args.cmd == "crop":
@@ -215,7 +242,7 @@ def main(argv=None):
         elif args.cmd == "act":
             mapping = client.load_mapping(args.from_shot) if args.from_shot else None
             payload = build_action(window, args.kind, args.coords, args.key, args.text,
-                                   args.direction, mapping)
+                                   args.direction, mapping, args.seconds)
             print(json.dumps(client.act(payload)))
             time.sleep(args.settle)
         return 0

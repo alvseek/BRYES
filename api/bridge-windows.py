@@ -6,7 +6,7 @@ by description, and acts at a pixel; BRYES does as it is told and reports what i
   GET  /health                            -> {ok: true}
   GET  /windows                           -> {frame: {origin, size}, windows: [{id, title, rect,
                                               image_rect, foreground, ...}]}
-  GET  /pointer?window=<id>               -> {x, y, image_x, image_y, inside_frame, inside_window}
+  GET  /pointer[?window=<id>]             -> {x, y}, plus window-relative fields when selected
   GET  /screenshot?window=<id>            -> PNG of the body's current frame, 1:1
   GET  /downscaleshot?window=&scale=0.5   -> PNG scaled down, with the mapping headers
   GET  /upscaleshot?window=&x1=&y1=&x2=&y2=&scale=2 -> PNG of that crop, enlarged, same headers
@@ -227,10 +227,17 @@ def make_app(device_factory=None, locator=None, window_lister=None, frame_provid
         display; this is the read that answers it, and `inside_window` is the same test the
         body applies before acting.
         """
-        hwnd = _parse_window_id(request.args.get("window"))
-        device = _device_for(hwnd)
+        raw = request.args.get("window")
+        hwnd = _parse_window_id(raw)
+        if raw is not None and hwnd is None:
+            abort(400, description="window must be a hexadecimal window id")
+        device = factory(hwnd)
         with _LOCK:
             pos = device.pointer()
+        if pos is None:
+            abort(503, description="pointer position is unavailable")
+        if hwnd is None:
+            return jsonify({"x": int(pos[0]), "y": int(pos[1])})
         left, top, right, bottom = frame_of(hwnd)
         win = next((w for w in lister() if _parse_window_id(w["id"]) == hwnd), None)
         return jsonify({

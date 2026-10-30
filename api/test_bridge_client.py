@@ -7,6 +7,8 @@ from the image headers, the crop-to-frame conversion, the /act payload per verb,
 and the raise point. The HTTP calls themselves are thin and are exercised against a live Bridge.
 """
 import sys
+import json
+import io
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -40,10 +42,14 @@ def test_build_action():
     assert bc.build_action("0x1", "scroll", (5, 5), direction="up")["direction"] == "up"
     assert bc.build_action("0x1", "scroll", (5, 5))["direction"] == "down"
     assert bc.build_action("0x1", "key", key="ctrl+a") == {"window": "0x1", "type": "key", "key": "ctrl+a"}
+    assert bc.build_action("0x1", "key_hold", key="w", seconds=1.5) == {
+        "window": "0x1", "type": "key_hold", "key": "w", "seconds": 1.5}
+    assert "seconds" not in bc.build_action("0x1", "key_hold", key="w")
     assert bc.build_action("0x1", "type", text="Event BeginPlay")["text"] == "Event BeginPlay"
     for bad in (lambda: bc.build_action("0x1", "click", (1,)),
                 lambda: bc.build_action("0x1", "drag", (1, 2)),
                 lambda: bc.build_action("0x1", "key"),
+                lambda: bc.build_action("0x1", "key", key="w", seconds=1),
                 lambda: bc.build_action("0x1", "type")):
         try:
             bad()
@@ -51,6 +57,56 @@ def test_build_action():
             continue
         raise AssertionError("a malformed action was accepted")
     print("PASS: /act payloads per verb, converted through a mapping, malformed ones refused")
+
+
+def test_client_commands():
+    calls = []
+
+    class FakeClient:
+        def __init__(self, out=None):
+            pass
+
+        def locate(self, window, instruction):
+            calls.append(("locate", window, instruction))
+            return {"x": 10, "y": 20}
+
+        def profiles(self, path):
+            calls.append(("profiles", path))
+            return {"visual": "example", "operating": "example"}
+
+        def act(self, payload):
+            calls.append(("act", payload))
+            return {"ok": True}
+
+    original_client, original_sleep = bc.BridgeClient, bc.time.sleep
+    try:
+        bc.BridgeClient, bc.time.sleep = FakeClient, lambda _: None
+        assert bc.main(["--window", "0x1", "locate", "the Submit button"]) == 0
+        assert bc.main(["profiles", "windows/unreal-editor"]) == 0
+        assert bc.main(["--window", "0x1", "act", "key_hold", "--key", "w", "--seconds", "1.5"]) == 0
+    finally:
+        bc.BridgeClient, bc.time.sleep = original_client, original_sleep
+    assert calls == [("locate", "0x1", "the Submit button"),
+                     ("profiles", "windows/unreal-editor"),
+                     ("act", {"window": "0x1", "type": "key_hold", "key": "w", "seconds": 1.5})]
+
+    class Response(io.BytesIO):
+        pass
+
+    client = bc.BridgeClient(base="http://example.test")
+    requests = []
+
+    def fake_open(req):
+        requests.append(req)
+        return Response(b'{"ok": true}')
+
+    client._open = fake_open
+    assert client.locate("0x1", "a button") == {"ok": True}
+    assert json.loads(requests[0].data) == {"window": "0x1", "instruction": "a button"}
+    assert requests[0].full_url == "http://example.test/locate"
+    assert client.profiles("windows/a b") == {"ok": True}
+    assert requests[1] == "http://example.test/profiles?path=windows%2Fa+b"
+    print("PASS: locate, profiles, and key_hold duration CLI and HTTP requests")
 
 
 def test_pick_window():
@@ -92,6 +148,7 @@ if __name__ == "__main__":
     test_mapping_from_headers()
     test_to_frame()
     test_build_action()
+    test_client_commands()
     test_pick_window()
     test_raise_point()
     test_mapping_sidecar_round_trip()
