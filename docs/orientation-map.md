@@ -130,10 +130,22 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 - **roles**: []
 - **status**: useful
 - **tags**: [bridge, windows, http, screenshots, coordinates, external-agent]
-- **last_verified**: "2026-10-29"
+- **last_verified**: "2026-10-30"
 - **verified_by**: "claude-software-architect"
 - **update_trigger**: "when the Windows Bridge filename, routes, image headers, or runtime setup changes"
-- **notes**: "Dedicated reference for api/bridge-windows.py on loopback port 8110, separated from the Task API README. Lists primitive routes including downscaleshot and upscaleshot and their coordinate mapping. The full safety and observe-act-verify workflow lives in docs/procedures/drive-the-desktop.md."
+- **notes**: "Reference for the Windows Bridge server on loopback port 8110, including the windowless global pointer, optional window-relative coordinates, and scaled-shot mapping. The command-line client has its own README; the full safety and observe-act-verify workflow lives in docs/procedures/drive-the-desktop.md."
+
+### `api/README-Bridge-Client.md`
+
+- **type**: other
+- **scope**: shared
+- **roles**: []
+- **status**: useful
+- **tags**: [bridge, windows, client, cli, screenshots, coordinates]
+- **last_verified**: "2026-10-30"
+- **verified_by**: "claude-software-architect"
+- **update_trigger**: "when the Bridge client commands, target selection, or image mapping change"
+- **notes**: "Command-line client for the Windows Bridge server: target selection, screenshots and saved coordinate mapping, actions, locate, profiles, and held-key duration. Separate from the server API reference."
 
 ### `docs/architecture-overview.md`
 
@@ -286,10 +298,10 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 - **roles**: []
 - **status**: useful
 - **tags**: [procedure, host-body, windows, driving, pyautogui, gates, adr-009]
-- **last_verified**: "2026-10-29"
+- **last_verified**: "2026-10-30"
 - **verified_by**: "claude-software-architect"
 - **update_trigger**: "when Windows Bridge routes, coordinate mapping, input gates, or operator workflow change"
-- **notes**: "Canonical /drive-desktop operator procedure, rewritten Bridge-first on 2026-10-29. Start api/bridge-windows.py on loopback 8110, select a verified window handle, read profiles, observe PNGs, map downscaled or enlarged crop coordinates, act and verify. Records that screenshots do not foreground targets, each shot is fresh, input success is not app success, JSON is not authentication, and Bridge has no shell route. Whole-goal Python/Task API delegation is an explicitly separate alternative. Global commands/skills are generated copies refreshed by setup-scripts."
+- **notes**: "Canonical /drive-desktop operator procedure, rewritten Bridge-first on 2026-10-29. Start api/bridge-windows.py on loopback 8110, select a verified window handle, read profiles, observe PNGs, map downscaled or enlarged crop coordinates, act and verify. The pointer endpoint also accepts requests without a window for desktop coordinates. Global commands/skills are generated copies and have not been refreshed after this change."
 
 ### `grounding.py`
 

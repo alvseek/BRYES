@@ -23,7 +23,7 @@ rewritten around the Bridge on 2026-10-29. API reference lives in
 | Route | Returns |
 |---|---|
 | `GET /windows` | every targetable window: `id` (handle), `title`, `rect` (screen), `image_rect` (frame), `frame{origin,size}`, `foreground` |
-| `GET /pointer?window=` | pointer in screen and image space, `inside_frame`, `inside_window` |
+| `GET /pointer` | pointer in desktop coordinates; optional `window` adds monitor-relative image coordinates, `inside_frame`, and `inside_window` |
 | `GET /screenshot?window=` | the target's monitor, 1:1 |
 | `GET /downscaleshot?window=&scale=0.5` | the frame scaled down (0.5 is the Eyes' own overview factor) |
 | `GET /upscaleshot?window=&x1=&y1=&x2=&y2=&scale=2` | one crop, enlarged |
@@ -39,6 +39,12 @@ mapping, so the headers are the contract.
 rejects ordinary browser form posts but is not authentication or local-process isolation.
 Input needs `BRYES_ALLOW_HOST=1` in the server process. There is no Bridge shell endpoint.
 Actions serialize on a lock, not a workflow-wide reservation.
+
+The command-line client `api/bridge_client.py` is documented separately in
+`api/README-Bridge-Client.md`. It provides `locate`, `profiles`, image mapping, and
+`key_hold --seconds`; the server and client remain separate. `/pointer` without a window
+returns only desktop `x` and `y`. With a window, `image_x` and `image_y` are relative to the
+top-left of that window's monitor; the pointer request does not capture an image.
 
 Screenshots do not raise the window; they capture what is visible on the selected monitor.
 Each scaled request captures afresh. Only the scaled routes carry mapping headers, not the

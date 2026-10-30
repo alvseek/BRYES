@@ -5,6 +5,26 @@ fixes it forced, and the first real build driven through it.
 
 ---
 
+### 2026-10-30 11.59 - THE EXTERNAL AGENT AS BRAIN AND A SIMPLER POINTER (agent: software-architect)
+
+- **Summary**: Clarified the Windows Bridge and its command-line client as separate server and client. Added client commands for locate, profiles and key-hold duration; made the pointer endpoint usable without a window; separated and clarified their READMEs.
+- **Context**: Alvi wants external agents to reason and follow procedures while BRYES supplies eyes and hands. The existing Brain remains a separate standalone path; removing it was not requested.
+- **Discussion**: Alvi chose separate server and client files and then separate READMEs. He clarified that endpoint explanations and examples belong in the endpoint table. He chose to defer `type_into` and drag-by-offset; Eyes describe, box and diff may help agents without image input but were not added.
+- **Outcomes**:
+  - **Deliverables**: `api/bridge_client.py`, `api/bridge-windows.py`, their model-free tests, `api/README-Bridge.md`, new `api/README-Bridge-Client.md`, and the desktop-driving procedure. Project changes pushed as `0ab8a52`.
+  - **Verification**: Both model-free Bridge test scripts passed; `git diff --check` passed. No live Bridge or desktop test was run.
+  - **Tech Debts**:
+    - New client commands and windowless pointer response have not been proven against a running server or real desktop.
+    - Globally installed desktop-driving procedure is a separate copy and has not been refreshed.
+    - Carried from the prior session: missing Eyes endpoints and focused/profile-aware locate; Unreal save and settings persistence unverified; live-build record and council handoff incomplete; Screen exposure and temporary screenshots; host isolation absent; broad lint and runtime QA unrun; Task API README stale.
+  - **Next Steps**:
+    - Verify the changed Bridge and client against a running server when appropriate, and refresh the installed procedure if needed.
+    - Revisit `type_into`, drag-by-offset, and Eyes endpoints only when their intended use is chosen.
+- **Promotions**:
+  → Updated [visual Bridge knowledge](../knowledge/visual-bridge.md) with the separate client and windowless pointer contract.
+
+---
+
 ### 2026-10-29 12.37 - THE MISSING BRIDGE WAS IN A WORKTREE; WINDOWS NAMING AND A BRIDGE-FIRST PROCEDURE (agent: software-architect)
 
 - **Summary**: Recovered the visual Bridge and its newer memories from an unmerged worktree, merged and pushed them, removed the clean merged worktrees, renamed the server to `api/bridge-windows.py`, separated its README, and rewrote desktop driving around an outside caller's observe-act-verify workflow.
