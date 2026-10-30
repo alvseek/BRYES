@@ -54,13 +54,20 @@ Coordinates are frame pixels, and points must be finite numbers; `scroll` is a p
 it needs `x` and `y` as well as `direction`. The keyboard fields are `text` for `type` and
 `key` for `key`/`key_hold`, the last of which clamps its optional `seconds` to 0.1-5.
 
+The server resolves exactly one `window` handle or `title` substring per request. A missing
+target is 404; an ambiguous title is 409 with candidates. POST capture variants can focus by
+gated hover and capture under one lock; GET captures stay read-only. The client sends title and
+focus requests directly rather than selecting windows or choreographing focus itself. This was
+covered by model-free tests on 2026-10-30, not by a live Bridge desktop run.
+
 The command-line client `api/bridge_client.py` is documented separately in
 `api/README-Bridge-Client.md`. It provides `locate`, `profiles`, image mapping, and
 `key_hold --seconds`; the server and client remain separate. `/pointer` without a window
 returns only desktop `x` and `y`. With a window, `image_x` and `image_y` are relative to the
 top-left of that window's monitor; the pointer request does not capture an image.
 
-Screenshots do not raise the window; they capture what is visible on the selected monitor.
+Plain screenshots do not raise the window; focused POST captures do so through a gated hover.
+Both capture what is visible on the selected monitor.
 Each scaled request captures afresh. Only the scaled routes carry mapping headers, not the
 plain screenshot route. A viewer may resize the returned image again; undo that resizing
 before applying the Bridge mapping. Input success is not proof of application success.

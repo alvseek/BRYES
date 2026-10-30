@@ -5,6 +5,26 @@ fixes it forced, and the first real build driven through it.
 
 ---
 
+### 2026-10-30 16.11 - SERVER-OWNED TARGETING AND FOCUSED CAPTURES (agent: software-architect)
+
+- **Summary**: Implemented the Bridge handoff plan: unique server-side title/handle resolution, focused capture POSTs, safe JSON errors, and client delegation. Refreshed the global OpenCode and Claude Code desktop-driving copies.
+- **Context**: Alvi requested implementation of the approved handoff, then installation of the desktop-driving procedure. The separate lesson directories were outside the work.
+- **Outcomes**:
+  - **Deliverables**: Bridge server and client, their tests and READMEs, the desktop procedure and orientation map; completed plan in `plans/completed/`. Project changes pushed as `30ca387`.
+  - **Verification**: Bridge and client model-free suites, Windows device and host input checks, installer fixture checks, local documentation links and `git diff --check` passed. Installed copies matched the installer-rendered procedure. The Windows device suite performed a screenshot; no live Bridge focus or batch test was performed.
+  - **Tech Debts**:
+    - Live Bridge focus, title resolution and batch behavior remain unverified on a disposable window.
+    - Ruff was unavailable on PATH and as a Python module, so scoped lint did not run.
+    - The Bridge still exposes only `locate` from the Eyes; focus/profile-aware location and host environment isolation remain unbuilt.
+    - Unreal settings persistence and the Blueprint save remain unverified; broad runtime QA is unrun.
+  - **Next Steps**:
+    - With authorization, verify focused capture, gate refusal, targeting and a harmless batch on an agent-started disposable window.
+    - Run scoped Ruff once available.
+- **Promotions**:
+  → Updated `docs/context-index.md` and `.agents/knowledge/visual-bridge.md` with the target and capture contract.
+
+---
+
 ### 2026-10-30 15.01 - BATCH ACTIONS AND A HONEST README, THEN A HANDOFF PLAN (agent: software-architect)
 
 - **Summary**: Documented both scaled screenshot endpoints and the action surface properly, added ordered batch actions to `/act` with a stop-first failure contract, and wrote a handoff plan for moving target selection, focus and error handling into the server.
