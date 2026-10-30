@@ -11,6 +11,7 @@ import importlib.util
 import io
 import json
 import sys
+import threading
 from pathlib import Path
 
 from PIL import Image
@@ -75,6 +76,184 @@ def build():
                    window_lister=lambda: WINDOWS,
                    frame_provider=lambda hwnd: (-100, -50, 1820, 1030))
     return app, device
+
+
+def test_target_resolver():
+    app, _ = build()
+    calls = []
+
+    def lister():
+        calls.append(True)
+        return WINDOWS
+
+    with app.test_request_context():
+        assert _bridge._resolve_target({"title": "  UNREAL editor "}, lister)[0] == 0x2b
+        assert _bridge._resolve_target({"window": "001A"}, lister)[0] == 0x1a
+        assert _bridge._resolve_target({}, lister, required=False) == (None, None)
+        for args, expected in [({"window": "0x0"}, 400), ({"window": "-1"}, 400),
+                               ({"window": None}, 400), ({"window": 26}, 400),
+                               ({"title": " "}, 400), ({"title": None}, 400),
+                               ({"title": []}, 400), ({}, 400),
+                               ({"title": "x", "window": "0x1a"}, 400),
+                               ({"title": "missing"}, 404), ({"window": "0xff"}, 404),
+                               ({"title": "o"}, 409)]:
+            try:
+                _bridge._resolve_target(args, lister)
+                raise AssertionError(args)
+            except _bridge.HTTPException as exc:
+                status = exc.response.status_code if exc.response else exc.code
+                assert status == expected, (args, status)
+                if status == 409:
+                    assert len(exc.response.get_json()["matches"]) == 2
+    assert len(calls) == 5
+    print("PASS: target resolver validates selectors and refuses ambiguous or missing windows")
+
+
+def test_target_routes():
+    calls, handles, inputs, models = [], [], [], []
+    device = FakeDevice(None)
+    device.act = lambda action: inputs.append(action)
+    app = make_app(device_factory=lambda hwnd: (handles.append(hwnd), device)[1],
+                   locator=lambda *_: (models.append(True), {"x": 1, "y": 2})[1],
+                   window_lister=lambda: (calls.append(True), WINDOWS)[1],
+                   frame_provider=lambda _: (0, 0, 100, 100))
+    c = app.test_client()
+    for selector in ("window=0x1a", "title=party"):
+        for path in ("pointer", "screenshot", "downscaleshot",
+                     "upscaleshot?x1=0&y1=0&x2=10&y2=10"):
+            join = "&" if "?" in path else "?"
+            assert c.get(f"/{path}{join}{selector}").status_code == 200
+    for selector in ({"window": "0x1a"}, {"title": "party"}):
+        assert c.post("/locate", json={**selector, "instruction": "x"}).status_code == 200
+        calls.clear()
+        actions = [{"type": "type", "text": "a"}, {"type": "key", "key": "enter"}]
+        assert c.post("/act", json={**selector, "actions": actions}).status_code == 200
+        assert len(calls) == 1 and handles[-1] == 0x1a and inputs[-2:] == actions
+    before = (len(handles), len(inputs), len(models))
+    for path in ("pointer", "screenshot", "downscaleshot", "upscaleshot"):
+        assert c.get(f"/{path}?title=missing").status_code == 404
+    assert c.post("/locate", json={"title": "missing", "instruction": "x"}).status_code == 404
+    assert c.post("/act", json={"window": "0xff", "type": "key", "key": "a"}).status_code == 404
+    assert (len(handles), len(inputs), len(models)) == before
+    assert c.post("/act", json={"window": "0x1a", "actions": [
+        {"type": "key", "key": "x", "title": "party"}]}).status_code == 400
+    print("PASS: target routes resolve once and refuse missing targets before device or model access")
+
+
+def test_focused_capture():
+    device = FakeDevice(None)
+    events = []
+    device.pos = (-90, -40)
+    device.act = lambda action: events.append(action)
+    device.screenshot = lambda: (events.append("shot"), _png())[1]
+    windows = [{"id": "0x1a", "title": "target", "rect": [-100, -50, 0, 50]}]
+    app = make_app(device_factory=lambda _: device, window_lister=lambda: windows,
+                   frame_provider=lambda _: (-100, -50, 0, 50))
+    c = app.test_client()
+    sleep = _bridge.time.sleep
+    _bridge.time.sleep = lambda _: None
+    try:
+        for path in ("screenshot", "downscaleshot", "upscaleshot"):
+            extra = {"x1": 0, "y1": 0, "x2": 10, "y2": 10} if path == "upscaleshot" else {}
+            events.clear()
+            r = c.post("/" + path, json={"title": "target", "raise": True, **extra})
+            assert r.status_code == 200 and events == [{"type": "hover", "x": 10, "y": 10}, "shot"]
+        device.pos = (500, 500)
+        events.clear()
+        assert c.post("/screenshot", json={"window": "0x1a", "raise": True}).status_code == 200
+        assert events[0] == {"type": "hover", "x": 50, "y": 50}
+        for body in ({"window": "0x1a", "raise": "false"},
+                     {"window": "0x1a", "raise": True, "x1": 0, "y1": 0, "x2": 101, "y2": 10},
+                     {"window": "0x1a", "raise": True, "scale": True}):
+            events.clear()
+            assert c.post("/upscaleshot", json=body).status_code == 400
+            assert events == []
+        events.clear()
+        assert c.post("/screenshot", json={"window": "0x1a", "raise": False}).status_code == 200
+        assert events == ["shot"]
+        assert c.get("/screenshot?window=0x1a&raise=true").status_code == 400
+        assert c.post("/screenshot", data="x").status_code == 415
+        device.act = lambda _: (_ for _ in ()).throw(RuntimeError("gate"))
+        assert c.post("/screenshot", json={"window": "0x1a", "raise": True}).status_code == 409
+    finally:
+        _bridge.time.sleep = sleep
+    print("PASS: focused captures validate before input and preserve frame coordinates")
+
+
+def test_focus_capture_lock():
+    entered, release, attempted, done = (threading.Event() for _ in range(4))
+    events = []
+    device = FakeDevice(None)
+    device.pos = (10, 10)
+
+    def act(action):
+        events.append(action["type"])
+        if action["type"] == "hover":
+            entered.set()
+            assert release.wait(5)
+
+    device.act = act
+    device.screenshot = lambda: (events.append("shot"), _png())[1]
+    app = make_app(device_factory=lambda _: device, window_lister=lambda: WINDOWS,
+                   frame_provider=lambda _: (0, 0, 100, 100))
+    sleep = _bridge.time.sleep
+    _bridge.time.sleep = lambda _: None
+
+    def capture_thread():
+        with app.test_client() as c:
+            assert c.post("/screenshot", json={"window": "0x1a", "raise": True}).status_code == 200
+
+    def action_thread():
+        attempted.set()
+        with app.test_client() as c:
+            assert c.post("/act", json={"window": "0x1a", "type": "key", "key": "x"}).status_code == 200
+        done.set()
+
+    try:
+        a = threading.Thread(target=capture_thread)
+        b = threading.Thread(target=action_thread)
+        a.start()
+        assert entered.wait(5)
+        b.start()
+        assert attempted.wait(5) and not done.is_set()
+        release.set()
+        a.join(5)
+        b.join(5)
+        assert done.is_set() and events == ["hover", "shot", "key"]
+    finally:
+        release.set()
+        _bridge.time.sleep = sleep
+    print("PASS: another input cannot interleave between focus and capture")
+
+
+def test_error_contract():
+    app, device = build()
+    c = app.test_client()
+    app.logger.disabled = True
+    for path, status in (("/missing", 404), ("/act", 405), ("/profiles?path=missing", 404)):
+        r = c.get(path)
+        assert r.status_code == status and r.is_json and {"error", "description"} <= r.get_json().keys()
+    for data in ("null", "[]", '"x"', "{"):
+        r = c.post("/locate", data=data, content_type="application/json")
+        assert r.status_code == 400 and r.is_json
+    device.pointer = lambda: (_ for _ in ()).throw(RuntimeError("pointer refused"))
+    assert c.get("/pointer").status_code == 409
+    device.screenshot = lambda: (_ for _ in ()).throw(ValueError("capture refused"))
+    assert c.get("/screenshot?window=0x1a").status_code == 409
+    device.screenshot = lambda: (_ for _ in ()).throw(OSError("secret detail"))
+    r = c.get("/screenshot?window=0x1a")
+    assert r.status_code == 500 and "secret detail" not in r.get_data(as_text=True)
+    device.screenshot = lambda: _png()
+    assert c.get("/screenshot?window=0x1a").status_code == 200
+    for error, status in ((RuntimeError("model failed"), 502), (OSError("secret model"), 500)):
+        model_app = make_app(device_factory=lambda _: device, window_lister=lambda: WINDOWS,
+                             locator=lambda *_: (_ for _ in ()).throw(error))
+        model_app.logger.disabled = True
+        r = model_app.test_client().post("/locate", json={"window": "0x1a", "instruction": "x"})
+        assert r.status_code == status and r.is_json and {"error", "description"} <= r.get_json().keys()
+        if status == 500:
+            assert "secret model" not in r.get_data(as_text=True)
+    print("PASS: errors remain JSON, classify failures, and hide unexpected exception details")
 
 
 def test_health_and_windows():
@@ -306,6 +485,11 @@ def test_profiles():
 
 
 if __name__ == "__main__":
+    test_target_resolver()
+    test_target_routes()
+    test_focused_capture()
+    test_focus_capture_lock()
+    test_error_contract()
     test_health_and_windows()
     test_screenshot()
     test_downscaleshot()

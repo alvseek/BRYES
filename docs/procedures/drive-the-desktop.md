@@ -74,7 +74,10 @@ GET /profiles?path=windows/unreal-editor
 
 Minimized and untitled windows are omitted. Restore a minimized application before selecting
 it. A dialog or another editor window may need its own handle; refresh `/windows` whenever
-the task changes windows or the selected one closes.
+the task changes windows or the selected one closes. The Bridge also accepts `title` instead of
+`window`, matching a case-insensitive substring only when exactly one window matches. Ambiguity
+returns 409 and candidate IDs; a unique title is not evidence of process ownership. Prefer the
+verified handle for an agent-started target.
 
 Profiles return `visual` and `operating` text. Read the relevant vocabulary before driving;
 the app-specific profile includes inherited desktop guidance. The Bridge does not automatically
@@ -82,7 +85,7 @@ feed this text into `/locate` or make decisions from it.
 
 ## 4. Observe and map coordinates
 
-All screenshot requests require `window=<id>` and return PNG bytes directly in the HTTP
+All screenshot requests require a `window` or `title` selector and return PNG bytes directly in the HTTP
 response body (`Content-Type: image/png`), not a path or JSON image. Save or display the bytes
 with an image-capable tool and inspect the result before choosing an action.
 
@@ -93,7 +96,10 @@ with an image-capable tool and inspect the result before choosing an action.
 | `GET /upscaleshot?window=<id>&x1=100&y1=200&x2=300&y2=400&scale=2` | Fresh capture, then crop and enlarge; scale range `1` to `4`, default `2` |
 | `GET /pointer` | Pointer in absolute screen coordinates; add `?window=<id>` for image coordinates and the `inside_frame` and `inside_window` flags |
 
-A screenshot does **not** bring the window to the foreground. It records what is visible on
+A GET screenshot does **not** bring the window to the foreground. To focus first, POST JSON to
+the same endpoint, for example `{"window":"<id>","raise":true,"scale":0.5}` to
+`/downscaleshot`. Focus requires the host-input gate; focus and capture share one lock, but other
+applications and the user can still change the desktop. It records what is visible on
 that monitor, including other windows covering the target. Do not aim at a control you cannot
 see. Each screenshot endpoint makes a fresh capture; an overview and a later crop are not
 guaranteed to show the same moment.
@@ -169,10 +175,13 @@ it does not recover detail absent from the original capture.
 - **HTTP 400:** inspect the JSON description for a missing window, invalid crop or scale, or
   unsupported action. `/act` also checks whether the body supports the verb.
 - **HTTP 415:** send POST bodies as `application/json`.
-- **HTTP 409 from `/act`:** read the body refusal, such as a disabled host gate, focus failure,
+- **HTTP 404:** the selected window or profile was not found.
+- **HTTP 409:** a title matched several windows, or the body refused input, such as a disabled host gate, focus failure,
   or out-of-window point. Recheck the window, frame, and current image before retrying.
 - **HTTP 502 from `/locate`:** the model call failed. Inspect the cause or choose coordinates
   yourself from a screenshot; do not pretend a failed location produced a target.
+- **HTTP 503 / 500:** pointer unavailable / unexpected server failure. Errors contain JSON
+  `error` and `description`; do not automatically retry input because it may have partially run.
 - **Input completes but nothing changes:** check control focus and whether the target runs at
   a higher Windows integrity level than Python. Windows can refuse synthetic input across that
   boundary. Do not treat an unchanged screenshot as proof that retrying is safe.

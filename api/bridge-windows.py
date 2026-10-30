@@ -34,8 +34,10 @@ Run: python api/bridge-windows.py  ->  http://127.0.0.1:8110
 import ctypes
 import io
 import math
+import re
 import sys
 import threading
+import time
 from ctypes import wintypes
 from pathlib import Path
 
@@ -128,6 +130,41 @@ def _parse_window_id(raw):
         return None
 
 
+def _resolve_target(args, lister, required=True):
+    """Resolve one selector against the live list without choosing an arbitrary match."""
+    has_window, has_title = "window" in args, "title" in args
+    if has_window and has_title:
+        abort(400, description="send either window or title, not both")
+    if not has_window and not has_title:
+        if required:
+            abort(400, description="a window or title is required")
+        return None, None
+    if has_window:
+        raw = args["window"]
+        if not isinstance(raw, str) or not re.fullmatch(r"(?:0[xX])?[0-9a-fA-F]+", raw.strip()):
+            abort(400, description="window must be a positive hexadecimal window id")
+        hwnd = _parse_window_id(raw)
+        if hwnd is None or hwnd <= 0:
+            abort(400, description="window must be a positive hexadecimal window id")
+        matches = [w for w in lister() if _parse_window_id(w["id"]) == hwnd]
+    else:
+        title = args["title"]
+        if not isinstance(title, str) or not title.strip():
+            abort(400, description="title must be a nonempty string")
+        needle = title.strip().casefold()
+        matches = [w for w in lister() if needle in w["title"].casefold()]
+    if not matches:
+        abort(404, description="no matching window")
+    if len(matches) > 1:
+        response = jsonify({"error": "Conflict", "description": "multiple matching windows",
+                            "matches": [{"id": w["id"], "title": w["title"]}
+                                        for w in matches]})
+        response.status_code = 409
+        abort(response)
+    selected = matches[0]
+    return _parse_window_id(selected["id"]), selected
+
+
 def _scaled(image, scale):
     """PNG bytes of `image` scaled by `scale` (PIL's LANCZOS, size rounded to at least 1 px)."""
     width, height = image.size
@@ -141,6 +178,8 @@ def _scale_arg(raw, default, low, high):
     """A scale factor from the query string, refused outside [low, high] rather than clamped."""
     if raw is None or raw == "":
         return default
+    if isinstance(raw, bool):
+        abort(400, description="scale must be a number")
     try:
         value = float(raw)
     except (TypeError, ValueError):
@@ -153,6 +192,9 @@ def _scale_arg(raw, default, low, high):
 def _crop_arg(args, size):
     """(x1, y1, x2, y2) from the query string, validated against the frame it comes from."""
     try:
+        if any(isinstance(args[k], bool) or not isinstance(args[k], (int, str))
+               for k in ("x1", "y1", "x2", "y2")):
+            raise ValueError("not an integer")
         x1, y1 = int(args["x1"]), int(args["y1"])
         x2, y2 = int(args["x2"]), int(args["y2"])
     except (KeyError, TypeError, ValueError):
@@ -192,10 +234,22 @@ def make_app(device_factory=None, locator=None, window_lister=None, frame_provid
         """Every refusal is JSON with a description: the caller is a program, not a browser."""
         return jsonify({"error": err.name, "description": err.description}), err.code
 
+    @app.errorhandler(Exception)
+    def _unexpected_error(err):
+        app.logger.exception("Unexpected Bridge failure", exc_info=err)
+        return jsonify({"error": "Internal Server Error",
+                        "description": "An unexpected Bridge error occurred"}), 500
+
+    def device_call(fn, *args):
+        try:
+            return fn(*args)
+        except (RuntimeError, ValueError) as exc:
+            abort(409, description=str(exc))
+
     def _device_for(hwnd):
         if hwnd is None:
             abort(400, description="a window id is required (see GET /windows)")
-        return factory(hwnd)
+        return device_call(factory, hwnd)
 
     @app.get("/health")
     def health():
@@ -228,19 +282,15 @@ def make_app(device_factory=None, locator=None, window_lister=None, frame_provid
         display; this is the read that answers it, and `inside_window` is the same test the
         body applies before acting.
         """
-        raw = request.args.get("window")
-        hwnd = _parse_window_id(raw)
-        if raw is not None and hwnd is None:
-            abort(400, description="window must be a hexadecimal window id")
-        device = factory(hwnd)
+        hwnd, win = _resolve_target(request.args, lister, required=False)
+        device = device_call(factory, hwnd)
         with _LOCK:
-            pos = device.pointer()
+            pos = device_call(device.pointer)
         if pos is None:
             abort(503, description="pointer position is unavailable")
         if hwnd is None:
             return jsonify({"x": int(pos[0]), "y": int(pos[1])})
         left, top, right, bottom = frame_of(hwnd)
-        win = next((w for w in lister() if _parse_window_id(w["id"]) == hwnd), None)
         return jsonify({
             "x": int(pos[0]), "y": int(pos[1]),
             "image_x": int(pos[0]) - left, "image_y": int(pos[1]) - top,
@@ -248,40 +298,66 @@ def make_app(device_factory=None, locator=None, window_lister=None, frame_provid
             "inside_window": bool(win) and pointer_in_rect(pos, tuple(win["rect"])),
         })
 
-    @app.get("/downscaleshot")
-    def downscaleshot():
-        """The frame scaled down, for a caller that wants the whole screen cheaply.
-
-        `scale` defaults to 0.5, which is the factor BRYES's own Eyes use for their overview.
-        """
-        hwnd = _parse_window_id(request.args.get("window"))
-        scale = _scale_arg(request.args.get("scale"), default=0.5, low=0.05, high=1.0)
+    def capture(kind):
+        if request.method == "POST":
+            if not request.is_json:
+                abort(415, description="send application/json")
+            args = request.get_json(silent=True)
+            if not isinstance(args, dict):
+                abort(400, description="send a JSON object")
+            raise_window = args.get("raise", False)
+            if not isinstance(raise_window, bool):
+                abort(400, description="raise must be a boolean")
+        else:
+            args = request.args
+            if "raise" in args:
+                abort(400, description="use POST to raise a window")
+            raise_window = False
+        hwnd, win = _resolve_target(args, lister)
+        scale = None
+        if kind == "down":
+            if request.method == "POST" and "scale" in args and args["scale"] is None:
+                abort(400, description="scale must be a number")
+            scale = _scale_arg(args.get("scale"), 0.5, 0.05, 1.0)
+        elif kind == "up":
+            if request.method == "POST" and "scale" in args and args["scale"] is None:
+                abort(400, description="scale must be a number")
+            scale = _scale_arg(args.get("scale"), 2.0, 1.0, 4.0)
+        if raise_window and kind == "up":
+            left, top, right, bottom = frame_of(hwnd)
+            _crop_arg(args, (right - left, bottom - top))
+        device = _device_for(hwnd)
         with _LOCK:
-            png = _device_for(hwnd).screenshot()
+            if raise_window:
+                pos = device_call(device.pointer)
+                if pos is None:
+                    abort(503, description="pointer position is unavailable")
+                left, top, _, _ = frame_of(hwnd)
+                x1, y1, x2, y2 = win["rect"]
+                x, y = pos if pointer_in_rect(pos, win["rect"]) else (
+                    (x1 + x2) // 2, (y1 + y2) // 2)
+                device_call(device.act, {"type": "hover", "x": x - left, "y": y - top})
+                time.sleep(0.3)
+            png = device_call(device.screenshot)
+        if kind == "plain":
+            return send_file(io.BytesIO(png), mimetype="image/png")
         image = Image.open(io.BytesIO(png))
+        if kind == "up":
+            box = _crop_arg(args, image.size)
+            return _shot_response(_scaled(image.crop(box), scale), scale, box[:2], image.size)
         return _shot_response(_scaled(image, scale), scale, (0, 0), image.size)
 
-    @app.get("/upscaleshot")
+    @app.route("/downscaleshot", methods=["GET", "POST"])
+    def downscaleshot():
+        return capture("down")
+
+    @app.route("/upscaleshot", methods=["GET", "POST"])
     def upscaleshot():
-        """One region, cropped then enlarged: the zoom that costs the caller no eyesight.
+        return capture("up")
 
-        The crop is in frame pixels, and every returned pixel maps back through the same rule.
-        """
-        hwnd = _parse_window_id(request.args.get("window"))
-        scale = _scale_arg(request.args.get("scale"), default=2.0, low=1.0, high=4.0)
-        with _LOCK:
-            png = _device_for(hwnd).screenshot()
-        image = Image.open(io.BytesIO(png))
-        box = _crop_arg(request.args, image.size)
-        crop = image.crop(box)
-        return _shot_response(_scaled(crop, scale), scale, (box[0], box[1]), image.size)
-
-    @app.get("/screenshot")
+    @app.route("/screenshot", methods=["GET", "POST"])
     def screenshot():
-        hwnd = _parse_window_id(request.args.get("window"))
-        with _LOCK:
-            png = _device_for(hwnd).screenshot()
-        return send_file(io.BytesIO(png), mimetype="image/png")
+        return capture("plain")
 
     @app.post("/act")
     def act():
@@ -296,7 +372,7 @@ def make_app(device_factory=None, locator=None, window_lister=None, frame_provid
         items = body.get("actions") if batch else [body]
         if not isinstance(items, list) or not items:
             abort(400, description="actions must be a non-empty array")
-        hwnd = _parse_window_id(body.get("window"))
+        hwnd, _ = _resolve_target(body, lister)
         device = _device_for(hwnd)
         actions = []
         # Validate every action before sending any input. Geometry/focus still depend on
@@ -312,8 +388,8 @@ def make_app(device_factory=None, locator=None, window_lister=None, frame_provid
             verb = item.get("type")
             if not isinstance(verb, str) or verb not in _VERBS:
                 refuse(f"type must be one of {sorted(_VERBS)}")
-            if batch and "window" in item:
-                refuse("window belongs at the request level")
+            if batch and ("window" in item or "title" in item):
+                refuse("window and title belong at the request level")
             if verb not in device.caps.verbs:
                 refuse(f"{device.caps.name} cannot perform {verb}")
             action = {"type": verb}
@@ -347,9 +423,12 @@ def make_app(device_factory=None, locator=None, window_lister=None, frame_provid
                     device.act(action)
                 except Exception as e:
                     status = 409 if isinstance(e, (RuntimeError, ValueError)) else 500
+                    if status == 500:
+                        app.logger.exception("Unexpected Bridge action failure")
+                    description = str(e) if status == 409 else "An unexpected Bridge error occurred"
                     if batch:
                         return jsonify({"ok": False, "error": "Action failed",
-                                        "description": str(e), "completed": completed,
+                                        "description": description, "completed": completed,
                                         "failed_index": index, "failed_action": action}), status
                     if status == 409:
                         abort(409, description=str(e))
@@ -363,13 +442,15 @@ def make_app(device_factory=None, locator=None, window_lister=None, frame_provid
     def locate():
         if not request.is_json:
             abort(415, description="send application/json")
-        body = request.get_json(silent=True) or {}
+        body = request.get_json(silent=True)
+        if not isinstance(body, dict):
+            abort(400, description="send a JSON object")
         instruction = str(body.get("instruction") or "").strip()
         if not instruction:
             abort(400, description="instruction is required")
-        hwnd = _parse_window_id(body.get("window"))
+        hwnd, _ = _resolve_target(body, lister)
         with _LOCK:
-            frame = _device_for(hwnd).screenshot()
+            frame = device_call(_device_for(hwnd).screenshot)
             try:
                 found = eyes(frame, instruction)
             except RuntimeError as e:

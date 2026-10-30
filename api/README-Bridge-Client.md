@@ -18,14 +18,17 @@ python api/bridge_client.py profiles windows/unreal-editor
 python api/bridge_client.py act key_hold --key w --seconds 1.5
 ```
 
-Select a window with `--window`, `BRIDGE_WINDOW`, or `--title` (which must match exactly one
-window). Profiles do not require a window. The server defaults to `http://127.0.0.1:8110`;
+Select a window with `--window`, `BRIDGE_WINDOW`, or `--title`. An explicit `--window` wins,
+then `BRIDGE_WINDOW`, then `--title`; the server resolves the title and requires exactly one
+match. Profiles and windows do not require a selector. Start the updated server before using
+the updated client; there is no fallback to older server behavior. The server defaults to `http://127.0.0.1:8110`;
 set `BRIDGE_URL` to use another address.
 
 Each saved image has a JSON mapping file beside it. Pass its name to `act --from` to convert
 image coordinates back to the original frame. The mapping does not verify that the screen or
 window has stayed in the same place since the capture, so observe again when geometry changes.
 
-`--raise` hovers where the pointer already is when it is inside the window, or at the window's
-centre otherwise. `act` waits `--settle` seconds (default 0.4) after input. The Windows body
+`--raise` sends one focused capture request to the server, which hovers where the pointer already
+is when inside the window, or at the window's centre otherwise. It requires the server's host-input
+gate. `act` waits `--settle` seconds (default 0.4) after input. The Windows body
 clamps key-hold durations to 0.1–5 seconds; omit `--seconds` to use its default.

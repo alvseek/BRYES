@@ -93,24 +93,6 @@ def build_action(window, kind, coords=(), key=None, text=None, direction=None, m
     return payload
 
 
-def pick_window(windows, title):
-    """The one window whose title contains `title`; refuses none or several, by name."""
-    hits = [w for w in windows if title.lower() in w.get("title", "").lower()]
-    if len(hits) != 1:
-        names = ", ".join(f"{w['id']} '{w['title']}'" for w in hits) or "none"
-        raise BridgeError(f"--title '{title}' must match exactly one window; matched {names}")
-    return hits[0]["id"]
-
-
-def raise_point(window_entry, pointer):
-    """Where a harmless hover brings the window forward: the pointer's own spot if it is already
-    inside the window (so nothing moves), else the window's centre."""
-    if pointer.get("inside_window"):
-        return pointer["image_x"], pointer["image_y"]
-    x1, y1, x2, y2 = window_entry["image_rect"]
-    return (x1 + x2) // 2, (y1 + y2) // 2
-
-
 # ---- HTTP -------------------------------------------------------------------------------------
 
 class BridgeClient:
@@ -138,8 +120,9 @@ class BridgeClient:
             return json.loads(r.read().decode())
 
     def locate(self, window, instruction):
+        selector = window if isinstance(window, dict) else {"window": window}
         req = urllib.request.Request(
-            self.base + "/locate", data=json.dumps({"window": window, "instruction": instruction}).encode(),
+            self.base + "/locate", data=json.dumps({**selector, "instruction": instruction}).encode(),
             headers={"Content-Type": "application/json"})
         with self._open(req) as r:
             return json.loads(r.read().decode())
@@ -147,17 +130,12 @@ class BridgeClient:
     def profiles(self, path):
         return self.get_json("/profiles?" + urllib.parse.urlencode({"path": path}))
 
-    def raise_window(self, window):
-        entry = next((w for w in self.windows() if w["id"] == window), None)
-        if entry is None:
-            raise BridgeError(f"no window {window}; refresh with `windows`")
-        pointer = self.get_json(f"/pointer?window={window}")
-        x, y = raise_point(entry, pointer)
-        return self.act({"window": window, "type": "hover", "x": x, "y": y})
-
-    def save_image(self, path, name):
+    def save_image(self, path, name, body=None):
         """GET an image endpoint; write <name>.png and its mapping as <name>.json."""
-        with self._open(self.base + path) as r:
+        req = self.base + path if body is None else urllib.request.Request(
+            self.base + path, data=json.dumps(body).encode(),
+            headers={"Content-Type": "application/json"})
+        with self._open(req) as r:
             data = r.read()
             mapping = mapping_from_headers(dict(r.headers.items()))
         self.out.mkdir(parents=True, exist_ok=True)
@@ -222,27 +200,30 @@ def main(argv=None):
         if args.cmd == "profiles":
             print(json.dumps(client.profiles(args.path), ensure_ascii=False))
             return 0
-        window = args.window or (pick_window(client.windows(), args.title) if args.title else None)
-        if not window:
+        selector = {"window": args.window} if args.window else {"title": args.title} if args.title else None
+        if not selector:
             raise BridgeError("no target: pass --window, --title, or set BRIDGE_WINDOW")
-        if args.cmd in ("shot", "crop") and args.raise_:
-            client.raise_window(window)
-            time.sleep(0.3)
         if args.cmd == "locate":
-            print(json.dumps(client.locate(window, args.instruction), ensure_ascii=False))
+            print(json.dumps(client.locate(selector, args.instruction), ensure_ascii=False))
         elif args.cmd == "shot":
-            png, m = client.save_image(f"/downscaleshot?window={window}&scale={args.scale}", args.name)
+            params = {**selector, "scale": args.scale}
+            path = "/downscaleshot"
+            png, m = client.save_image(path if args.raise_ else path + "?" + urllib.parse.urlencode(params),
+                                       args.name, {**params, "raise": True} if args.raise_ else None)
             print(f"{png}  scale={m['scale']} origin={m['origin']} frame={m['frame']}")
         elif args.cmd == "crop":
             x1, y1, x2, y2 = args.box
-            q = urllib.parse.urlencode({"window": window, "x1": x1, "y1": y1, "x2": x2, "y2": y2,
-                                        "scale": args.scale})
-            png, m = client.save_image(f"/upscaleshot?{q}", args.name)
+            params = {**selector, "x1": x1, "y1": y1, "x2": x2, "y2": y2, "scale": args.scale}
+            path = "/upscaleshot"
+            png, m = client.save_image(path if args.raise_ else path + "?" + urllib.parse.urlencode(params),
+                                       args.name, {**params, "raise": True} if args.raise_ else None)
             print(f"{png}  scale={m['scale']} origin={m['origin']} frame={m['frame']}")
         elif args.cmd == "act":
             mapping = client.load_mapping(args.from_shot) if args.from_shot else None
-            payload = build_action(window, args.kind, args.coords, args.key, args.text,
+            payload = build_action(selector.get("window"), args.kind, args.coords, args.key, args.text,
                                    args.direction, mapping, args.seconds)
+            payload.pop("window")
+            payload.update(selector)
             print(json.dumps(client.act(payload)))
             time.sleep(args.settle)
         return 0

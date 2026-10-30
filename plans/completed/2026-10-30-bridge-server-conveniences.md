@@ -8,7 +8,7 @@
 - **Theme**: Move the agreed server-owned conveniences out of caller orchestration.
 - **Source template**: Hermod's `high-wizard-plan-template`, downloaded verbatim from `https://hermod.lok.quest/content/high-wizard-plan-template`, then filled.
 - **Workflow**: Explicit planning-only request. The High Wizard template is used; the full `/high-wizard` procedure was not run. Read this whole file before implementation, preserve inherited decisions, execute and log each step below. Do not restart a planning questionnaire for settled scope.
-- **Status**: Planned only. No implementation of this plan or live verification has been performed.
+- **Status**: Implemented with model-free verification. Live Bridge desktop verification remains unperformed.
 
 ---
 
@@ -39,16 +39,16 @@
 An arbitrary HTTP caller should be able to select a unique target by title, request a focused capture in one request, and receive consistent structured errors without reproducing the Python client's orchestration. The optional CLI stays useful for files and coordinate mapping, but is no longer the owner of targeting/focus rules.
 
 ### **Related Documents**
-- [Server and endpoint contract](../api/README-Bridge.md)
-- [Optional CLI client](../api/README-Bridge-Client.md)
-- [Server implementation](../api/bridge-windows.py)
-- [Client implementation](../api/bridge_client.py)
-- [Windows body](../devices/windows.py)
-- [Bridge tests](../api/test_bridge.py) and [client tests](../api/test_bridge_client.py)
-- [Desktop-driving procedure](../docs/procedures/drive-the-desktop.md)
-- [Host safety decision](../docs/adr/2026-10-21-host-body-and-gates.md)
-- [Quality standard](../docs/quality-standard.md)
-- [Latest localized session](../.agents/session/bryes-visual-bridge.md)
+- [Server and endpoint contract](../../api/README-Bridge.md)
+- [Optional CLI client](../../api/README-Bridge-Client.md)
+- [Server implementation](../../api/bridge-windows.py)
+- [Client implementation](../../api/bridge_client.py)
+- [Windows body](../../devices/windows.py)
+- [Bridge tests](../../api/test_bridge.py) and [client tests](../../api/test_bridge_client.py)
+- [Desktop-driving procedure](../../docs/procedures/drive-the-desktop.md)
+- [Host safety decision](../../docs/adr/2026-10-21-host-body-and-gates.md)
+- [Quality standard](../../docs/quality-standard.md)
+- [Latest localized session](../../.agents/session/bryes-visual-bridge.md)
 
 ### **SUCCESS CRITERIA**
 - [ ] Every target-taking route accepts a unique title or an explicit handle, consistently.
@@ -103,7 +103,7 @@ Written-through architect defaults for this handoff; inherited user choices are 
 HTTP request -> validate shape and selector -> resolve live target once -> existing WindowsDevice -> JSON or PNG. Window resolution is shared across routes. The global Bridge lock continues to serialize desktop operations; focus and capture use one acquisition. The client constructs requests and handles local files, not target matching or focus policy.
 
 ### Component 1: Target resolution
-- **Key file**: [api/bridge-windows.py](../api/bridge-windows.py), within/alongside `make_app` so the existing injected lister is used.
+- **Key file**: [api/bridge-windows.py](../../api/bridge-windows.py), within/alongside `make_app` so the existing injected lister is used.
 - **Routes**: `/screenshot`, `/downscaleshot`, `/upscaleshot`, `/act`, `/locate`, and optional targeting for `/pointer`. `/health`, `/windows`, `/profiles` are not target-selecting operations.
 - GET selectors come from query fields; POST selectors come from JSON. `/act` selectors belong only at request level, never inside batch actions. Reject per-action `title` as well as `window`.
 - `window`: retain hexadecimal ID syntax; require a positive handle corresponding to a target in the current lister. Never pass a malformed/stale ID into monitor fallback. Match IDs numerically, not by differently formatted hex strings.
@@ -122,7 +122,7 @@ GET /pointer?title=Unreal%20Editor
 ```
 
 ### Component 2: Server-owned focus and capture
-- **Key file**: [api/bridge-windows.py](../api/bridge-windows.py). Avoid changing the Windows body unless a concrete correctness issue requires it.
+- **Key file**: [api/bridge-windows.py](../../api/bridge-windows.py). Avoid changing the Windows body unless a concrete correctness issue requires it.
 - Add POST `/screenshot`, `/downscaleshot`, `/upscaleshot`. Body fields mirror GET query fields, plus optional boolean `raise` (default false). POST requires `application/json` and a JSON object. Do not coerce strings such as `"false"` into true.
 - Preserve GET parameters and defaults, including scale ranges, crop bounds, PNG bytes, and existing `X-Bryes-*` headers. Reject a GET `raise` parameter with 400 and direct the caller to POST; do not silently pretend focus happened.
 - The POST capture caller supplies `window` or `title`; examples:
@@ -139,7 +139,7 @@ GET /pointer?title=Unreal%20Editor
 - Human input and other applications remain outside this lock; focus does not prove screenshot privacy or UI readiness. Returned image is the target's monitor, not an isolated window crop.
 
 ### Component 3: Consistent failures
-- **Key file**: [api/bridge-windows.py](../api/bridge-windows.py).
+- **Key file**: [api/bridge-windows.py](../../api/bridge-windows.py).
 - Preserve HTTPException handling and intentional statuses (400 invalid request, 404 absent target/profile/route, 409 ambiguity/device refusal, 415 wrong content type, 502 Eyes failure, 503 unavailable pointer).
 - Add a shared unexpected-exception handler that logs the full exception server-side and returns 500 JSON with a stable generic `description`, not stack traces or sensitive exception details. Do not replace intentional 4xx/5xx HTTPExceptions with generic 500.
 - Apply expected device RuntimeError/ValueError classification consistently to pointer/capture/focus/action paths. Model RuntimeError in `/locate` remains 502, not a device 409. Keep narrow exception boundaries so a model failure is not mislabeled as a target refusal.
@@ -148,7 +148,7 @@ GET /pointer?title=Unreal%20Editor
 - Do not auto-retry failed input. A failed action may have partially executed; prior inputs are not rolled back. An HTTP error is not a guarantee that nothing changed.
 
 ### Component 4: Thin optional client
-- **Key files**: [api/bridge_client.py](../api/bridge_client.py), [api/test_bridge_client.py](../api/test_bridge_client.py).
+- **Key files**: [api/bridge_client.py](../../api/bridge_client.py), [api/test_bridge_client.py](../../api/test_bridge_client.py).
 - With `--title`, send the title selector directly to the target endpoint rather than doing client-side `windows()` + `pick_window()`. Explicit `--window` / `BRIDGE_WINDOW` remain supported. Preserve existing CLI selector precedence rather than unexpectedly changing environment behavior in this scope; send only the one chosen selector and document it accurately.
 - For `shot/crop --raise`, send the new POST capture request with `raise:true`; remove the client's old window-list/pointer/hover choreography and its 0.3-second focus sleep. Plain capture may keep GET. Keep the Python `raise_window` helper only if actual callers need it; inspect references before removing any public helper. Do not invent a hidden no-op replacement.
 - Keep image file saving, mapping sidecars, `--from` conversion, request serialization, CLI HTTP-error printing/exit code and `act --settle` unchanged. Do not add batch CLI commands.
@@ -275,52 +275,52 @@ I have to use this document as my **ONLY** source of truth to execute and track 
 - 🚫 **Blocked**: Get input from [USER-NAME] before assuming
 
 ### Phase 1: Target selection
-- [ ] **Step 1.1**: [Baseline and shared resolver](#phase-1-target-selection)
-  - **Implementation Log**: Not started.
-  - **Testing Log**: Not run for this plan.
-  - **Success Criteria / Result**: Pending.
-- [ ] **Step 1.2**: [Wire every target-taking route](#phase-1-target-selection)
-  - **Implementation Log**: Not started.
-  - **Testing Log**: Not run for this plan.
-  - **Success Criteria / Result**: Pending.
+- [x] **Step 1.1**: [Baseline and shared resolver](#phase-1-target-selection)
+  - **Implementation Log**: Read the plan, current diff, Bridge tests and Windows body; added a shared injected-list resolver with strict selectors and ambiguity metadata. Route integration follows in Step 1.2.
+  - **Testing Log**: Baseline Bridge and client suites passed; Bridge suite passed again with resolver tests for invalid, missing, ambiguous and unique selectors.
+  - **Success Criteria / Result**: Resolver refuses invalid selections before device access and returns a concrete handle and selected entry.
+- [x] **Step 1.2**: [Wire every target-taking route](#phase-1-target-selection)
+  - **Implementation Log**: Routed pointer, captures, actions and locate through the resolver; rejected batch item selectors and preserved targetless pointer.
+  - **Testing Log**: Bridge suite passed with title and handle coverage across routes, one lister call per batch, stale-target refusal before device/model calls, and batch-selector rejection.
+  - **Success Criteria / Result**: Existing handle-based regression tests pass; target resolution is shared.
 
 ### Phase 2: Focused captures and errors
-- [ ] **Step 2.1**: [POST capture variants and atomic focus](#phase-2-focused-captures-and-errors)
-  - **Implementation Log**: Not started.
-  - **Testing Log**: Not run for this plan.
-  - **Success Criteria / Result**: Pending.
-- [ ] **Step 2.2**: [Error consistency and batch preservation](#phase-2-focused-captures-and-errors)
-  - **Implementation Log**: Not started.
-  - **Testing Log**: Not run for this plan.
-  - **Success Criteria / Result**: Pending.
+- [x] **Step 2.1**: [POST capture variants and atomic focus](#phase-2-focused-captures-and-errors)
+  - **Implementation Log**: Added JSON POST capture variants, strict focus flag, pre-focus crop validation, hover and capture inside one lock, and retained GET capture behavior.
+  - **Testing Log**: Bridge suite passed with negative-origin coordinates, focus refusal, invalid-input no-action checks and a threaded event-controlled interleaving test.
+  - **Success Criteria / Result**: Focus and capture are one serialized request; live Windows behavior remains unverified.
+- [x] **Step 2.2**: [Error consistency and batch preservation](#phase-2-focused-captures-and-errors)
+  - **Implementation Log**: Added generic logged unexpected-error handling, expected device refusals and safe batch exception descriptions while preserving batch progress.
+  - **Testing Log**: Bridge suite passed, including malformed locate, route/method/profile errors, device and model failures, secret suppression, batch stop positions and subsequent successful request.
+  - **Success Criteria / Result**: Tested failures return JSON with preserved statuses and batch progress.
 
 ### Phase 3: Client, docs and handoff
-- [ ] **Step 3.1**: [Delegate existing CLI conveniences](#phase-3-client-docs-and-handoff)
-  - **Implementation Log**: Not started.
-  - **Testing Log**: Not run for this plan.
-  - **Success Criteria / Result**: Pending.
-- [ ] **Step 3.2**: [Documentation, review and verification handoff](#phase-3-client-docs-and-handoff)
-  - **Implementation Log**: Not started.
-  - **Testing Log**: Not run for this plan.
-  - **Success Criteria / Result**: Pending.
+- [x] **Step 3.1**: [Delegate existing CLI conveniences](#phase-3-client-docs-and-handoff)
+  - **Implementation Log**: Checked helper references, removed local title/focus choreography, and sent selectors and focus requests to the server while retaining mapping and action behavior.
+  - **Testing Log**: Client suite passed with fake-client request assertions for title, focused shots/crops, locate, actions and environment selector precedence.
+  - **Success Criteria / Result**: Client no longer resolves or focuses targets locally.
+- [x] **Step 3.2**: [Documentation, review and verification handoff](#phase-3-client-docs-and-handoff)
+  - **Implementation Log**: Updated both Bridge READMEs, desktop procedure and orientation notes; reviewed the changed surface against the quality standard and recorded runtime limits below.
+  - **Testing Log**: Bridge, client, Windows drive, host input and installer fixture scripts passed. Documentation local links and `git diff --check` passed. Ruff was unavailable both on PATH and as a Python module.
+  - **Success Criteria / Result**: Model-free contract and regressions passed; no live Bridge proof or global install was claimed.
 
 ---
 
 ## **QUALITY REVIEW**
 
-- **Status**: Not performed; implementation has not started.
+- **Status**: Scoped static review performed by the implementing agent; ruff unavailable.
 - **Scope**: Reconcile Execution Log with actual diff/status, including new files. Expected server/client implementations and tests, plus documentation; avoid unrelated lessons.
-- **Quality Standard**: [docs/quality-standard.md](../docs/quality-standard.md). Review error classifications, host gates, GET purity, complete target validation, lock lifetime, compatibility and ASCII console output.
-- **Findings / Fixed**: To be recorded by implementing agent after scoped review. No delegated review agent is required or launched by this planning-only request.
+- **Quality Standard**: [docs/quality-standard.md](../../docs/quality-standard.md). Review error classifications, host gates, GET purity, complete target validation, lock lifetime, compatibility and ASCII console output.
+- **Findings / Fixed**: Resolver rejects malformed and stale handles before device creation; focus uses the host-gated action path under the capture lock; GET rejects `raise`; unexpected failures are logged without returning their details. Tightened hex syntax and constructor error handling during review. No separate reviewer was launched.
 
 ---
 
 ## **QA HANDOFF**
 
 - **Scope**: Target resolution, server focus/capture and failure reporting. Model-free HTTP integration and device/client regressions are mandatory in the phases above.
-- **QA instrument**: Formal runtime bench/checklist not inspected or set up in this planning pass. Do not assume its absence or existence; inspect when implementing.
-- **Integration coverage**: Planned Flask test-client tests with injected device/lister/locator, CLI HTTP mocks and lock/concurrency controls. These prove contracts, not Windows foreground behavior.
-- **Checklist**: To be recorded after implementation; do not fabricate a passed checklist.
+- **QA instrument**: No `qa/` bench or QA-named path was found in the checkout. No bench was created.
+- **Integration coverage**: Flask test-client tests use injected device/lister/locator, client HTTP mocks and a threaded focus/capture lock control. These prove contracts, not Windows foreground behavior.
+- **Checklist**: No formal runtime checklist was written or run; the authorized future live checks are listed below.
 - **Runtime verification**: **NOT DONE.** Do not operate a user application merely to close this plan. With explicit live-test authorization, use an agent-started disposable window and verify title resolution, a focused POST capture, gate refusal, pointer behavior, and a harmless batch; close only what the tester started. No model call is needed.
 - **Remaining boundary**: Loopback/JSON gates and title uniqueness are not isolation or authorization. Screenshots may include other applications. Document unverified live behavior separately from automated test results.
 

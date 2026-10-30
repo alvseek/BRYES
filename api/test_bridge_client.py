@@ -9,6 +9,8 @@ and the raise point. The HTTP calls themselves are thin and are exercised agains
 import sys
 import json
 import io
+import tempfile
+import urllib.error
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -86,7 +88,7 @@ def test_client_commands():
         assert bc.main(["--window", "0x1", "act", "key_hold", "--key", "w", "--seconds", "1.5"]) == 0
     finally:
         bc.BridgeClient, bc.time.sleep = original_client, original_sleep
-    assert calls == [("locate", "0x1", "the Submit button"),
+    assert calls == [("locate", {"window": "0x1"}, "the Submit button"),
                      ("profiles", "windows/unreal-editor"),
                      ("act", {"window": "0x1", "type": "key_hold", "key": "w", "seconds": 1.5})]
 
@@ -109,26 +111,95 @@ def test_client_commands():
     print("PASS: locate, profiles, and key_hold duration CLI and HTTP requests")
 
 
-def test_pick_window():
-    wins = [{"id": "0x1", "title": "LSGI - Unreal Editor"}, {"id": "0x2", "title": "Notepad"},
-            {"id": "0x3", "title": "BPA_Test - Unreal Editor"}]
-    assert bc.pick_window(wins, "notepad") == "0x2"
-    for title in ("Unreal Editor", "nothing"):
+def test_server_owned_targeting():
+    calls = []
+
+    class FakeClient:
+        def __init__(self, out=None):
+            pass
+
+        def save_image(self, path, name, body=None):
+            calls.append((path, body))
+            return name, {"scale": 1, "origin": [0, 0], "frame": [100, 100]}
+
+        def locate(self, selector, instruction):
+            calls.append(("locate", selector, instruction))
+            return {}
+
+        def act(self, payload):
+            calls.append(("act", payload))
+            return {}
+
+    original, sleep, old_env = bc.BridgeClient, bc.time.sleep, bc.os.environ.pop("BRIDGE_WINDOW", None)
+    try:
+        bc.BridgeClient, bc.time.sleep = FakeClient, lambda _: None
+        assert bc.main(["--title", "Example App", "shot", "one", "--raise"]) == 0
+        assert bc.main(["--title", "Example App", "crop", "two", "1", "2", "3", "4", "--raise"]) == 0
+        assert bc.main(["--title", "Example App", "locate", "button"]) == 0
+        assert bc.main(["--title", "Example App", "act", "key", "--key", "a"]) == 0
+        assert calls[0] == ("/downscaleshot", {"title": "Example App", "scale": "0.5", "raise": True})
+        assert calls[1][1] == {"title": "Example App", "x1": 1, "y1": 2, "x2": 3, "y2": 4, "scale": "2", "raise": True}
+        assert calls[2] == ("locate", {"title": "Example App"}, "button")
+        assert calls[3] == ("act", {"title": "Example App", "type": "key", "key": "a"})
+        bc.os.environ["BRIDGE_WINDOW"] = "0x1"
+        assert bc.main(["--title", "ignored", "shot", "three", "--raise"]) == 0
+        assert calls[-1][1]["window"] == "0x1" and "title" not in calls[-1][1]
+    finally:
+        bc.BridgeClient, bc.time.sleep = original, sleep
+        if old_env is None:
+            bc.os.environ.pop("BRIDGE_WINDOW", None)
+        else:
+            bc.os.environ["BRIDGE_WINDOW"] = old_env
+    print("PASS: CLI sends title and focused capture directly to server")
+
+
+def test_focused_http_request():
+    class Response(io.BytesIO):
+        headers = {"X-Bryes-Scale": "0.5", "X-Bryes-Origin": "0,0", "X-Bryes-Frame": "100,100"}
+
+    with tempfile.TemporaryDirectory() as directory:
+        client = bc.BridgeClient(base="http://example.test", out=directory)
+        requests = []
+        client._open = lambda req: (requests.append(req), Response(b"png"))[1]
+        png, mapping = client.save_image("/downscaleshot", "shot",
+                                         {"title": "app", "raise": True, "scale": "0.5"})
+        assert requests[0].get_method() == "POST"
+        assert requests[0].full_url == "http://example.test/downscaleshot"
+        assert json.loads(requests[0].data) == {"title": "app", "raise": True, "scale": "0.5"}
+        assert png.read_bytes() == b"png" and mapping["scale"] == 0.5
+        assert json.loads((Path(directory) / "shot.json").read_text()) == mapping
+    original = bc.urllib.request.urlopen
+    try:
+        def fail(*_args, **_kwargs):
+            raise urllib.error.HTTPError("http://example.test", 409, "conflict", {}, io.BytesIO(b'failure body'))
+        bc.urllib.request.urlopen = fail
         try:
-            bc.pick_window(wins, title)
-        except bc.BridgeError:
-            continue
-        raise AssertionError(f"'{title}' should not resolve to one window")
-    print("PASS: --title resolves exactly one window and refuses none or several")
+            bc.BridgeClient().get_json("/pointer")
+            raise AssertionError("HTTP error not surfaced")
+        except bc.BridgeError as exc:
+            assert "409" in str(exc) and "failure body" in str(exc)
+    finally:
+        bc.urllib.request.urlopen = original
+    print("PASS: focused capture sends JSON POST and preserves image mapping and HTTP errors")
 
 
-def test_raise_point():
-    entry = {"image_rect": [0, 0, 3440, 1400]}
-    # pointer already inside: hover where it is, so nothing moves
-    assert bc.raise_point(entry, {"inside_window": True, "image_x": 50, "image_y": 60}) == (50, 60)
-    # pointer elsewhere: the window's centre
-    assert bc.raise_point(entry, {"inside_window": False, "image_x": -900, "image_y": -900}) == (1720, 700)
-    print("PASS: raising hovers in place when the pointer is inside, else at the window centre")
+def test_cli_error_exit():
+    class FakeClient:
+        def __init__(self, out=None):
+            pass
+
+        def locate(self, *_args):
+            raise bc.BridgeError("HTTP 409: refusal body")
+
+    original, stderr = bc.BridgeClient, sys.stderr
+    try:
+        bc.BridgeClient = FakeClient
+        sys.stderr = io.StringIO()
+        assert bc.main(["--window", "0x1", "locate", "button"]) == 1
+        assert "HTTP 409: refusal body" in sys.stderr.getvalue()
+    finally:
+        bc.BridgeClient, sys.stderr = original, stderr
+    print("PASS: CLI prints HTTP error and returns failure")
 
 
 def test_mapping_sidecar_round_trip(tmp=Path(__file__).resolve().parent.parent / "artifacts" / "bridge-client-test"):
@@ -149,7 +220,8 @@ if __name__ == "__main__":
     test_to_frame()
     test_build_action()
     test_client_commands()
-    test_pick_window()
-    test_raise_point()
+    test_server_owned_targeting()
+    test_focused_http_request()
+    test_cli_error_exit()
     test_mapping_sidecar_round_trip()
     print("PASS: all bridge client tests green")
