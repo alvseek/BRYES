@@ -9,6 +9,7 @@ once by hand when the bridge is pointed at the editor.
 """
 import importlib.util
 import io
+import json
 import sys
 from pathlib import Path
 
@@ -168,6 +169,105 @@ def test_locate():
     print("PASS: /locate returns the Eyes' pixel for the caller's words")
 
 
+def test_act_batch():
+    app, device = build()
+    actions = [{"type": "click", "x": 20, "y": 10},
+               {"type": "type", "text": "abc"}, {"type": "key", "key": "enter"}]
+    r = app.test_client().post("/act", json={"window": "0x1a", "actions": actions})
+    assert r.status_code == 200 and r.get_json() == {"ok": True, "actions": actions}
+    assert device.actions == actions
+    print("PASS: batch actions run in order with the documented text and key fields")
+
+
+def test_act_batch_validates_before_input():
+    invalid = [None, [], {}, [None], [{"type": []}],
+               [{"type": "click"}], [{"type": "type", "string": "abc"}],
+               [{"type": "key", "key": ""}],
+               [{"type": "click", "x": "20", "y": 10}],
+               [{"type": "drag", "x": 1, "y": 2, "x2": 3}],
+               [{"type": "key_hold", "key": "w"}],
+               [{"type": "type", "text": "abc", "window": "0x2b"}]]
+    for items in invalid:
+        app, device = build()
+        if isinstance(items, list) and items:
+            items = [{"type": "type", "text": "must not run"}] + items
+        r = app.test_client().post("/act", json={"window": "0x1a", "actions": items})
+        assert r.status_code == 400, (items, r.get_json())
+        assert not device.actions
+    app, device = build()
+    c = app.test_client()
+    for body in ([], None, "abc", {"window": "0x1a", "type": "type", "actions": []},
+                 {"actions": [{"type": "type", "text": "abc"}]}):
+        r = c.post("/act", data=json.dumps(body), content_type="application/json")
+        assert r.status_code == 400
+    assert not device.actions
+    print("PASS: malformed batches and later invalid actions send no input")
+
+
+def test_act_batch_stops_on_failure():
+    for failed_index in (0, 1, 2):
+        app, device = build()
+        actions = [{"type": "click", "x": 10, "y": 10} for _ in range(3)]
+        actions[failed_index] = {"type": "click", "x": -1, "y": 0}
+        r = app.test_client().post("/act", json={"window": "0x1a", "actions": actions})
+        body = r.get_json()
+        assert r.status_code == 409 and body["ok"] is False
+        assert body["failed_index"] == failed_index
+        assert body["failed_action"] == actions[failed_index]
+        assert body["completed"] == device.actions == actions[:failed_index]
+    # Even an unexpected device exception must retain progress and stop the batch.
+    app, device = build()
+    original = device.act
+
+    def fail_on_key(action):
+        if action["type"] == "key":
+            raise OSError("input backend unavailable")
+        original(action)
+
+    device.act = fail_on_key
+    actions = [{"type": "type", "text": "abc"}, {"type": "key", "key": "enter"},
+               {"type": "type", "text": "must not run"}]
+    r = app.test_client().post("/act", json={"window": "0x1a", "actions": actions})
+    assert r.status_code == 500 and r.get_json()["completed"] == actions[:1]
+    assert device.actions == actions[:1]
+    print("PASS: first, middle, last and unexpected failures stop with accurate progress")
+
+
+def test_act_batch_lock():
+    app, device = build()
+    original_act = device.act
+    original_lock = _bridge._LOCK
+
+    class RecordingLock:
+        held = False
+        entries = 0
+
+        def __enter__(self):
+            assert not self.held
+            self.held = True
+            self.entries += 1
+
+        def __exit__(self, *_args):
+            self.held = False
+
+    lock = RecordingLock()
+
+    def check_lock(action):
+        assert lock.held
+        original_act(action)
+
+    device.act = check_lock
+    _bridge._LOCK = lock
+    try:
+        r = app.test_client().post("/act", json={"window": "0x1a", "actions": [
+            {"type": "type", "text": "a"}, {"type": "type", "text": "b"}]})
+        assert r.status_code == 200 and len(device.actions) == 2
+        assert lock.entries == 1 and not lock.held
+    finally:
+        _bridge._LOCK = original_lock
+    print("PASS: one lock acquisition covers the whole batch and is released afterwards")
+
+
 def test_pointer():
     app, device = build()
     c = app.test_client()
@@ -211,6 +311,10 @@ if __name__ == "__main__":
     test_downscaleshot()
     test_upscaleshot()
     test_act_forwards_and_refuses()
+    test_act_batch()
+    test_act_batch_validates_before_input()
+    test_act_batch_stops_on_failure()
+    test_act_batch_lock()
     test_locate()
     test_pointer()
     test_profiles()

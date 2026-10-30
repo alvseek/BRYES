@@ -33,6 +33,7 @@ Run: python api/bridge-windows.py  ->  http://127.0.0.1:8110
 """
 import ctypes
 import io
+import math
 import sys
 import threading
 from ctypes import wintypes
@@ -56,7 +57,7 @@ _LOCK = threading.Lock()
 
 # Verbs the surface will forward. The body's Capabilities are the second check, so a verb that
 # exists here but not on this body is refused with the body's own reason.
-_POINT_VERBS = {"click", "double_click", "right_click", "hover"}
+_POINT_VERBS = {"click", "double_click", "right_click", "hover", "scroll"}
 _VERBS = _POINT_VERBS | {"drag", "scroll", "type", "key", "key_hold"}
 
 
@@ -286,27 +287,76 @@ def make_app(device_factory=None, locator=None, window_lister=None, frame_provid
     def act():
         if not request.is_json:
             abort(415, description="send application/json")
-        body = request.get_json(silent=True) or {}
-        verb = body.get("type")
-        if verb not in _VERBS:
-            abort(400, description=f"type must be one of {sorted(_VERBS)}")
+        body = request.get_json(silent=True)
+        if not isinstance(body, dict):
+            abort(400, description="send a JSON object")
+        batch = "actions" in body
+        if batch and "type" in body:
+            abort(400, description="send either type or actions, not both")
+        items = body.get("actions") if batch else [body]
+        if not isinstance(items, list) or not items:
+            abort(400, description="actions must be a non-empty array")
         hwnd = _parse_window_id(body.get("window"))
-        action = {"type": verb}
-        for field in ("x", "y", "x2", "y2", "text", "key", "seconds", "direction"):
-            if body.get(field) is not None:
-                action[field] = body[field]
-        if verb in _POINT_VERBS and ("x" not in action or "y" not in action):
-            abort(400, description=f"{verb} needs x and y")
-        if verb == "drag" and not {"x", "y", "x2", "y2"} <= set(action):
-            abort(400, description="drag needs x, y, x2 and y2")
         device = _device_for(hwnd)
-        if verb not in device.caps.verbs:
-            abort(400, description=f"{device.caps.name} cannot perform {verb}")
-        try:
-            with _LOCK:
-                device.act(action)
-        except (RuntimeError, ValueError) as e:
-            abort(409, description=str(e))
+        actions = []
+        # Validate every action before sending any input. Geometry/focus still depend on
+        # live desktop state and are checked by the device at each point of execution.
+        for index, item in enumerate(items):
+            prefix = f"actions[{index}]: " if batch else ""
+
+            def refuse(message):
+                abort(400, description=prefix + message)
+
+            if not isinstance(item, dict):
+                refuse("each action must be an object")
+            verb = item.get("type")
+            if not isinstance(verb, str) or verb not in _VERBS:
+                refuse(f"type must be one of {sorted(_VERBS)}")
+            if batch and "window" in item:
+                refuse("window belongs at the request level")
+            if verb not in device.caps.verbs:
+                refuse(f"{device.caps.name} cannot perform {verb}")
+            action = {"type": verb}
+            for field in ("x", "y", "x2", "y2", "text", "key", "seconds", "direction"):
+                if item.get(field) is not None:
+                    action[field] = item[field]
+            points = ("x", "y", "x2", "y2") if verb == "drag" else (
+                ("x", "y") if verb in _POINT_VERBS else ())
+            for field in points:
+                value = action.get(field)
+                if (isinstance(value, bool) or not isinstance(value, (int, float))
+                        or not math.isfinite(value)):
+                    refuse(f"{verb} needs finite numeric {field}")
+            field = "text" if verb == "type" else "key" if verb in {"key", "key_hold"} else None
+            if field and not isinstance(action.get(field), str):
+                refuse(f"{verb} needs a string {field}")
+            if field == "key" and not action[field].strip():
+                refuse("key must not be empty")
+            if verb == "scroll" and action.get("direction", "down") not in ("up", "down"):
+                refuse("direction must be up or down")
+            if verb == "key_hold" and "seconds" in action:
+                value = action["seconds"]
+                if (isinstance(value, bool) or not isinstance(value, (int, float))
+                        or not math.isfinite(value)):
+                    refuse("seconds must be a finite number")
+            actions.append(action)
+        completed = []
+        with _LOCK:
+            for index, action in enumerate(actions):
+                try:
+                    device.act(action)
+                except Exception as e:
+                    status = 409 if isinstance(e, (RuntimeError, ValueError)) else 500
+                    if batch:
+                        return jsonify({"ok": False, "error": "Action failed",
+                                        "description": str(e), "completed": completed,
+                                        "failed_index": index, "failed_action": action}), status
+                    if status == 409:
+                        abort(409, description=str(e))
+                    raise
+                completed.append(action)
+        if batch:
+            return jsonify({"ok": True, "actions": completed})
         return jsonify({"ok": True, "action": action})
 
     @app.post("/locate")
