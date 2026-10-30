@@ -165,6 +165,31 @@ def _resolve_target(args, lister, required=True):
     return _parse_window_id(selected["id"]), selected
 
 
+def _finite_number(value):
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return False
+    try:
+        return math.isfinite(value)
+    except OverflowError:
+        return False
+
+
+def _action_mapping(body):
+    """Optional screenshot-to-frame mapping, supplied by the caller, never stored."""
+    if "mapping" not in body:
+        return None
+    mapping = body["mapping"]
+    if not isinstance(mapping, dict):
+        abort(400, description="mapping must be an object with scale and origin")
+    scale, origin = mapping.get("scale"), mapping.get("origin")
+    if not _finite_number(scale) or scale <= 0:
+        abort(400, description="mapping.scale must be a finite positive number")
+    if (not isinstance(origin, list) or len(origin) != 2
+            or not all(_finite_number(value) for value in origin)):
+        abort(400, description="mapping.origin must contain two finite numbers")
+    return scale, origin
+
+
 def _scaled(image, scale):
     """PNG bytes of `image` scaled by `scale` (PIL's LANCZOS, size rounded to at least 1 px)."""
     width, height = image.size
@@ -372,6 +397,7 @@ def make_app(device_factory=None, locator=None, window_lister=None, frame_provid
         items = body.get("actions") if batch else [body]
         if not isinstance(items, list) or not items:
             abort(400, description="actions must be a non-empty array")
+        mapping = _action_mapping(body)
         hwnd, _ = _resolve_target(body, lister)
         device = _device_for(hwnd)
         actions = []
@@ -390,6 +416,8 @@ def make_app(device_factory=None, locator=None, window_lister=None, frame_provid
                 refuse(f"type must be one of {sorted(_VERBS)}")
             if batch and ("window" in item or "title" in item):
                 refuse("window and title belong at the request level")
+            if batch and "mapping" in item:
+                refuse("mapping belongs at the request level")
             if verb == "delay":
                 value = item.get("miliseconds")
                 if (isinstance(value, bool) or not isinstance(value, (int, float))
@@ -413,9 +441,18 @@ def make_app(device_factory=None, locator=None, window_lister=None, frame_provid
                 ("x", "y") if verb in _POINT_VERBS else ())
             for field in points:
                 value = action.get(field)
-                if (isinstance(value, bool) or not isinstance(value, (int, float))
-                        or not math.isfinite(value)):
+                if not _finite_number(value):
                     refuse(f"{verb} needs finite numeric {field}")
+            if mapping and points:
+                scale, origin = mapping
+                for field in points:
+                    try:
+                        value = origin[0 if field in ("x", "x2") else 1] + action[field] / scale
+                        if not _finite_number(value):
+                            raise ValueError
+                        action[field] = round(value)
+                    except (OverflowError, ValueError):
+                        refuse(f"mapping produces a non-finite frame coordinate for {field}")
             field = "text" if verb == "type" else "key" if verb in {"key", "key_hold"} else None
             if field and not isinstance(action.get(field), str):
                 refuse(f"{verb} needs a string {field}")

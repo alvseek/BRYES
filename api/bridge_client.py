@@ -1,7 +1,7 @@
 """Command-line client for the Windows Bridge (api/bridge-windows.py).
 
-Saves images with mapping sidecars and sends the server's action JSON unchanged, except for
-the selected target and optional `--from` coordinate conversion.
+Saves images with mapping sidecars and sends the server's action JSON unchanged, adding
+the selected target and, with `--from`, the saved mapping for server-side coordinate conversion.
 
     python api/bridge_client.py windows
     python api/bridge_client.py shot overview [--scale 0.5] [--raise]
@@ -17,7 +17,6 @@ artifacts/bridge-shots), each as <name>.png beside <name>.json holding its mappi
 """
 import argparse
 import json
-import math
 import os
 import sys
 import urllib.error
@@ -46,46 +45,18 @@ def mapping_from_headers(headers):
     return {"scale": scale, "origin": [ox, oy], "frame": [fw, fh]}
 
 
-def to_frame(mapping, x, y):
-    """A pixel of a saved image -> the frame pixel /act expects (frame = origin + px / scale)."""
-    ox, oy = mapping["origin"]
-    s = mapping["scale"]
-    return round(ox + x / s), round(oy + y / s)
-
-
 def build_payload(selector, payload, mapping=None):
-    """Add the CLI target and optionally map coordinate pairs; the server validates actions."""
+    """Attach target and saved mapping; action validation and conversion belong to the server."""
     if not isinstance(payload, dict):
         raise ValueError("--json must contain a JSON object")
     if "window" in payload or "title" in payload:
         raise ValueError("select the target with --window, --title, or BRIDGE_WINDOW, not --json")
     result = {**payload, **selector}
-    if mapping is None:
-        return result
-
-    def mapped(action):
-        if not isinstance(action, dict):
-            raise ValueError("--from requires action objects")
-        action = dict(action)
-        for x, y in (("x", "y"), ("x2", "y2")):
-            if x not in action and y not in action:
-                continue
-            try:
-                values = (action[x], action[y])
-                if any(isinstance(v, bool) or not isinstance(v, (int, float))
-                       or not math.isfinite(v) for v in values):
-                    raise ValueError
-                action[x], action[y] = to_frame(mapping, *values)
-            except (KeyError, TypeError, ValueError, OverflowError, ZeroDivisionError):
-                raise ValueError(f"--from needs finite numeric {x}, {y} and a valid mapping") from None
-        return action
-
-    if "actions" in result:
-        if not isinstance(result["actions"], list):
-            raise ValueError("--from requires an actions array")
-        result["actions"] = [mapped(action) for action in result["actions"]]
-        return result
-    return mapped(result)
+    if mapping is not None:
+        if "mapping" in payload:
+            raise ValueError("send mapping in --json or use --from, not both")
+        result["mapping"] = mapping
+    return result
 
 
 # ---- HTTP -------------------------------------------------------------------------------------
@@ -143,7 +114,10 @@ class BridgeClient:
         sidecar = self.out / f"{name}.json"
         if not sidecar.exists():
             raise BridgeError(f"no mapping for '{name}' in {self.out}; take that shot first")
-        return json.loads(sidecar.read_text(encoding="utf-8"))
+        mapping = json.loads(sidecar.read_text(encoding="utf-8"))
+        if not isinstance(mapping, dict):
+            raise BridgeError(f"mapping file '{name}' must contain a JSON object")
+        return mapping
 
 
 # ---- CLI ----------------------------------------------------------------------------------------
@@ -176,7 +150,7 @@ def main(argv=None):
 
     a = sub.add_parser("act", help="send one action or a batch as the server's JSON")
     a.add_argument("--json", required=True, help="action object or object containing an actions array")
-    a.add_argument("--from", dest="from_shot", help="coords are pixels of this saved shot")
+    a.add_argument("--from", dest="from_shot", help="send this saved shot's mapping to the server")
 
     args = p.parse_args(argv)
     client = BridgeClient(out=args.out)

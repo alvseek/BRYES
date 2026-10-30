@@ -119,7 +119,11 @@ frame_y = origin_y + returned_y / scale
 Use the response headers, not remembered scaling settings. For example, on a crop starting at
 `(100,200)` enlarged by `2`, returned pixel `(40,60)` maps to frame pixel `(120,230)`.
 If your image viewer resizes the returned image again, undo that additional resize before
-applying the formula. Round the final frame coordinates to integer pixels for input.
+applying the formula. Round the final frame coordinates to integer pixels for input. Alternatively,
+send image coordinates with request-level `mapping`, for example
+`{"scale":2,"origin":[100,200]}` on `/act`, and let the updated server do the conversion and
+rounding. One mapping applies to all pointer actions in a batch; responses echo frame coordinates.
+Do not send already-converted points together with mapping, or they will be converted twice.
 
 The plain `/screenshot` response is already 1:1 and does not carry those mapping headers.
 Do not add the monitor's Windows origin when sending `/act`: the body does that translation.
@@ -139,7 +143,7 @@ Re-observe after moving the target between monitors, resizing it, or changing di
 | `key_hold` | `key`, `seconds` | Hold then release; duration is clamped to `0.1` through `5` seconds |
 
 [api/bridge_client.py](../../api/bridge_client.py) wraps all of this in one line per step, and its
-`--from <shot>` converts a crop's pixels for you. With plain HTTP, for example, with `$window` set to
+`--from <shot>` sends the saved mapping for server-side conversion. With plain HTTP, for example, with `$window` set to
 an id returned by `/windows` and `$x`, `$y` measured from the image:
 
 ```powershell

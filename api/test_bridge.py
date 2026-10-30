@@ -13,6 +13,7 @@ import json
 import sys
 import threading
 from pathlib import Path
+from unittest.mock import patch
 
 from PIL import Image
 
@@ -430,6 +431,80 @@ def test_act_delay():
     print("PASS: delay waits in order under the batch lock, validates first and preserves progress")
 
 
+def test_act_mapping():
+    app, device = build()
+    device.caps.verbs = device.caps.verbs | {"scroll"}
+    c = app.test_client()
+    mapping = {"scale": 2, "origin": [100, 200], "frame": [1920, 1080]}
+    for verb in ("click", "double_click", "right_click", "hover", "scroll", "drag"):
+        action = {"type": verb, "x": 40, "y": 60}
+        expected = {"type": verb, "x": 120, "y": 230}
+        if verb == "drag":
+            action.update(x2=80, y2=100)
+            expected.update(x2=140, y2=250)
+        r = c.post("/act", json={"window": "0x1a", "mapping": mapping, **action})
+        assert r.status_code == 200 and r.get_json()["action"] == expected
+        assert device.actions[-1] == expected
+    for scale, origin, point, expected in (
+            (0.5, [0, 0], [850, 450], [1700, 900]),
+            (3, [780, 380], [388, 160], [909, 433]),
+            (1, [-10, -20], [15, 30], [5, 10])):
+        r = c.post("/act", json={"title": "party", "mapping": {
+            "scale": scale, "origin": origin}, "type": "click", "x": point[0], "y": point[1]})
+        assert r.status_code == 200 and device.actions[-1] == {
+            "type": "click", "x": expected[0], "y": expected[1]}
+    # Mapped results still go through the body's bounds check, not just source coordinates.
+    r = c.post("/act", json={"window": "0x1a", "mapping": {"scale": 1, "origin": [-2, 0]},
+                              "type": "click", "x": 1, "y": 0})
+    assert r.status_code == 409
+    # Batch responses and failures echo frame coordinates, while non-pointer actions stay unchanged.
+    actions = [{"type": "click", "x": 40, "y": 60},
+               {"type": "delay", "miliseconds": 1000}, {"type": "key", "key": "enter"}]
+    with patch.object(_bridge.time, "sleep") as sleep:
+        r = c.post("/act", json={"window": "0x1a", "mapping": mapping, "actions": actions})
+        expected = [{"type": "click", "x": 120, "y": 230}, *actions[1:]]
+        assert r.status_code == 200 and r.get_json()["actions"] == expected
+        sleep.assert_called_once_with(1)
+        sleep.reset_mock()
+        failed = {"type": "click", "x": -202, "y": 0}
+        r = c.post("/act", json={"window": "0x1a", "mapping": mapping,
+                                  "actions": [actions[0], failed, actions[1]]})
+        assert r.status_code == 409 and r.get_json()["completed"] == expected[:1]
+        assert r.get_json()["failed_action"] == {"type": "click", "x": -1, "y": 200}
+        assert r.get_json()["failed_index"] == 1
+        sleep.assert_not_called()
+    print("PASS: server maps pointer coordinates once and echoes executed frame pixels")
+
+
+def test_act_mapping_validation():
+    app, device = build()
+    c = app.test_client()
+    invalid = [None, [], {}, {"scale": 1}, {"origin": [0, 0]}]
+    for scale in (0, -1, True, "2", None, float("inf"), float("nan"), 10**400):
+        invalid.append({"scale": scale, "origin": [0, 0]})
+    for origin in (None, [], [0], [0, 0, 0], "0,0", [True, 0], ["1", 0],
+                   [float("inf"), 0], [10**400, 0]):
+        invalid.append({"scale": 1, "origin": origin})
+    sleep = _bridge.time.sleep
+    _bridge.time.sleep = lambda _: (_ for _ in ()).throw(AssertionError("must not wait"))
+    try:
+        for mapping in invalid:
+            r = c.post("/act", json={"window": "0x1a", "mapping": mapping, "actions": [
+                {"type": "key", "key": "enter"}, {"type": "delay", "miliseconds": 1}]})
+            assert r.status_code == 400 and r.is_json, (mapping, r.get_json())
+        for item in ({"type": "click", "x": 1e308, "y": 1},
+                     {"type": "click", "x": 10**400, "y": 1},
+                     {"type": "key", "key": "a", "mapping": {"scale": 1, "origin": [0, 0]}}):
+            r = c.post("/act", json={"window": "0x1a", "mapping": {
+                "scale": 1e-308, "origin": [0, 0]}, "actions": [
+                    {"type": "delay", "miliseconds": 1}, item]})
+            assert r.status_code == 400 and "actions[1]" in r.get_json()["description"]
+        assert not device.actions
+    finally:
+        _bridge.time.sleep = sleep
+    print("PASS: malformed mappings and non-finite converted points fail before input or waiting")
+
+
 def test_act_batch_stops_on_failure():
     for failed_index in (0, 1, 2):
         app, device = build()
@@ -545,6 +620,8 @@ if __name__ == "__main__":
     test_act_batch()
     test_act_batch_validates_before_input()
     test_act_delay()
+    test_act_mapping()
+    test_act_mapping_validation()
     test_act_batch_stops_on_failure()
     test_act_batch_lock()
     test_locate()

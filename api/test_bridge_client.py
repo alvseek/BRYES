@@ -26,48 +26,35 @@ def test_mapping_from_headers():
     print("PASS: mapping is read from the X-Bryes headers, 1:1 when absent")
 
 
-def test_to_frame():
-    # the README's own example: crop at (100,200) enlarged by 2, pixel (40,60) -> frame (120,230)
-    assert bc.to_frame({"scale": 2.0, "origin": [100, 200]}, 40, 60) == (120, 230)
-    # a downscaled overview at 0.5 doubles back
-    assert bc.to_frame({"scale": 0.5, "origin": [0, 0]}, 850, 450) == (1700, 900)
-    # fractional results round to whole pixels
-    assert bc.to_frame({"scale": 3.0, "origin": [780, 380]}, 388, 160) == (909, 433)
-    print("PASS: crop pixels map to frame pixels as origin + px / scale")
-
-
 def test_build_payload():
     selector = {"window": "0x1"}
     m = {"scale": 2.0, "origin": [100, 200]}
     drag = {"type": "drag", "x": 40, "y": 60, "x2": 80, "y2": 100}
-    converted = {"type": "drag", "x": 120, "y": 230, "x2": 140, "y2": 250}
-    assert bc.build_payload(selector, drag, m) == {**selector, **converted}
+    assert bc.build_payload(selector, drag, m) == {**selector, **drag, "mapping": m}
     assert drag["x"] == 40  # caller-owned JSON is not mutated
     delay = {"type": "delay", "miliseconds": 1000}
     future = {"type": "future-server-verb", "new_field": {"keep": True}}
     batch = {"actions": [drag, delay, future]}
     assert bc.build_payload(selector, batch, m) == {
-        **selector, "actions": [converted, delay, future]}
+        **selector, **batch, "mapping": m}
     assert batch["actions"][0] == drag
     assert bc.build_payload({"title": "App"}, future) == {"title": "App", **future}
     # The server, not the CLI, validates verbs, required fields and batch semantics.
     for action in ({"type": "key"}, {"actions": []}, future):
         assert bc.build_payload(selector, action) == {**selector, **action}
+    assert bc.build_payload(selector, {**drag, "mapping": m}) == {**selector, **drag, "mapping": m}
+    assert bc.build_payload(selector, {"x": "bad"}, {"scale": 0}) == {
+        **selector, "x": "bad", "mapping": {"scale": 0}}  # server validates these
     for bad in (lambda: bc.build_payload(selector, []),
                 lambda: bc.build_payload(selector, {"window": "0x2"}),
                 lambda: bc.build_payload(selector, {"title": "Other"}),
-                lambda: bc.build_payload(selector, {"actions": None}, m),
-                lambda: bc.build_payload(selector, {"actions": [None]}, m),
-                lambda: bc.build_payload(selector, {"x": 1}, m),
-                lambda: bc.build_payload(selector, {"x": True, "y": 1}, m),
-                lambda: bc.build_payload(selector, {"x": "1", "y": 1}, m),
-                lambda: bc.build_payload(selector, {"x": float("inf"), "y": 1}, m)):
+                lambda: bc.build_payload(selector, {"mapping": m}, m)):
         try:
             bad()
         except ValueError:
             continue
         raise AssertionError("an invalid local payload or mapping was accepted")
-    print("PASS: generic payloads preserve server fields and map single or batch coordinates")
+    print("PASS: generic payloads attach saved mapping without converting or mutating coordinates")
 
 
 def test_client_commands():
@@ -258,8 +245,13 @@ def test_json_action_requests():
                             json.dumps({"actions": actions})]) == 0
             expected = [{"type": "click", "x": 120, "y": 230}, actions[1],
                         {"type": "drag", "x": 120, "y": 230, "x2": 140, "y2": 250}]
-            assert json.loads(requests[-1].data) == {"window": "0x1a", "actions": expected}
+            assert json.loads(requests[-1].data) == {
+                "window": "0x1a", "mapping": {"scale": 2, "origin": [100, 200]}, "actions": actions}
             assert device.actions == [single, expected[0], expected[2]] and waits == [1.0]
+            with patch("sys.stderr", new_callable=io.StringIO) as stderr:
+                assert bc.main(["--window", "0x1a", "act", "--json", json.dumps({
+                    "mapping": {"scale": 0, "origin": [0, 0]}, "type": "click", "x": 1, "y": 2})]) == 1
+                assert "HTTP 400" in stderr.getvalue()
             assert bc.main(["--window", "0x1a", "act", "--json",
                             '{"type":"delay","miliseconds":0}']) == 0
             assert waits == [1.0, 0]
@@ -290,7 +282,14 @@ def test_mapping_sidecar_round_trip(tmp=Path(__file__).resolve().parent.parent /
     client = bc.BridgeClient(out=tmp)
     tmp.mkdir(parents=True, exist_ok=True)
     (tmp / "k1.json").write_text('{"scale": 3.0, "origin": [780, 380], "frame": [3440, 1440]}', encoding="utf-8")
-    assert bc.to_frame(client.load_mapping("k1"), 388, 160) == (909, 433)
+    assert client.load_mapping("k1") == {"scale": 3.0, "origin": [780, 380], "frame": [3440, 1440]}
+    (tmp / "invalid.json").write_text("null", encoding="utf-8", newline="\n")
+    try:
+        client.load_mapping("invalid")
+    except bc.BridgeError:
+        pass
+    else:
+        raise AssertionError("null sidecar silently discarded mapping")
     try:
         client.load_mapping("missing")
     except bc.BridgeError:
@@ -301,7 +300,6 @@ def test_mapping_sidecar_round_trip(tmp=Path(__file__).resolve().parent.parent /
 
 if __name__ == "__main__":
     test_mapping_from_headers()
-    test_to_frame()
     test_build_payload()
     test_client_commands()
     test_server_owned_targeting()

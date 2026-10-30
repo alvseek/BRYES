@@ -37,12 +37,15 @@ For example, press Enter, wait one second, then type:
 python api/bridge_client.py act --json '{"actions":[{"type":"key","key":"enter"},{"type":"delay","miliseconds":1000},{"type":"type","text":"abc"}]}'
 ```
 
-Each saved image has a JSON mapping file beside it. `act --from <shot>` converts `x,y` and
-`x2,y2` from that image back to original frame pixels, for either one action or every action
-in a batch. All points in that request must use the same saved image; other fields, including
-delay durations, pass through unchanged. Without `--from`, coordinates are already frame pixels.
-The mapping does not verify that the screen or window has stayed in the same place since the
-capture, so observe again when geometry changes.
+Each saved image has a JSON mapping file beside it. `act --from <shot>` attaches that file as
+request-level `mapping`; the client does not change any coordinates. The server converts `x,y`
+and both drag endpoints back to original frame pixels, for one action or every pointer action
+in a batch. All points in that request must use the same saved image; keyboard fields and delay
+durations stay unchanged. You can instead put `mapping` directly in `--json`, but cannot combine
+that with `--from`. With neither, coordinates are already frame pixels. Start the updated server
+before using this client: an older server does not implement mapping and could act at the wrong
+coordinates. Responses echo converted frame coordinates. Mapping does not verify that the UI
+has stayed in the same place since capture, so observe again when geometry changes.
 
 `--raise` sends one focused capture request to the server, which hovers where the pointer already
 is when inside the window, or at the window's centre otherwise. It requires the server's host-input
