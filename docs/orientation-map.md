@@ -300,10 +300,10 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 - **roles**: []
 - **status**: useful
 - **tags**: [procedure, host-body, windows, driving, pyautogui, gates, adr-009]
-- **last_verified**: "2026-10-30"
-- **verified_by**: "software-architect / partial procedure alignment"
+- **last_verified**: "2026-10-31"
+- **verified_by**: "software-architect / simplified Bridge client workflow"
 - **update_trigger**: "when Windows Bridge routes, coordinate mapping, input gates, or operator workflow change"
-- **notes**: "Canonical /drive-desktop operator procedure: targeting, profiles, observe-act-verify and focused POST capture. This session added server mapping guidance, but full alignment with delay/batches and the thin JSON client is explicitly next session. Global copies were last refreshed before these changes and have not been reinstalled."
+- **notes**: "Canonical /drive-desktop operator procedure: connect, select, observe, act and verify using the thin JSON client. Covers server mapping, explicit delays, bounded batches, partial failures and timeout safety; endpoint details stay in the Bridge references. Global OpenCode and Claude Code copies refreshed after alignment."
 
 ### `grounding.py`
 

@@ -5,6 +5,42 @@ fixes it forced, and the first real build driven through it.
 
 ---
 
+### 2026-10-31 12.49 - THE PROCEDURE ALIGNED WITH THE CONTRACT, AND SIMPLIFIED (agent: software-architect)
+
+- **Summary**: Rewrote `docs/procedures/drive-the-desktop.md` around the current Bridge client, cut it down instead of extending it, and refreshed both globally installed copies.
+- **Context**: The previous session closed by naming procedure alignment as the next job, not another feature. Alvi opened with that, and with a question about whether the procedure needed a full rewrite or an edit.
+- **Discussion**:
+  - **Rewrite or modify**: He asked directly. My answer was to modify but rewrite the observation and action sections together, since the safety and targeting material still fits while the action instructions had become a second copy of the API surface. He agreed with the reasoning and then narrowed it.
+  - **Clean and simple**: "I want the procedure to be clean and simple. just like our readme-bridge and its client doc." That turned the job from patching in the missing features to removing the duplication: the procedure carries the sequence, the two READMEs carry the surface. I confirmed the modify decision still held under that constraint before starting.
+  - **What the rewrite changed**: connect → select → observe → act → verify, with the client commands inline; server-owned `--from` mapping as the normal path instead of manual arithmetic; `act --json` replacing per-verb flags; explicit `delay` actions replacing any implied settling wait; batches bounded to sequences whose intermediate states need no inspection; and partial-failure, timeout and stale-image rules stated where they matter.
+- **Key Interactions**: "do you think we should completely rewritten that or just modify", "make sense, but one note: I want the procedure to be clean and simple", then "go".
+- **Issues Encountered**:
+  - **Problem Description**: Simplifying dropped the link to the effector-hierarchy ADR, and `test_setup.py` failed on `drive-desktop: ADR link points into the clone's docs/adr` while its other 32 checks passed.
+  - **Root Cause**: That suite pins the specific ADR link, because it is the rule the procedure's channel ordering rests on. The check is on the generated copy, so the failure named the installer rather than the edit.
+  - **Solution Process**: Read the assertion instead of guessing, then put the link back into the opening paragraph where the preference is stated.
+  - **Resolution**: All 33 checks pass; both installers were re-run and reported two entries replaced in each target.
+- **Outcomes**:
+  - **Deliverables**: `docs/procedures/drive-the-desktop.md` rewritten (111 insertions, 185 deletions), `docs/context-index.md` and the map entry for the procedure updated, new `.agents/knowledge/procedure-authoring.md` and its index row. Global copies refreshed under `~/.config/opencode/skills/` and `~/.claude/commands/`.
+  - **Progress Made**: Verified rather than assumed: `bridge_client.py`'s real argument surface (`shot <name> [--scale] [--raise]` → `/downscaleshot`, `crop <name> X1 Y1 X2 Y2` → `/upscaleshot`, `act --json` with `--from`) was read before the examples were written. Installer suite green; `git diff --check` clean. No desktop input, no model call, no Bridge restart.
+  - **Tech Debts**:
+    - The simplified procedure has not been executed end to end against a running Bridge; its commands match the client's parser, not a live run.
+    - Carried, and not to be re-proposed: live Bridge focus, title resolution, batch, delay and mapped-pointer behaviour remain unverified on a disposable window. Alvi declined that test.
+    - Carried: Ruff unavailable on PATH and as a module, so scoped lint did not run.
+    - Carried: extra Eyes endpoints and focus/profile-aware `locate` deferred; host environment isolation unbuilt; Unreal settings persistence and the Blueprint save unverified; broad runtime QA unrun.
+  - **Next Steps**:
+    - Exercise the procedure as written on the next authorized desktop run, and correct whatever the live run contradicts.
+    - Carried: settle the Eyes endpoint set and focused `locate` before building either.
+- **Insights**:
+  - **New Understanding**: A procedure that restates an API is not thorough, it is a second implementation that drifts. The same rewrite that added missing features also removed the stale ones, and the shorter text is the more accurate one.
+  - **Pattern Recognition**: The installed copies are generated artifacts with their own test, so "the source is right" is adjacent evidence for "other agents will do the right thing".
+  - **Improvement Areas**: The dropped ADR link was avoidable — the suite says what it pins, and I had not read it before cutting a paragraph.
+- **Promotions**:
+  → New project knowledge `.agents/knowledge/procedure-authoring.md` — the canonical-to-generated copy flow, the pinned ADR link, the procedure-versus-reference split and the checks after an edit.
+  → Updated `docs/context-index.md`: the Bridge quick fact no longer claims procedure alignment is pending.
+  → Orientation map entry for `docs/procedures/drive-the-desktop.md` re-verified 2026-10-31.
+
+---
+
 ### 2026-10-30 17.55 - EXPLICIT DELAYS, A THIN JSON CLIENT AND SERVER-OWNED COORDINATE MAPPING (agent: software-architect)
 
 - **Summary**: Added delay actions, replaced per-verb CLI syntax with server JSON, moved image-to-frame conversion into `/act`, pushed the changes and restarted the Bridge. Next session is procedure alignment, not another feature or a forced live test.
