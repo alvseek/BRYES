@@ -5,6 +5,43 @@ fixes it forced, and the first real build driven through it.
 
 ---
 
+### 2026-11-02 09.43 - THE PROCEDURE GOT AN EXECUTIVE FLOW, AND THE PREVIEW ERROR WAS VS CODE'S (agent: software-architect)
+
+- **Summary**: Wrote an executive-level flow for the desktop-driving procedure, elaborated its connect step on request, and diagnosed the reported Mermaid preview error as a deprecated VS Code extension duplicating the built-in renderer.
+- **Context**: Straight after the docs reorganization, Alvi asked for a flow of the desktop-driving procedure "for executive level (no deep tech terms / deep tech flow)", then asked to elaborate the connect part, then reported a preview error and asked whether it came from the doc or from VS Code.
+- **Discussion**:
+  - **Two artifacts, not one**: the procedure carries the operational steps, the flow carries the shape. The flow has no commands, endpoints or coordinates, and the procedure gained one line pointing at it.
+  - **The connect branch**: what was one box became four checks, namely is the tool running, does it answer, can it both see and act, and is it local with no other driver. Every failure lands on the same stop-and-report node.
+  - **Preview diagnosis**: instead of guessing, I installed the Mermaid version the extension bundles (11.12.2), parsed and rendered the block to an SVG, and only then read the extension's README, whose first line declares it deprecated because VS Code 1.121 merged the feature in.
+- **Key Interactions**: "can you create flow for the desktop-drive procedure? please create it for executive level" · "can you elaborate the 'Connect to the eyes and hands' part in the diagram?" · "I got error Cannot read properties of null (reading 'getAttribute') ... is that something the doc has or something the vscode has".
+- **Issues Encountered**:
+  - **Problem Description**: The first diagram collapsed connect into one node, hiding the difference between a tool that answers and a tool permitted to act.
+  - **Solution Process**: Replaced it with a running, answering, seeing-and-acting and ownership branch, routing every failure to the existing stop node.
+  - **Problem Description**: The VS Code preview reported a null getAttribute error for the diagram.
+  - **Root Cause**: The preview had two Mermaid renderers, the built-in one and the deprecated bierner.markdown-mermaid extension.
+  - **Resolution**: The block renders under the extension's own Mermaid version, so the document was cleared; the fix is to disable the deprecated extension and reload.
+- **Outcomes**:
+  - **Deliverables**: `docs/flows/drive-the-desktop-flow.md`, a link from `docs/procedures/drive-the-desktop.md`, rows in `docs/README.md` and `docs/context-index.md`, and an orientation-map entry. Pushed as `e77776a`.
+  - **Progress Made**: The diagram parses under Mermaid 11.17.2 and renders under 11.12.2; every map path and changed-file link resolves; no new broken links.
+  - **Tech Debts**:
+    - The diagram has not been seen in a real preview; the headless render used a shimmed layout.
+    - The deprecated extension is still installed, so the preview error will repeat until it is disabled.
+    - Carried: the three `.mmd` render commands remain unexecuted; `interfaces/` and `modules/` are placeholders; the docs link checker lives only in a temp script.
+  - **Next Steps**:
+    - Disable bierner.markdown-mermaid, reload, and confirm the built-in preview draws the flow.
+    - Carried: prove the procedure pointers in a fresh session, and decide whether to fix the stale plans/ and README tools/ links.
+- **Insights**:
+  - **New Understanding**: An executive flow is not a summary of the procedure, it is a different altitude with its own decisions, and it earns its place only where the procedure's text hides a fork.
+  - **Pattern Recognition**: The preview error looked like a document defect because it appeared next to the document. The bundled renderer was one measurement away.
+  - **Improvement Areas**: The connect step should have been a branch the first time. "Connect" names a state, and a state with four preconditions is a decision.
+- **Promotions**:
+  → New central knowledge "VS Code Mermaid Preview: native since 1.121, and the deprecated extension that conflicts" (uuid 5669e6a6).
+  → Orientation map entry for the new flow, and `last_verified` refreshed on the flow and the procedure.
+  → Reasoning: skipped. The measurement-first lesson is already carried by the verify-the-thing principle.
+  → Emotional: skipped. Criterion 5 was not met.
+
+---
+
 ### 2026-10-31 12.49 - THE PROCEDURE ALIGNED WITH THE CONTRACT, AND SIMPLIFIED (agent: software-architect)
 
 - **Summary**: Rewrote `docs/procedures/drive-the-desktop.md` around the current Bridge client, cut it down instead of extending it, and refreshed both globally installed copies.
