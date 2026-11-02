@@ -6,7 +6,7 @@ artifacts themselves; this file says where a new one belongs.
 | Folder | Holds |
 |---|---|
 | [`architecture/`](architecture/) | How the system is built: [architecture-overview.md](architecture/architecture-overview.md) and the three structure maps (`modularity`, `modularity-target`, `loop-dispatch`). |
-| [`flows/`](flows/) | How it behaves: [agent-loop-flow.md](flows/agent-loop-flow.md), the per-step sequence. |
+| [`flows/`](flows/) | How it behaves: [agent-loop-flow.md](flows/agent-loop-flow.md), the per-step sequence, and [drive-the-desktop-flow.md](flows/drive-the-desktop-flow.md), driving an application at executive altitude. |
 | [`standards/`](standards/) | Rules the code follows: [python-conventions.md](standards/python-conventions.md), [quality-standard.md](standards/quality-standard.md). |
 | [`tech-debts/`](tech-debts/) | What is known-broken, planned or unproven: [backlog.md](tech-debts/backlog.md). |
 | [`interfaces/`](interfaces/) | Contracts between modules. Empty until one is written down. |

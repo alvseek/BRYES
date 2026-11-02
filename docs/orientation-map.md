@@ -173,6 +173,18 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 - **update_trigger**: "when the per-step loop, the action dispatch, or the verification/recovery path changes"
 - **notes**: "The loop as a sequence: screenshot → describe → decide → locate → act → verify, with the per-step component table, the BRAIN PROMPT blocks, the HISTORY and CONFIRMED FINDINGS rules, and the change-feedback rungs. Also carried the running list of what is still open. **Missing from this map until 2026-10-23.** Updated the same day: `key_hold` added to the action list and to the Hands payload contract."
 
+### `docs/flows/drive-the-desktop-flow.md`
+
+- **type**: flow-diagram
+- **scope**: shared
+- **roles**: []
+- **status**: useful
+- **tags**: [flow, drive-desktop, bridge, verification, safety, executive]
+- **last_verified**: "2026-11-02"
+- **verified_by**: "software-architect"
+- **update_trigger**: "when the desktop-driving procedure's steps or safety rules change"
+- **notes**: "The executive altitude of docs/procedures/drive-the-desktop.md: the decide-act-verify loop in plain language, the fork that prefers an application's own API, the connect branch that separates seeing from acting, and the rules that hold at every step. Deliberately carries no commands, endpoints or coordinates; the procedure remains the operational text."
+
 ### `docs/adr/2026-07-15-effector-hierarchy.md`
 
 - **type**: adr

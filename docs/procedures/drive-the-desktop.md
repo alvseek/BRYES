@@ -5,6 +5,9 @@ Windows application. You observe, decide, act and verify; the Bridge supplies ey
 hands, not a Brain. [Prefer the application's API or command interface](../adr/2026-07-15-effector-hierarchy.md) when it can do the
 job reliably, unless the visible interface is what you need to test.
 
+An executive-level view of this procedure, without commands or coordinates, is in the
+[desktop-driving flow](../flows/drive-the-desktop-flow.md).
+
 This procedure uses the optional [command-line client](../../api/README-Bridge-Client.md).
 Direct HTTP requests work too. Those references contain the full endpoint and field details.
 Run the commands below from the BRYES clone.
