@@ -46,8 +46,8 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 - **roles**: []
 - **status**: useful
 - **tags**: [readme, 7q, overview, entry-point, architecture, github]
-- **last_verified**: "2026-10-23"
-- **verified_by**: "claude-software-architect"
+- **last_verified**: "2026-11-02"
+- **verified_by**: "software-architect / docs reorganized"
 - **update_trigger**: "when the four pieces (Screen/Eyes/Brain/Loop), setup, the task entry point (run()), the ADR list, the lesson pipeline, or the high-level architecture change"
 - **notes**: "The root, GitHub-facing project README (7 Questions Framework) — the single project overview. Covers what BRYES is (Brain-Eyes vision computer-use agent), the CURRENT module coupling (the loop is the sole coupler — grounded on docs/architecture/modularity.mmd + docs/architecture/loop-dispatch.mmd), setup, how to give a task (run(goal) from Python), the per-step flow, the ADR-001..008 index, and known debts. Supersedes roadmap.md as the closest-to-root overview. Generated 2026-07-19 via /generate-readme. Updated 2026-10-20: a third body (WindowsDevice, capture-only, no pointer verbs) and the lesson pipeline (capture.py + lesson.py, procedure in docs/procedures/make-a-lesson.md) added to the architecture section. Updated 2026-10-23: `key_hold` added to the action set and the hands table, plus the two new regression commands (screen/test_action_payloads.py, agent/test_key_hold.py)."
 
@@ -106,8 +106,8 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 - **roles**: []
 - **status**: stale-but-valuable
 - **tags**: [loop, orchestration, closed-loop, phase-4]
-- **last_verified**: "2026-10-23"
-- **verified_by**: "claude-software-architect"
+- **last_verified**: "2026-11-02"
+- **verified_by**: "software-architect / docs reorganized"
 - **update_trigger**: "when the loop's step sequence changes or verify-and-recover (Phase 5) lands"
 - **notes**: "Phase 4 — Close the Loop, as it was built: screenshot -> describe -> decide -> locate -> act, until done/fail/step-limit. Verified 2026-10-23 as a **historical record that no longer describes the loop**: it says no verify-and-recover exists (ADR-003 and ADR-007 shipped it), omits the `wait`/`screenshot`/`shell`/`type_into` actions and the findings ledger, and predates embodiment selection (ADR-006). A status banner now sits at its top pointing readers at agent-loop-flow.md, which is the current shape."
 
@@ -118,8 +118,8 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 - **roles**: []
 - **status**: stale-but-valuable
 - **tags**: [api, task-invocation, flask, async, http, jobmanager]
-- **last_verified**: "2026-10-29"
-- **verified_by**: "claude-software-architect"
+- **last_verified**: "2026-11-02"
+- **verified_by**: "software-architect / docs reorganized"
 - **update_trigger**: "when task endpoints, supported device/window parameters, or the JobManager lifecycle change"
 - **notes**: "Task-Invocation API on port 8100: whole-goal submission and polling around the Brain-driven run loop. Bridge details have moved to api/README-Bridge.md, linked from this README. The original task API endpoint reference still omits Windows/window details; the current operator procedure distinguishes that path from direct Bridge driving."
 
@@ -204,8 +204,8 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 - **roles**: []
 - **status**: useful
 - **tags**: [adr, phase-5, verify-and-recover, expect, change-feedback, seam-b, recovery]
-- **last_verified**: "2026-07-16"
-- **verified_by**: "claude-software-architect"
+- **last_verified**: "2026-11-02"
+- **verified_by**: "software-architect / link path updated"
 - **update_trigger**: "when the change-feedback design changes (expect/focus/request_diff modifiers, the recovery trigger) or framediff is un-parked"
 - **notes**: "ADR-003 — Phase 5 verify-and-recover closes Seam B. Change-feedback is the VLM's job, split correctly (Eyes perceive, Brain judges): the Brain emits a `expect` per action, and the next `describe` REPORTS that thing's actual state (`VERIFICATION: <state>`, no verdict) for the Brain to compare — Layer 2, primary. Plus `request_diff` (Brain-gated 2-image diff, Layer 3) and a dumb advisory repeated-action recovery guard. Two things measured & dropped: the screen-wide pixel no-op ('Layer 1' — a typed digit scores below the noise floor, UI-TARS can't box a crop region; `framediff.py` parked), and the VLM pass/fail verdict (noisy — report-not-judge instead). Unifies focus/expect/request_diff into one prospective describe-modifier family."
 
@@ -228,8 +228,8 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 - **roles**: []
 - **status**: useful
 - **tags**: [adr, structured-output, pydantic, json-schema, validation, format-enforcement, model-fallback, architecture]
-- **last_verified**: "2026-07-17"
-- **verified_by**: "claude-software-architect"
+- **last_verified**: "2026-11-02"
+- **verified_by**: "software-architect / link path updated"
 - **update_trigger**: "when the structured-output mechanism (structured.py / BrainAction / response_format json_schema), the model primary/backup, or the format-enforcement standard changes"
 - **notes**: "ADR-005 (amended TWICE 2026-07-17) — structured LLM output: formats are enforced by OUR schema + Pydantic validation, not the AI. Mechanism RE-REVERTED to FORCED TOOL-CALLING (Amendment 2): Pydantic model -> forced tool-call -> OUR Pydantic validation (structured.py); never json_object free-text; validity never depends on the provider. (json_schema strict:false was tried in Amendment 1 but let reasoning models drop OPTIONAL fields — visual_expectation 89%->0%, Phase-5 verify silently died — so reverted; qwen, the only reason we'd left tool-calling, was already dropped.) Model: deepseek-v4-flash primary + gemini-2.5-flash-lite backup (both re-emit visual_expectation under tool-calling; gemini does NOT degenerate). Also: box() NOT_FOUND -> VISUAL_FOCUS FAILED + overview; focus->visual_focus, expect->visual_expectation."
 
@@ -264,8 +264,8 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 - **roles**: []
 - **status**: useful
 - **tags**: [adr, task-invocation, api, flask, async, mcp, jobmanager, architecture]
-- **last_verified**: "2026-07-19"
-- **verified_by**: "claude-software-architect"
+- **last_verified**: "2026-11-02"
+- **verified_by**: "software-architect / link path updated"
 - **update_trigger**: "when the task-invocation architecture changes (sync/async, HTTP/MCP, the endpoint/result contract, the concurrency model)"
 - **notes**: "ADR-008 - BRYES tasks are invoked through an ASYNC HTTP task service (POST /tasks -> task_id, GET /tasks/<id> polls) wrapping the native run() loop; API-first, MCP as a later thin adapter. Step 0 of the loop-as-a-service target (docs/architecture/modularity-target.mmd). Decisions: Flask, global single-flight (409 busy), localhost-only + no auth, result = status/steps/history + CONFIRMED FINDINGS ledger, in-memory job store, one daemon thread per task."
 
