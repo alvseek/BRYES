@@ -42,8 +42,8 @@ Give BRYES a body that drives the **real Windows desktop**, so a run can operate
 ### **Related Documents**
 - [ADR-002 — the Device interface](docs/adr/2026-07-15-device-interface.md) — the body abstraction this extends; it already names "a future Windows desktop"
 - [ADR-001 — effector hierarchy](docs/adr/2026-07-15-effector-hierarchy.md) — API > shell > vision, the reason an Unreal API action is a later Tier-1, not this plan
-- [docs/architecture-overview.md](docs/architecture-overview.md) — the current module coupling
-- [docs/quality-standard.md](docs/quality-standard.md) — the nine dimensions this implementation is reviewed against
+- [docs/architecture/architecture-overview.md](docs/architecture/architecture-overview.md) — the current module coupling
+- [docs/standards/quality-standard.md](docs/standards/quality-standard.md) — the nine dimensions this implementation is reviewed against
 - [devices/windows.py](devices/windows.py) — the capture-only body this upgrades
 
 ### **SUCCESS CRITERIA**
@@ -208,7 +208,7 @@ The effector choice, as it was actually narrowed. Each was measured or rejected 
   - **Success Criteria**: both API suites pass; a `window` on a linux run is refused, not ignored.
 
 - [x] **Step 2.3**: Dependencies and prose
-  - **Action**: `pyautogui` in `requirements.txt`; the host body described in `README.md` beside the other bodies; `docs/architecture-overview.md` updated where it lists bodies.
+  - **Action**: `pyautogui` in `requirements.txt`; the host body described in `README.md` beside the other bodies; `docs/architecture/architecture-overview.md` updated where it lists bodies.
   - **Implementation**: requirements with a one-line comment naming the transitive tree; README gains a short paragraph and the two environment variables in the variables table.
   - **Testing**: `pip install -r requirements.txt` into a clean venv resolves; the README's variable table lists both gates.
   - **Success Criteria**: a fresh environment installs from the file; no doc claims a capability the code does not have.
@@ -280,7 +280,7 @@ I have to use this document as my **ONLY** source of truth to execute and track 
   - **Result**: Pass
 
 - [x] **Step 2.3**: Dependencies and prose
-  - **Implementation Log**: `requirements.txt` gained `pyautogui>=0.9.54` (with its transitive tree named in a comment) and `pyperclip>=1.8` (imported directly by the adapter, so listed rather than assumed). `README.md`'s third-body paragraph was rewritten from "records instead of drives" to the gated driving body, and both environment variables joined the variables table. `docs/architecture-overview.md`'s body table now describes `WindowsDevice` instead of calling it future work.
+  - **Implementation Log**: `requirements.txt` gained `pyautogui>=0.9.54` (with its transitive tree named in a comment) and `pyperclip>=1.8` (imported directly by the adapter, so listed rather than assumed). `README.md`'s third-body paragraph was rewritten from "records instead of drives" to the gated driving body, and both environment variables joined the variables table. `docs/architecture/architecture-overview.md`'s body table now describes `WindowsDevice` instead of calling it future work.
   - **Testing Log**: `pip install -r requirements.txt --dry-run` resolves with everything satisfied; every suite above re-run green after the doc edits.
   - **Success Criteria**: Pass
   - **Tech Debts**: none
@@ -296,7 +296,7 @@ I have to use this document as my **ONLY** source of truth to execute and track 
 
 - [x] **Step 3.2**: ADR-009
   - **Implementation Log**: wrote `docs/adr/2026-10-21-host-body-and-gates.md` from the template: problem, the two-gate decision with the measured origin and fail-safe evidence, requirements and success criteria, and four rejected alternatives.
-  - **Testing Log**: the ADR links back to this plan and is linked from it; `docs/architecture-overview.md` now references it beside the body table.
+  - **Testing Log**: the ADR links back to this plan and is linked from it; `docs/architecture/architecture-overview.md` now references it beside the body table.
   - **Success Criteria**: Pass
   - **Tech Debts**: none
   - **Result**: Pass
@@ -309,7 +309,7 @@ I have to use this document as my **ONLY** source of truth to execute and track 
 *Filled by procedure Step 16 (delegated to `/analyze-code-quality` in embedded mode) after all execution phases are complete. **Static** review — answers "is the code clean?".*
 
 - **Scope**: devices/host_input.py, devices/windows.py, devices/smoke_windows_drive.py, agent/loop.py, api/jobs.py, api/server.py, capture.py and their tests — reconciled against `git status --short`, which also sees the new files.
-- **Quality Standard**: docs/quality-standard.md present; Dimensions 1 (error handling), 4 (efficiency), 5 (security), 7 (consistency), 8 (tooling), 9 (project conventions) applied.
+- **Quality Standard**: docs/standards/quality-standard.md present; Dimensions 1 (error handling), 4 (efficiency), 5 (security), 7 (consistency), 8 (tooling), 9 (project conventions) applied.
 - **Findings**:
   - **Critical — `agent/loop.py:_make_device`.** `run(device="linux")` and `POST /tasks {"device":"linux"}` were **broken**: `window=None` was forwarded to every body constructor and `ContainerDevice` accepts no such parameter (`RuntimeError: chose body 'linux' but it's unavailable: ContainerDevice.__init__() got an unexpected keyword argument 'window'`). No test caught it, because every test builds an instance or a fake and never a body name. Fixed by dropping `None` kwargs before construction, with two regression checks added.
   - **Medium — `devices/host_input.py` set `pyautogui.FAILSAFE = False` at import.** That mutates a third-party module for anything else in the process. Moved into `HostInput.__init__`, so the side effect happens when the adapter is used rather than when the file is imported.
@@ -323,7 +323,7 @@ I have to use this document as my **ONLY** source of truth to execute and track 
 ## **QA HANDOFF**
 *Filled by procedure Step 17 after Quality Review is resolved. This plan is **not** runtime-verified — this section records the plan for that verification, which happens in a QA session with the stack up.*
 
-- **Scope**: devices/windows.py, devices/host_input.py, agent/loop.py, api/jobs.py, api/server.py, tests, README, docs/architecture-overview.md, docs/adr/2026-10-21-host-body-and-gates.md
+- **Scope**: devices/windows.py, devices/host_input.py, agent/loop.py, api/jobs.py, api/server.py, tests, README, docs/architecture/architecture-overview.md, docs/adr/2026-10-21-host-body-and-gates.md
 - **QA instrument**: NOT SET UP — BRYES has no `qa/` directory, no `qa/qa-map.md` and no bench, so `/generate-qa-checklist` auto-skips. Nothing was invented to fill the gap.
 - **Integration coverage**: **NONE** — no bench and no stack, so this plan ships without integration coverage. Confirmed with Alvi before implementation (the alternative was to build the QA instrument first, which is a larger piece of work than this plan).
 - **Checklist**: none — skipped, no QA instrument in this project

@@ -19,7 +19,7 @@ Fix the Brain's **non-convergence-by-self-doubt** failure. In the 2026-07-18 Tok
 - [ADR-005 structured output](../docs/adr/2026-07-16-structured-output-standard.md) - forced tool-calling (kept)
 - [ADR-004 foveal describe](../docs/adr/2026-07-16-foveal-describe-trim.md) - OVERVIEW_SCALE lives here
 - [ADR-006 embodiment](../docs/adr/2026-07-17-embodiment-selection.md) - profiles/glossary source
-- [quality-standard.md](../docs/quality-standard.md) - Dim 4 amended by this change
+- [quality-standard.md](../docs/standards/quality-standard.md) - Dim 4 amended by this change
 
 ### **SUCCESS CRITERIA**
 - [ ] `decide()` prompt restructured into 6 priority-ordered blocks: GOAL / **CURRENT CONDITION** / **CONFIRMED FINDINGS** / HISTORY / PROFILES MANUAL / TODO (first two marked primary)
@@ -242,7 +242,7 @@ TODO:
 
 - [ ] **Step 4.2**: Doc-sync
   - **Action**: update the structural docs to the new prompt contract.
-  - **Implementation**: `docs/context-index.md` (Brain entry / prompt shape), `docs/agent-loop-flow.md` (the per-step data flow now carries findings + channel-aware condition), `docs/architecture-overview.md` if it describes the decide prompt. (Prose-doc sync per the carried debt.)
+  - **Implementation**: `docs/context-index.md` (Brain entry / prompt shape), `docs/flows/agent-loop-flow.md` (the per-step data flow now carries findings + channel-aware condition), `docs/architecture/architecture-overview.md` if it describes the decide prompt. (Prose-doc sync per the carried debt.)
   - **Testing**: read-through; links resolve.
   - **Success Criteria**: docs describe the CONFIRMED FINDINGS + block structure.
 
@@ -327,7 +327,7 @@ I have to use this document as my **ONLY** source of truth to execute and track 
 *Filled by procedure Step 16 (delegated to `/analyze-code-quality` in embedded mode) after all execution phases are complete. **Static** review — answers "is the code clean?".*
 
 - **Scope**: `brain/client.py`, `agent/loop.py`, `profiles.py`, `eyes/client.py`, `agent/test_condition_ledger.py` (new), `test_profiles.py`, `brain/test_phase3.py`. **Reconciliation**: git diff also shows `docs/*` (Phase-4 doc-sync, in-plan, not code-reviewed) + `profiles/index.md` & `profiles/linux/browser/*` (from the earlier tokopedia-profile task, low-risk markdown) — accounted for, excluded from code review.
-- **Quality Standard**: `docs/quality-standard.md` found — Dims 1, 4, 5–9 applied (2/3 N/A: no UI). Dim 8 (ruff) clean; Dim 9 (structured output) compliant — `findings`/`note` are just new fields on the forced-tool-call schema, no `json_object`.
+- **Quality Standard**: `docs/standards/quality-standard.md` found — Dims 1, 4, 5–9 applied (2/3 N/A: no UI). Dim 8 (ruff) clean; Dim 9 (structured output) compliant — `findings`/`note` are just new fields on the forced-tool-call schema, no `json_object`.
 - **Findings**: No Critical/Medium. Two **Low** (optional polish, non-blocking):
   - **L1** — [agent/loop.py](../agent/loop.py) channel-aware `last_result`: for a `shell` action the exec output is surfaced on the *"Your last action"* line and the *"What resulted"* line points "above" (the approved unified-line design). Functionally the output IS in CURRENT CONDITION; optional polish would carry the outcome on the result line itself.
   - **L2** — [agent/loop.py](../agent/loop.py) `prev_observation` reuse: after a visual→shell→(skip) sequence, the reused observation can re-show a stale `VERIFICATION:` prefix. Harmless (the screen description is still accurate; only the label is stale). Optional.

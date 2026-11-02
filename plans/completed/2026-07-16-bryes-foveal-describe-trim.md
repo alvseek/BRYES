@@ -16,7 +16,7 @@ Cut BRYES's per-step `describe` latency (currently 5–16s — the #1 tech debt)
 
 ### **Related Documents**
 - [ADR-003 change-feedback / verify-and-recover](../docs/adr/2026-07-16-change-feedback-verify-and-recover.md) — the escalation ladder extends this
-- [agent-loop-flow.md](../docs/agent-loop-flow.md) / [architecture-overview.md](../docs/architecture-overview.md) / [backlog.md](../docs/backlog.md) — docs to update
+- [agent-loop-flow.md](../docs/flows/agent-loop-flow.md) / [architecture-overview.md](../docs/architecture/architecture-overview.md) / [backlog.md](../docs/tech-debts/backlog.md) — docs to update
 - Bake-off evidence: `artifacts/bakeoff/` (boxprobe, test3/test5 crop-describe, hard-crop montages)
 
 ### **SUCCESS CRITERIA**

@@ -194,7 +194,7 @@ I have to use this document as my **ONLY** source of truth to execute and track 
 *Embedded `/analyze-code-quality` over the nine files this sub-plan changed.*
 
 - **Scope**: `agent/loop.py`, `brain/client.py`, `devices/windows.py`, `devices/base.py`, `api/server.py`, `devices/test_host_frame.py`, `agent/test_drag_and_pointer.py`, `devices/test_windows.py`, `devices/test_windows_drive.py`, `agent/test_run_selection.py`. Scope reconciliation: the working tree was clean at review time because the work was already committed, so the ground truth was the branch diff `d6ecbd8..HEAD`; every Execution Log file appears in it and nothing appears that the log omits.
-- **Quality Standard**: [docs/quality-standard.md](../../../docs/quality-standard.md), all nine dimensions.
+- **Quality Standard**: [docs/standards/quality-standard.md](../../../docs/standards/quality-standard.md), all nine dimensions.
 - **Findings**:
   1. **Medium** `agent/loop.py` run(): a caller-built `Device` passed together with `window` was accepted and the window silently ignored. That reintroduces the failure the old `ValueError` existed for, one call short. Fixed: refuse, and a test drives it.
   2. **Medium** `api/server.py`: the `window` + `profile` check required `windows/` as a prefix, so the bare `windows` base profile (a legitimate host profile) was rejected with a 400. Fixed: accepts `windows` and `windows/...`.

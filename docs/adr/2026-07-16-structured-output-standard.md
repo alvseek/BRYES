@@ -108,7 +108,7 @@ Any format-bearing LLM output MUST use this shape:
 2. Call **`structured_call(Model, messages, ...)`** — forced tool-call + **our** validation.
 3. Handle **`StructuredError`** (retry / fall back / surface) in the caller.
 
-Forbidden for structured data: `response_format: {"type": "json_object"}` free-text, or asking the model to emit a JSON string you then parse by hand. Documented in [quality-standard.md](../quality-standard.md) Dimension 9; checked in review by `/analyze-code-quality` (Dimension 8); enforced at runtime by `structured.py`.
+Forbidden for structured data: `response_format: {"type": "json_object"}` free-text, or asking the model to emit a JSON string you then parse by hand. Documented in [quality-standard.md](../standards/quality-standard.md) Dimension 9; checked in review by `/analyze-code-quality` (Dimension 8); enforced at runtime by `structured.py`.
 
 ---
 

@@ -20,13 +20,13 @@ GitHub: **github.com/alvseek/BRYES** (remote named `alvseek`, commit identity
 |---|---|---|
 | **Screen** | disposable Ubuntu desktop (Xvfb + fluxbox): screenshots + input, plus a sandboxed **shell** (`/exec`) | local Docker container, `screen/` |
 | **Hands** | `xdotool` click/double-click/right-click/hover/scroll/drag/type/key/key-hold inside that container | same container |
-| **Eyes** | **deepseek-v4.1-flash** *describes* (two-mode foveal, [ADR-004](adr/2026-07-16-foveal-describe-trim.md) + Amend 1; swapped from qwen3-vl-30b-a3b 2026-10-21), **Qwen2.5-VL-72B** *boxes* a focus region + does careful re-reads, **UI-TARS-1.5-7B** *locates* elements (grounding → coordinates) | rented, OpenRouter, `eyes/` |
+| **Eyes** | **deepseek-v4.1-flash** *describes* (two-mode foveal, [ADR-004](../adr/2026-07-16-foveal-describe-trim.md) + Amend 1; swapped from qwen3-vl-30b-a3b 2026-10-21), **Qwen2.5-VL-72B** *boxes* a focus region + does careful re-reads, **UI-TARS-1.5-7B** *locates* elements (grounding → coordinates) | rented, OpenRouter, `eyes/` |
 | **Brain** | `deepseek-v4.1-flash` (default, swappable; backup `gemini-2.5-flash-lite`) — state → next action (reasoning) | rented, OpenRouter, `brain/` |
 
 **Two rules from the roadmap:** rent everything until it hurts (local GPU 3060 Ti 8GB
 is a last resort, Phase 6); prove ONE real task end-to-end before generalizing.
 
-## Bodies — the Device abstraction ([ADR-002](adr/2026-07-15-device-interface.md))
+## Bodies — the Device abstraction ([ADR-002](../adr/2026-07-15-device-interface.md))
 
 Screen + Hands + shell are **not** hard-wired to the container — they sit behind a swappable
 **`Device`** interface (a *vision-controllable body*: `screenshot()` + `act()` + optional
@@ -37,12 +37,12 @@ each body keeps its transport private:
 |---|---|---|
 | **`ContainerDevice`** (default) | HTTP → `:8000` | the Dockerized desktop, 1280×800, `bash` shell, all 8 pointer verbs |
 | **`PhoneDevice`** | `adb` (USB) | a real Android phone — `screencap` / `input` / `adb shell`; 1080×2400 portrait, no right_click/hover, Back/Home keys, `scroll`→swipe |
-| **`WindowsDevice`** | in-process (`PIL.ImageGrab` + `pyautogui`) | **the real desktop.** Whole virtual desktop or one named window; all 8 pointer verbs, PowerShell shell. Gated: `BRYES_ALLOW_HOST=1` to act, `BRYES_ALLOW_HOST_SHELL=1` for shell ([ADR-009](adr/2026-10-21-host-body-and-gates.md)). Image coordinates are translated to screen ones by the live virtual origin, so a monitor placed above the primary does not shift every click. Never listed in the profile catalog, so the auto-picker cannot choose it |
+| **`WindowsDevice`** | in-process (`PIL.ImageGrab` + `pyautogui`) | **the real desktop.** Whole virtual desktop or one named window; all 8 pointer verbs, PowerShell shell. Gated: `BRYES_ALLOW_HOST=1` to act, `BRYES_ALLOW_HOST_SHELL=1` for shell ([ADR-009](../adr/2026-10-21-host-body-and-gates.md)). Image coordinates are translated to screen ones by the live virtual origin, so a monitor placed above the primary does not shift every click. Never listed in the profile catalog, so the auto-picker cannot choose it |
 
 The Brain assembles its **action vocabulary from the active body's `Capabilities`** — it is only
 offered verbs the current body can do (a phone never sees `right_click`). Pure API/MCP channels
 (no screen) are deliberately NOT `Device`s — that's a separate effector abstraction
-([ADR-001](adr/2026-07-15-effector-hierarchy.md)'s Tier-1). One mind, swappable bodies.
+([ADR-001](../adr/2026-07-15-effector-hierarchy.md)'s Tier-1). One mind, swappable bodies.
 
 ## Repo layout
 
@@ -52,17 +52,17 @@ offered verbs the current body can do (a phone never sees `right_click`). Pure A
   `click`, `double_click`, `right_click`, `hover`,
   `scroll`, `drag`, `type`, `key`, `key_hold`. `/pointer` returns the mouse `(x,y)` for model-free
   action assertions. Live view: noVNC at `http://localhost:6080/vnc.html`; control API on `:8000`.
-- `devices/` — the **Device abstraction** ([ADR-002](adr/2026-07-15-device-interface.md)): `base.py` (`Device` Protocol + `Capabilities`), `container.py` (`ContainerDevice`), `phone.py` (`PhoneDevice`, adb), `test_phone.py` (deterministic smoke). The loop's `run(goal, device=None)` defaults to `ContainerDevice`.
-- `eyes/client.py` — `describe(img, focus?, expect?, careful?)` (two-mode foveal, [ADR-004](adr/2026-07-16-foveal-describe-trim.md): overview gist / boxed-crop trim; q3-8b, 72B for box+careful) + `box(img, target)` (region → bbox, 72B) + `locate(img, instr)` (element → pixel x,y, UI-TARS). Regression: `eyes/test_describe.py`.
-- `brain/client.py` — `decide(...)` composes priority-ordered prompt blocks (GOAL / CURRENT CONDITION / CONFIRMED FINDINGS / HISTORY / PROFILES MANUAL / TODO — [ADR-007](adr/2026-07-18-brain-prompt-restructure.md)) → structured JSON action; the loop banks the Brain's `findings` into a durable, trusted ledger.
+- `devices/` — the **Device abstraction** ([ADR-002](../adr/2026-07-15-device-interface.md)): `base.py` (`Device` Protocol + `Capabilities`), `container.py` (`ContainerDevice`), `phone.py` (`PhoneDevice`, adb), `test_phone.py` (deterministic smoke). The loop's `run(goal, device=None)` defaults to `ContainerDevice`.
+- `eyes/client.py` — `describe(img, focus?, expect?, careful?)` (two-mode foveal, [ADR-004](../adr/2026-07-16-foveal-describe-trim.md): overview gist / boxed-crop trim; q3-8b, 72B for box+careful) + `box(img, target)` (region → bbox, 72B) + `locate(img, instr)` (element → pixel x,y, UI-TARS). Regression: `eyes/test_describe.py`.
+- `brain/client.py` — `decide(...)` composes priority-ordered prompt blocks (GOAL / CURRENT CONDITION / CONFIRMED FINDINGS / HISTORY / PROFILES MANUAL / TODO — [ADR-007](../adr/2026-07-18-brain-prompt-restructure.md)) → structured JSON action; the loop banks the Brain's `findings` into a durable, trusted ledger.
 - `agent/loop.py` — `run(goal)` chains screenshot → describe → decide → locate → act.
-- `api/` — two host-side HTTP surfaces. `server.py` is the **Task-Invocation API** ([ADR-008](adr/2026-07-19-task-invocation-api.md)): `jobs.py` (`JobManager` — single-flight, a daemon thread per task, in-memory store) + Flask `POST /tasks` / `GET /tasks/<id>` / `/health` on localhost `:8100`, wrapping `run()` so a caller hands over a whole goal and BRYES's Brain drives. `bridge-windows.py` is the **Windows Bridge** on localhost `:8110` ([reference](../api/README-Bridge.md)): primitives only — window list, pointer, screenshots at three scales, `/act`, `/locate`, `/profiles` — for an outside agent that makes its own decisions; no Brain, no goal, no loop. Both are distinct from `screen/server/` (the Docker container's body API on `:8000`), and neither reaches the container or the phone. Model-free tests: `api/test_jobs.py`, `api/test_server.py`, `api/test_bridge.py`.
+- `api/` — two host-side HTTP surfaces. `server.py` is the **Task-Invocation API** ([ADR-008](../adr/2026-07-19-task-invocation-api.md)): `jobs.py` (`JobManager` — single-flight, a daemon thread per task, in-memory store) + Flask `POST /tasks` / `GET /tasks/<id>` / `/health` on localhost `:8100`, wrapping `run()` so a caller hands over a whole goal and BRYES's Brain drives. `bridge-windows.py` is the **Windows Bridge** on localhost `:8110` ([reference](../../api/README-Bridge.md)): primitives only — window list, pointer, screenshots at three scales, `/act`, `/locate`, `/profiles` — for an outside agent that makes its own decisions; no Brain, no goal, no loop. Both are distinct from `screen/server/` (the Docker container's body API on `:8000`), and neither reaches the container or the phone. Model-free tests: `api/test_jobs.py`, `api/test_server.py`, `api/test_bridge.py`.
 - `.env` (gitignored) holds `OPENROUTER_API_KEY` (one key covers Eyes + Brain). Template: `.env.example`.
 
 ## Models (OpenRouter slugs — verified live)
 
 - **Eyes / describe:** `deepseek/deepseek-v4.1-flash` — the fast default describer (two-mode
-  foveal, [ADR-004](adr/2026-07-16-foveal-describe-trim.md)): a downscaled OVERVIEW gist when
+  foveal, [ADR-004](../adr/2026-07-16-foveal-describe-trim.md)): a downscaled OVERVIEW gist when
   unfocused, a 72B-boxed + cropped TRIM read when focused. Faithful on trimmed crops, ~0.3–1.4s.
   Called EVERY step but **no longer the bottleneck** (describe dropped from 5–16s to ~2s).
 - **Eyes / box + careful re-read:** `qwen/qwen2.5-vl-72b-instruct` — the authoritative Eyes:
@@ -78,7 +78,7 @@ offered verbs the current body can do (a phone never sees `right_click`). Pure A
   (different weights, no reasoning-stream bug — the LAST decide attempt escapes to it). Text-only
   → the Brain can't see; it reasons over the VLM `describe` text. (qwen3.6-flash — the old
   bake-off winner — was dropped: it degenerates under a json_schema/tool_choice constraint in
-  thinking mode, a documented Qwen bug; see [ADR-005](adr/2026-07-16-structured-output-standard.md).)
+  thinking mode, a documented Qwen bug; see [ADR-005](../adr/2026-07-16-structured-output-standard.md).)
   `deepseek-v4-pro` and `minimax/minimax-m3` LOST the bake-off (pricier, no better — M3 also
   failed to recognize completion on a generic goal). Avoid legacy `deepseek-chat`/
   `deepseek-reasoner` (retire 2026-07-24).
@@ -96,7 +96,7 @@ offered verbs the current body can do (a phone never sees `right_click`). Pure A
 - **Describe vs locate use DIFFERENT models:** UI-TARS is a grounding fine-tune — asked to
   *describe*, it confabulates results and flattens a history/log into the current state
   (caused clear-loops + false "done"). So `describe` runs on a general VLM; `locate` stays on UI-TARS.
-- **Describe latency ∝ output length; trim makes cheap models faithful** ([ADR-004](adr/2026-07-16-foveal-describe-trim.md)):
+- **Describe latency ∝ output length; trim makes cheap models faithful** ([ADR-004](../adr/2026-07-16-foveal-describe-trim.md)):
   the 72B *boxes* in ~1.5s but *describes* in 5–16s on the SAME frame — *generation*, not the
   model/image, is the cost. So describe is two-mode foveal: OVERVIEW downscales (×0.5) for a
   cheap gist; TRIM boxes (72B) → crops (+15%) → describes the crop on the fast **deepseek-v4.1-flash**.
@@ -110,7 +110,7 @@ offered verbs the current body can do (a phone never sees `right_click`). Pure A
   optionally `key` ctrl+a, then `type`. Composition (macros) belongs ABOVE the primitives:
   **`type_into`** is that layer — one Brain action doing the whole *[click? → clear? → type →
   Enter?]* text-entry gesture. It's a **device capability** (`device.type_into`, composed from the
-  atomics via `default_type_into` in [devices/base.py](../devices/base.py)); the loop only grounds
+  atomics via `default_type_into` in [devices/base.py](../../devices/base.py)); the loop only grounds
   its `click_target`, and each body owns its gesture (desktop = ctrl+a `clear_field` + Return; the
   phone's clear is deferred). Prefer it for text entry; the atomics remain for finer control.
   The full natural pointer set is `click` / `double_click` / `right_click` / `hover` /
@@ -122,7 +122,7 @@ offered verbs the current body can do (a phone never sees `right_click`). Pure A
   character walking while a key is held — sees continuous input. It is bounded at the verb, held
   in a `try/finally` on the host body so an exception cannot leave a key down, and offered by
   both desktops only (a phone has no held key state through `input keyevent`).
-- **Effector tiers — vision is the fallback, not the only tool** ([ADR-001](adr/2026-07-15-effector-hierarchy.md)):
+- **Effector tiers — vision is the fallback, not the only tool** ([ADR-001](../adr/2026-07-15-effector-hierarchy.md)):
   the Brain routes each intent to the most direct channel available.
   **Tier 2 — shell:** the `shell` action runs a NON-interactive command inside the container
   via `POST /exec` (`shell=True`, sandboxed; returns `{ok, exit_code, stdout, stderr}`) — used
@@ -159,7 +159,7 @@ offered verbs the current body can do (a phone never sees `right_click`). Pure A
 ## Phase status (roadmap)
 
 0 key ✅ · 1 Screen ✅ · 2 Eyes ✅ · 3 Brain ✅ · 4 Closed loop ✅ · 5 Verify-and-recover ✅
-([ADR-003](adr/2026-07-16-change-feedback-verify-and-recover.md) — `expect`/`VERIFICATION`,
+([ADR-003](../adr/2026-07-16-change-feedback-verify-and-recover.md) — `expect`/`VERIFICATION`,
 Brain-judged) · describe-speed then solved via the two-mode foveal describe
-([ADR-004](adr/2026-07-16-foveal-describe-trim.md), describe 5–16s → ~2s) ·
-6 Hosting ⬜ (only if forced). **Brain default: `deepseek-v4.1-flash`** (clean under json_schema+thinking; backup `gemini-2.5-flash-lite`, [ADR-005](adr/2026-07-16-structured-output-standard.md)).
+([ADR-004](../adr/2026-07-16-foveal-describe-trim.md), describe 5–16s → ~2s) ·
+6 Hosting ⬜ (only if forced). **Brain default: `deepseek-v4.1-flash`** (clean under json_schema+thinking; backup `gemini-2.5-flash-lite`, [ADR-005](../adr/2026-07-16-structured-output-standard.md)).

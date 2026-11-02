@@ -1,13 +1,14 @@
 """BRYES - installer tests (model-free). Every install points at a temp dir, never at ~/.claude.
 
-Covers what a broken installer gets wrong silently: the installed file must carry the whole
-procedure, a relative link must be made absolute, the frontmatter must parse, a re-run must not
+Covers what a broken installer gets wrong silently: the installed file must point at a procedure
+that exists and carry no procedure text of its own, the frontmatter must parse, a re-run must not
 pile up files, a dropped entry must be cleaned, and the .bat wrappers must be CRLF and ASCII.
 
 Run:  python setup-scripts/test_setup.py
 """
 
 import re
+import shutil
 import sys
 import tempfile
 from pathlib import Path
@@ -50,27 +51,32 @@ with tempfile.TemporaryDirectory() as tmp:
     check(removed == 0, "first install removes nothing")
     for name, source_name in inst.PROCEDURES.items():
         installed = read(cmds / f"{name}.md")
-        source = read(ROOT / "docs" / "procedures" / source_name)
+        source_path = ROOT / "docs" / "procedures" / source_name
+        source = read(source_path)
         fm = frontmatter(installed)
         check(set(fm) == {"description"}, f"{name}: command frontmatter is description only")
         check(fm["description"].startswith('"') and fm["description"].endswith('"'),
               f"{name}: description is a quoted scalar")
-        check(source.splitlines()[0] in installed, f"{name}: carries the procedure's own title")
-        check(source.splitlines()[-1] in installed, f"{name}: carries the procedure to its end")
+        check(f"]({source_path.as_posix()})" in installed,
+              f"{name}: points at its canonical procedure")
         check(ROOT.as_posix() in installed, f"{name}: names the BRYES clone")
+        check(source_path.is_file(), f"{name}: the pointed-to procedure exists")
+        check(source.splitlines()[0] not in installed and source.splitlines()[-1] not in installed,
+              f"{name}: carries no procedure text of its own")
     check(read(cmds / ".bryes-manifest").split() == ["drive-desktop.md", "make-lesson.md"],
           "manifest lists exactly the installed commands")
 
-    # a relative link must not survive: it only resolves next to the original file
+    # no copy of the procedure is generated, so nothing in transit can drift
     drive = read(cmds / "drive-desktop.md")
     check(not re.search(r"\]\((?!https?://|#|/|[A-Za-z]:)", drive),
           "drive-desktop: no relative markdown link left")
-    check(f"]({ROOT.as_posix()}/docs/adr/2026-07-15-effector-hierarchy.md)" in drive,
-          "drive-desktop: ADR link points into the clone's docs/adr")
+    check("](../adr/2026-07-15-effector-hierarchy.md)" in
+          read(ROOT / "docs" / "procedures" / "drive-the-desktop.md"),
+          "drive-the-desktop: the canonical procedure keeps the ADR link")
     for name in inst.PROCEDURES:
         links = re.findall(r"\]\(([A-Za-z]:/[^)#\s]+)", read(cmds / f"{name}.md"))
         dead = [link for link in links if not Path(link).exists()]
-        check(not dead, f"{name}: every rewritten link target exists ({len(links)} checked)")
+        check(not dead, f"{name}: every absolute link target exists ({len(links)} checked)")
 
     # --- idempotence and cleanup ---
     again, removed = inst.install(cmds, "command", ".bryes-manifest")
@@ -103,6 +109,16 @@ with tempfile.TemporaryDirectory() as tmp:
         check(False, "a missing source raises")
     except OSError:
         check(read(cmds / "make-lesson.md") == before, "a missing source leaves the install intact")
+
+    # a pointer skill with no procedure behind it would install a link to nothing, so it fails too
+    pointer_only = tmp_path / "pointer-only"
+    shutil.copytree(ROOT / ".opencode" / "skills", pointer_only / ".opencode" / "skills")
+    try:
+        inst.install(cmds, "command", ".bryes-manifest", root=pointer_only)
+        check(False, "a root with no procedures raises")
+    except OSError:
+        check(read(cmds / "make-lesson.md") == before,
+              "a root with no procedures leaves the install intact")
 
 # --- the .bat wrappers ---
 for bat in sorted(HERE.glob("*.bat")):

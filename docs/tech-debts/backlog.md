@@ -8,7 +8,7 @@ updated: 2026-07-16
 
 Living list of open work: **tech debts** (known gaps/risks) and **next steps** (what to do
 next). Keep it current — check items off, add new ones as they surface. The phase plan lives
-in [../roadmap.md](../roadmap.md); this is the finer-grained "what's left right now."
+in [../roadmap.md](../../roadmap.md); this is the finer-grained "what's left right now."
 
 ## Next steps (do these next)
 
@@ -47,7 +47,7 @@ in [../roadmap.md](../roadmap.md); this is the finer-grained "what's left right 
       (Tokopedia results scrolled through distinct screenfuls, 2026-07-14). Still eyeball-only:
       `double_click` selects, `right_click` context menu, `drag` on a draggable surface.
 - [x] **`key_hold` is live-proven at the transport (2026-10-23).** Payload validation and the
-      exact `keydown / sleep / keyup` chain by [screen/test_action_payloads.py](../screen/test_action_payloads.py),
+      exact `keydown / sleep / keyup` chain by [screen/test_action_payloads.py](../../screen/test_action_payloads.py),
       release-on-exception by `devices/test_host_input.py`, clamp + skip by `agent/test_key_hold.py`,
       and the container endpoint by `screen/test_hands.py`. Proven live inside the container against
       `xev`: a **1.2 s hold produced KeyPress at t=3634499 and KeyRelease at t=3635713** (1,214 ms,
@@ -59,13 +59,13 @@ in [../roadmap.md](../roadmap.md); this is the finer-grained "what's left right 
 - [ ] **Validate the default Brain (`deepseek-v4.1-flash`, swapped 2026-10-21) on the calculator suite** (`1550×3÷4`,
       `128+47`, `512−137`, `7÷8`, `12+34+56` on clutter) — it carried the Tokopedia browser task cleanly
       (12 steps, 2026-07-17) but hasn't been run on the multi-digit calc suite. *(qwen3.6-flash was
-      dropped as Brain, so its old calc-validation item is obsolete — see [ADR-005](adr/2026-07-16-structured-output-standard.md).)*
-- [x] **Phase 5 — verify-and-recover** ✅ **DONE (2026-07-16, [ADR-003](adr/2026-07-16-change-feedback-verify-and-recover.md)).** Shipped as **Layer 2 (`expect` verified in the VLM) as the primary change-feedback** + Layer 3 (Brain-requested 2-image diff) + a recovery backstop (same-action-and-failing → escalate). **The original screen-wide pixel "Layer 1" was dropped** after measurement: a single typed digit (~0.02–0.09 mean-diff) sits below the idle noise floor (~0.25), and UI-TARS can't box a region to crop → "did my action work?" is a regional/semantic question the VLM answers, not a pixel metric. `framediff.py` is kept & parked (see Recently resolved + the describe-speed lever above).
+      dropped as Brain, so its old calc-validation item is obsolete — see [ADR-005](../adr/2026-07-16-structured-output-standard.md).)*
+- [x] **Phase 5 — verify-and-recover** ✅ **DONE (2026-07-16, [ADR-003](../adr/2026-07-16-change-feedback-verify-and-recover.md)).** Shipped as **Layer 2 (`expect` verified in the VLM) as the primary change-feedback** + Layer 3 (Brain-requested 2-image diff) + a recovery backstop (same-action-and-failing → escalate). **The original screen-wide pixel "Layer 1" was dropped** after measurement: a single typed digit (~0.02–0.09 mean-diff) sits below the idle noise floor (~0.25), and UI-TARS can't box a region to crop → "did my action work?" is a regional/semantic question the VLM answers, not a pixel metric. `framediff.py` is kept & parked (see Recently resolved + the describe-speed lever above).
 
 ## Tech debts (known gaps / risks)
 
 - **Model-fallback UNEXERCISED live** — `decide()`'s `deepseek-v4-flash`→`gemini-2.5-flash-lite`
-  last-attempt escape ([ADR-005](adr/2026-07-16-structured-output-standard.md)) is wired + probe-verified
+  last-attempt escape ([ADR-005](../adr/2026-07-16-structured-output-standard.md)) is wired + probe-verified
   (gemini 3/3 under json_schema) but has never actually *fired* in a run — deepseek carried the live
   Tokopedia task with zero fallback. Needs a forced-primary-failure shakeout.
 - **Container image can go stale** — `docker compose up -d` reuses the existing image, so an edited
@@ -92,7 +92,7 @@ in [../roadmap.md](../roadmap.md); this is the finer-grained "what's left right 
   instruction specificity; not a safe default.
 - **`decide` (the Brain) is now the dominant loop latency** (3–12s/step, high-variance under
   `reasoning.effort=high`). **`describe` is SOLVED** — the two-mode foveal describe
-  ([ADR-004](adr/2026-07-16-foveal-describe-trim.md)) cut it from 5–16s to ~2s (OVERVIEW downscaled
+  ([ADR-004](../adr/2026-07-16-foveal-describe-trim.md)) cut it from 5–16s to ~2s (OVERVIEW downscaled
   gist / TRIM 72B-box → crop → q3-8b), moving the bottleneck off the Eyes and onto the Brain. The
   next latency lever, if it matters, is a faster/lighter `decide` config or model; `framediff.py`
   (skip-describe-when-unchanged) is still parked.
@@ -125,9 +125,9 @@ in [../roadmap.md](../roadmap.md); this is the finer-grained "what's left right 
 
 ## Recently resolved (for context)
 
-- **Structured-output STANDARD + verify-focus + focus-failure harness, [ADR-005](adr/2026-07-16-structured-output-standard.md)** → LLM JSON is now a **Pydantic model → forced tool-call → OUR validation** (`structured.py`), never `json_object` free-text — the malformed-JSON class is eliminated by construction (old crash root-caused via new decide-error instrumentation: a **1148-token reasoning-loop** under `json_object`). **Verify-focus**: `focus`→`visual_focus`, `expect`→`visual_expectation` — the Brain now aims the Eyes where an action's EFFECT shows (the display), not the control it pressed (+ "keys don't light up" operator fix). **Focus-failure**: `box()` reports `NOT_FOUND` instead of fabricating coords → `describe` gives `VISUAL_FOCUS FAILED` + overview → Brain re-orients; `BOX_PROMPT` recalibrated (genuine-absence only; 0/9 false-neg in a targeted test). **Model**: qwen primary + `deepseek-v4-flash` backup (decide's last attempt escapes — 18 providers vs qwen's 1). + `quality-standard.md`, ruff, a cp1252 console-crash fix. Commit `d9c6b2c`. (2026-07-16)
-- **Describe-speed — two-mode foveal describe + trim, [ADR-004](adr/2026-07-16-foveal-describe-trim.md)** → `describe` cut from **5–16s to ~2s** (now *under* the Brain). Root: latency is **output-length-bound** (72B boxes in ~1.5s but describes in 5–16s, same frame). **OVERVIEW** (no focus): downscaled ×0.5 gist on **qwen3-vl-8b**. **TRIM** (focus): 72B `box()` → crop (+15%) → q3-8b describes the crop; `expect` now REQUIRES `focus` and rides the crop as `VERIFICATION`. 72B → authoritative Eyes (boxing + `recheck` careful re-read); ladder `q3-8b → recheck → request_diff`. Thinking off (14× cost, no gain). Qwen2.5-VL emits **absolute** box coords at any res (validated at 1280×800 **and** 2560×1600/4.1M px — no conversion). Box `None` (unparseable/failed) → full-frame fallback. Deterministic `eyes/test_describe.py`; live browser task `done` in 4 steps, describe 1.8–3.3s. (2026-07-16)
-- **Phase 5 — verify-and-recover (change-feedback), [ADR-003](adr/2026-07-16-change-feedback-verify-and-recover.md)** → **Seam B closed** by giving the Brain a semantic post-action check. **Layer 2 (primary):** the Brain emits a `expect` with each action; `describe(…, expect=…)` **REPORTS that thing's actual state** → `VERIFICATION: <what's literally shown>` in the observation (grounded, no verdict — the Brain compares; regional via `focus`, ~free — rides describe). *(The Eyes report, the Brain judges — VLM binary verdicts proved noisy on 1024×4096: whitespace nitpicks, self-contradictions; descriptions were always accurate.)* **Layer 3:** `request_diff` → a Brain-gated 2-image `eyes.diff(prev, cur)` appended as "CHANGES SINCE YOUR LAST ACTION". **Recovery** lives in the Brain (off the report); the loop keeps only a dumb *advisory* guard on a repeated *identical* action; it never picks the action. `focus`/`expect`/`request_diff` now form one prospective describe-modifier family. **Dropped:** the screen-wide pixel no-op ("Layer 1") — whole-frame mean-diff can't separate a small real change from noise and UI-TARS can't box a crop region; `framediff.py` + `test_framediff.py` kept & parked for the describe-speed thread. Live-proven: "8+5" verified clean to `done`; an impossible task escalated fairly + broke the loop. Also hardened `decide` with a network retry. (2026-07-16)
+- **Structured-output STANDARD + verify-focus + focus-failure harness, [ADR-005](../adr/2026-07-16-structured-output-standard.md)** → LLM JSON is now a **Pydantic model → forced tool-call → OUR validation** (`structured.py`), never `json_object` free-text — the malformed-JSON class is eliminated by construction (old crash root-caused via new decide-error instrumentation: a **1148-token reasoning-loop** under `json_object`). **Verify-focus**: `focus`→`visual_focus`, `expect`→`visual_expectation` — the Brain now aims the Eyes where an action's EFFECT shows (the display), not the control it pressed (+ "keys don't light up" operator fix). **Focus-failure**: `box()` reports `NOT_FOUND` instead of fabricating coords → `describe` gives `VISUAL_FOCUS FAILED` + overview → Brain re-orients; `BOX_PROMPT` recalibrated (genuine-absence only; 0/9 false-neg in a targeted test). **Model**: qwen primary + `deepseek-v4-flash` backup (decide's last attempt escapes — 18 providers vs qwen's 1). + `quality-standard.md`, ruff, a cp1252 console-crash fix. Commit `d9c6b2c`. (2026-07-16)
+- **Describe-speed — two-mode foveal describe + trim, [ADR-004](../adr/2026-07-16-foveal-describe-trim.md)** → `describe` cut from **5–16s to ~2s** (now *under* the Brain). Root: latency is **output-length-bound** (72B boxes in ~1.5s but describes in 5–16s, same frame). **OVERVIEW** (no focus): downscaled ×0.5 gist on **qwen3-vl-8b**. **TRIM** (focus): 72B `box()` → crop (+15%) → q3-8b describes the crop; `expect` now REQUIRES `focus` and rides the crop as `VERIFICATION`. 72B → authoritative Eyes (boxing + `recheck` careful re-read); ladder `q3-8b → recheck → request_diff`. Thinking off (14× cost, no gain). Qwen2.5-VL emits **absolute** box coords at any res (validated at 1280×800 **and** 2560×1600/4.1M px — no conversion). Box `None` (unparseable/failed) → full-frame fallback. Deterministic `eyes/test_describe.py`; live browser task `done` in 4 steps, describe 1.8–3.3s. (2026-07-16)
+- **Phase 5 — verify-and-recover (change-feedback), [ADR-003](../adr/2026-07-16-change-feedback-verify-and-recover.md)** → **Seam B closed** by giving the Brain a semantic post-action check. **Layer 2 (primary):** the Brain emits a `expect` with each action; `describe(…, expect=…)` **REPORTS that thing's actual state** → `VERIFICATION: <what's literally shown>` in the observation (grounded, no verdict — the Brain compares; regional via `focus`, ~free — rides describe). *(The Eyes report, the Brain judges — VLM binary verdicts proved noisy on 1024×4096: whitespace nitpicks, self-contradictions; descriptions were always accurate.)* **Layer 3:** `request_diff` → a Brain-gated 2-image `eyes.diff(prev, cur)` appended as "CHANGES SINCE YOUR LAST ACTION". **Recovery** lives in the Brain (off the report); the loop keeps only a dumb *advisory* guard on a repeated *identical* action; it never picks the action. `focus`/`expect`/`request_diff` now form one prospective describe-modifier family. **Dropped:** the screen-wide pixel no-op ("Layer 1") — whole-frame mean-diff can't separate a small real change from noise and UI-TARS can't box a crop region; `framediff.py` + `test_framediff.py` kept & parked for the describe-speed thread. Live-proven: "8+5" verified clean to `done`; an impossible task escalated fairly + broke the loop. Also hardened `decide` with a network retry. (2026-07-16)
 - **Device abstraction (ADR-002) — Screen+Hands+shell behind a swappable `Device`** → the loop
   now depends on a `Device` Protocol (screenshot/act/optional shell + a `Capabilities` manifest),
   not a transport; `ContainerDevice` (HTTP, byte-identical) is the default body and **`PhoneDevice`
@@ -144,7 +144,7 @@ in [../roadmap.md](../roadmap.md); this is the finer-grained "what's left right 
   ~4 KB truncation, optional `stdin`, `errors="replace"`), and the result threads into HISTORY;
   the Brain prompt teaches tier-routing (shell vs vision) + non-interactive discipline. Verified
   live (`uname -r`, `find | wc -l`) + deterministic `test_shell.py`. Reframes BRYES as a
-  **tool-using agent, vision = one tool** — see [ADR-001](adr/2026-07-15-effector-hierarchy.md). (2026-07-15)
+  **tool-using agent, vision = one tool** — see [ADR-001](../adr/2026-07-15-effector-hierarchy.md). (2026-07-15)
 - **`wait` + `screenshot` actions (validated live on Tokopedia)** → the Brain can now `wait`
   (Brain-chosen seconds, clamped 0.5–30s) for a loading page, and `screenshot` to save a
   deliverable frame (`capture-NN.png`, distinct from per-step diagnostic frames). Validated

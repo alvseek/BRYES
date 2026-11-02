@@ -49,7 +49,7 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 - **last_verified**: "2026-10-23"
 - **verified_by**: "claude-software-architect"
 - **update_trigger**: "when the four pieces (Screen/Eyes/Brain/Loop), setup, the task entry point (run()), the ADR list, the lesson pipeline, or the high-level architecture change"
-- **notes**: "The root, GitHub-facing project README (7 Questions Framework) — the single project overview. Covers what BRYES is (Brain-Eyes vision computer-use agent), the CURRENT module coupling (the loop is the sole coupler — grounded on docs/modularity.mmd + docs/loop-dispatch.mmd), setup, how to give a task (run(goal) from Python), the per-step flow, the ADR-001..008 index, and known debts. Supersedes roadmap.md as the closest-to-root overview. Generated 2026-07-19 via /generate-readme. Updated 2026-10-20: a third body (WindowsDevice, capture-only, no pointer verbs) and the lesson pipeline (capture.py + lesson.py, procedure in docs/procedures/make-a-lesson.md) added to the architecture section. Updated 2026-10-23: `key_hold` added to the action set and the hands table, plus the two new regression commands (screen/test_action_payloads.py, agent/test_key_hold.py)."
+- **notes**: "The root, GitHub-facing project README (7 Questions Framework) — the single project overview. Covers what BRYES is (Brain-Eyes vision computer-use agent), the CURRENT module coupling (the loop is the sole coupler — grounded on docs/architecture/modularity.mmd + docs/architecture/loop-dispatch.mmd), setup, how to give a task (run(goal) from Python), the per-step flow, the ADR-001..008 index, and known debts. Supersedes roadmap.md as the closest-to-root overview. Generated 2026-07-19 via /generate-readme. Updated 2026-10-20: a third body (WindowsDevice, capture-only, no pointer verbs) and the lesson pipeline (capture.py + lesson.py, procedure in docs/procedures/make-a-lesson.md) added to the architecture section. Updated 2026-10-23: `key_hold` added to the action set and the hands table, plus the two new regression commands (screen/test_action_payloads.py, agent/test_key_hold.py)."
 
 ### `roadmap.md`
 
@@ -149,27 +149,27 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 - **implementation note**: "Actions use --json, including batches and delays. --from attaches a sidecar for server conversion; old action flags and --settle are removed. Requires the updated server for mapping."
 - **notes**: "Optional terminal client for the Windows Bridge: local image/sidecar saving, target defaults, JSON actions and mapping attachment, locate and profiles. No local coordinate arithmetic, action-schema rules or automatic wait. Separate from the server API reference."
 
-### `docs/architecture-overview.md`
+### `docs/architecture/architecture-overview.md`
 
 - **type**: architecture-overview
 - **scope**: shared
 - **roles**: []
 - **status**: useful
 - **tags**: [architecture, layers, devices, brain, eyes, hands, actions, effector-tiers]
-- **last_verified**: "2026-10-29"
-- **verified_by**: "claude-software-architect"
+- **last_verified**: "2026-11-02"
+- **verified_by**: "claude-software-architect / docs reorganized"
 - **update_trigger**: "when a layer, the Device abstraction, the Brain action set, or an effector tier changes"
 - **notes**: "The single-section architecture deep-dive: the four pieces, the Device abstraction and its three bodies, the effector tiers, the full Brain action set, `type_into` as the device-level text gesture, and the two-mode foveal describe. Updated 2026-10-29 to split the two host HTTP surfaces it had previously conflated: the Brain-driven Task API on :8100 and the Windows Bridge on :8110, whose primitive routes include the downscaled and enlarged screenshots, with the screen/ container API on :8000 named as a third, separate surface."
 
-### `docs/agent-loop-flow.md`
+### `docs/flows/agent-loop-flow.md`
 
 - **type**: flow-diagram
 - **scope**: shared
 - **roles**: []
 - **status**: useful
 - **tags**: [flow, loop, sequence, actions, verification, recovery, history]
-- **last_verified**: "2026-10-23"
-- **verified_by**: "claude-software-architect"
+- **last_verified**: "2026-11-02"
+- **verified_by**: "claude-software-architect / docs reorganized"
 - **update_trigger**: "when the per-step loop, the action dispatch, or the verification/recovery path changes"
 - **notes**: "The loop as a sequence: screenshot → describe → decide → locate → act → verify, with the per-step component table, the BRAIN PROMPT blocks, the HISTORY and CONFIRMED FINDINGS rules, and the change-feedback rungs. Also carried the running list of what is still open. **Missing from this map until 2026-10-23.** Updated the same day: `key_hold` added to the action list and to the Hands payload contract."
 
@@ -267,7 +267,7 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 - **last_verified**: "2026-07-19"
 - **verified_by**: "claude-software-architect"
 - **update_trigger**: "when the task-invocation architecture changes (sync/async, HTTP/MCP, the endpoint/result contract, the concurrency model)"
-- **notes**: "ADR-008 - BRYES tasks are invoked through an ASYNC HTTP task service (POST /tasks -> task_id, GET /tasks/<id> polls) wrapping the native run() loop; API-first, MCP as a later thin adapter. Step 0 of the loop-as-a-service target (docs/modularity-target.mmd). Decisions: Flask, global single-flight (409 busy), localhost-only + no auth, result = status/steps/history + CONFIRMED FINDINGS ledger, in-memory job store, one daemon thread per task."
+- **notes**: "ADR-008 - BRYES tasks are invoked through an ASYNC HTTP task service (POST /tasks -> task_id, GET /tasks/<id> polls) wrapping the native run() loop; API-first, MCP as a later thin adapter. Step 0 of the loop-as-a-service target (docs/architecture/modularity-target.mmd). Decisions: Flask, global single-flight (409 busy), localhost-only + no auth, result = status/steps/history + CONFIRMED FINDINGS ledger, in-memory job store, one daemon thread per task."
 
 ### `docs/adr/2026-10-21-host-body-and-gates.md`
 
@@ -300,10 +300,10 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 - **roles**: []
 - **status**: useful
 - **tags**: [procedure, host-body, windows, driving, pyautogui, gates, adr-009]
-- **last_verified**: "2026-10-31"
-- **verified_by**: "software-architect / simplified Bridge client workflow"
+- **last_verified**: "2026-11-02"
+- **verified_by**: "software-architect / installed forms became pointers"
 - **update_trigger**: "when Windows Bridge routes, coordinate mapping, input gates, or operator workflow change"
-- **notes**: "Canonical /drive-desktop operator procedure: connect, select, observe, act and verify using the thin JSON client. Covers server mapping, explicit delays, bounded batches, partial failures and timeout safety; endpoint details stay in the Bridge references. Global OpenCode and Claude Code copies refreshed after alignment."
+- **notes**: "Canonical /drive-desktop operator procedure: connect, select, observe, act and verify using the thin JSON client. Covers server mapping, explicit delays, bounded batches, partial failures and timeout safety; endpoint details stay in the Bridge references. The global OpenCode and Claude Code files are pointers to it, not copies, so no reinstall is needed after an edit."
 
 ### `grounding.py`
 
@@ -324,32 +324,32 @@ Index of orientation artifacts in this project. Used by agents at awakening (loa
 - **roles**: []
 - **status**: useful
 - **tags**: [installer, procedures, claude-code, opencode, bat, skills]
-- **last_verified**: "2026-10-26"
-- **verified_by**: "claude-software-architect"
-- **update_trigger**: "when a procedure is added to or removed from `PROCEDURES` in `install_skills.py`, or when a platform's global command/skill directory changes"
-- **notes**: "Installs `/drive-desktop` and `/make-lesson` globally so agents in OTHER projects (the Unreal agent in LSGI) can use them. `setup-all-claude-code.py` writes `~/.claude/commands/<name>.md`; `setup-all-opencode.py` writes `~/.config/opencode/skills/<name>/SKILL.md`; each has a `.bat` that only finds a real Python 3 (skipping the WindowsApps Store stub) and runs the `.py`. The shared `install_skills.py` copies the FULL procedure from `docs/procedures/` (the in-repo `.opencode/skills/` pointers resolve a relative path that does not exist from another project), rewrites relative links to absolute ones into the clone, and prepends a note naming the clone so its scripts can be run from there. The installed file is a generated copy: edit the procedure, then re-run the installer. A per-platform manifest (`.bryes-manifest`, `.bryes-opencode-manifest`) lets a re-run replace its own files without touching anything else. Override the target with `BRYES_TARGET_DIR`. Tested by `python setup-scripts/test_setup.py` (model-free, temp dirs only). Shape copied from `agent-memory-project/setup-scripts`."
+- **last_verified**: "2026-11-02"
+- **verified_by**: "software-architect / pointer installer"
+- **update_trigger**: "when a procedure is added to or removed from `PROCEDURES` in `install_skills.py`, when the clone moves, or when a platform's global command/skill directory changes"
+- **notes**: "Installs `/drive-desktop` and `/make-lesson` globally so agents in OTHER projects (the Unreal agent in LSGI) can use them. `setup-all-claude-code.py` writes `~/.claude/commands/<name>.md`; `setup-all-opencode.py` writes `~/.config/opencode/skills/<name>/SKILL.md`; each has a `.bat` that only finds a real Python 3 (skipping the WindowsApps Store stub) and runs the `.py`. The shared `install_skills.py` writes a **pointer**, not a copy: the canonical file as an absolute markdown link, the clone root its commands are relative to, and nothing else, so `docs/procedures/` stays the one text and an edit needs no reinstall. A per-platform manifest (`.bryes-manifest`, `.bryes-opencode-manifest`) lets a re-run replace its own files without touching anything else, and an install fails when a pointer skill has no procedure behind it. Override the target with `BRYES_TARGET_DIR`. Tested by `python setup-scripts/test_setup.py` (model-free, temp dirs only). Shape copied from `agent-memory-project/setup-scripts`."
 
-### `docs/backlog.md`
+### `docs/tech-debts/backlog.md`
 
 - **type**: other
 - **scope**: shared
 - **roles**: []
 - **status**: useful
 - **tags**: [backlog, tech-debts, next-steps, qa, proofs]
-- **last_verified**: "2026-10-23"
-- **verified_by**: "claude-software-architect"
+- **last_verified**: "2026-11-02"
+- **verified_by**: "claude-software-architect / docs reorganized"
 - **update_trigger**: "when an item is added, closed, or re-scoped"
 - **notes**: "The living list of what is known-broken, planned, or unproven, split into next steps and tech debts. It is the honest counterpart to the README's claims: a capability whose app-level behaviour has never been watched lives here. Added to this map on 2026-10-23 (it was not indexed before), the same day its `key_hold` entry was written and then checked off with the live timings."
 
-### `docs/quality-standard.md`
+### `docs/standards/quality-standard.md`
 
 - **type**: other
 - **scope**: shared
 - **roles**: []
 - **status**: useful
 - **tags**: [quality-standard, conventions, structured-output, ruff, analyze-code-quality]
-- **last_verified**: "2026-07-17"
-- **verified_by**: "claude-software-architect"
+- **last_verified**: "2026-11-02"
+- **verified_by**: "claude-software-architect / docs reorganized"
 - **update_trigger**: "when a project convention changes (error handling, efficiency, security, tooling/ruff, or a project-specific rule) or a new dimension is added"
 - **notes**: "The project quality standard — 9 dimensions filled from code (error handling degrades-not-crashes, model tiering, .env secrets, ASCII console, module-per-role, ruff, conventional-commits). Dimension 9 headline: FORMATS ARE ENFORCED BY TOOLS, NOT THE AI — mechanism = forced tool-calling (ADR-005 Amendment 2). State/UX dims marked N/A (no UI). Consumed by /analyze-code-quality Dimension 8."
 

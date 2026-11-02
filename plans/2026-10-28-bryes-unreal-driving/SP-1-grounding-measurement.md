@@ -49,7 +49,7 @@ Answer one question with a number: when the agent names something on a real Unre
 ### **Related Documents**
 - [core-plan.md](core-plan.md) - the council this sub-plan belongs to; R1 is its scope
 - [contracts/measurement-report.schema.json](contracts/measurement-report.schema.json) - the report shape this plan produces
-- [docs/quality-standard.md](../../docs/quality-standard.md) - the project criteria the harness is held to
+- [docs/standards/quality-standard.md](../../docs/standards/quality-standard.md) - the project criteria the harness is held to
 
 ### **SUCCESS CRITERIA**
 - [ ] `grounding.py` scores a labelled frame and writes a C-1 shaped report plus an overlay

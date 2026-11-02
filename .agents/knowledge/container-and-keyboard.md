@@ -64,5 +64,5 @@ tapping it twice. The phone does not offer the action: `input keyevent` has no h
 ## **SOURCES**
 
 - 2026-10-23 session (software-architect) building `key_hold`, with the container rebuilt live.
-- `docs/backlog.md` — the `key_hold` entry and the focus finding.
+- `docs/tech-debts/backlog.md` — the `key_hold` entry and the focus finding.
 - `.gitattributes` — the `*.sh` rule and its reason, in the file itself.

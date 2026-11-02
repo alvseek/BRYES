@@ -47,7 +47,7 @@ An arbitrary HTTP caller should be able to select a unique target by title, requ
 - [Bridge tests](../../api/test_bridge.py) and [client tests](../../api/test_bridge_client.py)
 - [Desktop-driving procedure](../../docs/procedures/drive-the-desktop.md)
 - [Host safety decision](../../docs/adr/2026-10-21-host-body-and-gates.md)
-- [Quality standard](../../docs/quality-standard.md)
+- [Quality standard](../../docs/standards/quality-standard.md)
 - [Latest localized session](../../.agents/session/bryes-visual-bridge.md)
 
 ### **SUCCESS CRITERIA**
@@ -310,7 +310,7 @@ I have to use this document as my **ONLY** source of truth to execute and track 
 
 - **Status**: Scoped static review performed by the implementing agent; ruff unavailable.
 - **Scope**: Reconcile Execution Log with actual diff/status, including new files. Expected server/client implementations and tests, plus documentation; avoid unrelated lessons.
-- **Quality Standard**: [docs/quality-standard.md](../../docs/quality-standard.md). Review error classifications, host gates, GET purity, complete target validation, lock lifetime, compatibility and ASCII console output.
+- **Quality Standard**: [docs/standards/quality-standard.md](../../docs/standards/quality-standard.md). Review error classifications, host gates, GET purity, complete target validation, lock lifetime, compatibility and ASCII console output.
 - **Findings / Fixed**: Resolver rejects malformed and stale handles before device creation; focus uses the host-gated action path under the capture lock; GET rejects `raise`; unexpected failures are logged without returning their details. Tightened hex syntax and constructor error handling during review. No separate reviewer was launched.
 
 ---

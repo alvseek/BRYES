@@ -15,7 +15,7 @@ action work?" is a regional, semantic question — so the loop answers it with t
 
 Parked here, intact, for its RIGHT consumer — the incremental/change-driven `describe`
 speed thread, where "did a LOT change -> re-describe?" IS a screen-wide question. See
-docs/backlog.md.
+docs/tech-debts/backlog.md.
 """
 import io
 

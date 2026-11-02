@@ -17,8 +17,8 @@ Close **Seam B** — today the loop authors history from what it *tried* ([loop.
 A secondary, architecture-level payoff: unify the Brain's three describe-modifiers into one symmetric family — **`focus`** (spatial spotlight: WHERE), **`expect`** (assertion: WHAT proposition is true), **`request_diff`** (expensive precise before/after). Each is set on a step-N action and consumed by step-N+1's `describe`.
 
 ### **Related Documents**
-- [backlog.md](../docs/backlog.md) — Phase 5 section (the parked design this plan implements)
-- [agent-loop-flow.md](../docs/agent-loop-flow.md) — Seam B / §4 (the two lossy seams) / §5 (1024 post-mortem) / §7 (phone reconfirmation)
+- [backlog.md](../docs/tech-debts/backlog.md) — Phase 5 section (the parked design this plan implements)
+- [agent-loop-flow.md](../docs/flows/agent-loop-flow.md) — Seam B / §4 (the two lossy seams) / §5 (1024 post-mortem) / §7 (phone reconfirmation)
 - [ADR-001 effector-hierarchy](../docs/adr/2026-07-15-effector-hierarchy.md) · [ADR-002 device-interface](../docs/adr/2026-07-15-device-interface.md) — orthogonal architecture this builds atop
 
 ### **SUCCESS CRITERIA** *(revised after the 2026-07-16 re-plan — Layer 1 dropped)*
@@ -226,7 +226,7 @@ sequenceDiagram
 
 ### Phase 6: Docs + ADR-003
 - [ ] **Step 6.1**: Record the architecture (ADR-003) and refresh the living docs
-  - **Action**: Create `docs/adr/2026-07-15-change-feedback-ladder.md` (ADR-003) from the Confirmed Decisions; update `docs/agent-loop-flow.md` (Seam B now closed — §4/§6/§7), `docs/backlog.md` (Phase 5 → resolved), and add the ADR to `docs/orientation-map.md`.
+  - **Action**: Create `docs/adr/2026-07-15-change-feedback-ladder.md` (ADR-003) from the Confirmed Decisions; update `docs/flows/agent-loop-flow.md` (Seam B now closed — §4/§6/§7), `docs/tech-debts/backlog.md` (Phase 5 → resolved), and add the ADR to `docs/orientation-map.md`.
   - **Implementation**: ADR-003 via the ADR template — context (Seam B), decision (3-layer ladder + describe-modifier family + recovery backstop), consequences, links to ADR-001/002 and this plan. agent-loop-flow: mark Seam B resolved, add a §8 (or extend §7) describing the ladder + the modifier family. backlog: move Phase 5 to "recently resolved", keep describe-latency + incremental-describe as open. orientation-map: new `adr` entry.
   - **Testing**: links resolve; docs match shipped behavior (no false "no verify" claims left).
   - **Success Criteria**: ADR-003 exists and is linked; agent-loop-flow no longer says Seam B is open; backlog + orientation-map updated.
@@ -324,7 +324,7 @@ Phase 5 was built through Phase 4 as a **3-layer** ladder (pixel no-op + `expect
 
 ### Phase 6:
 - [x] **Step 6.1**: Record the architecture (ADR-003) + refresh the living docs
-  - **Implementation Log**: Created **[ADR-003](../docs/adr/2026-07-16-change-feedback-verify-and-recover.md)** (`2026-07-16-change-feedback-verify-and-recover.md`) — the design + a dedicated "Why NOT a screen-wide pixel no-op detector" section (the calibration + UI-TARS-can't-box evidence) + alternatives rejected + relationship to ADR-001/002. Updated [agent-loop-flow.md](../docs/agent-loop-flow.md): §4 Seam B marked **✅ closed (2026-07-16)**, new **§8 Change-feedback** (modifier-family table + sequence diagram + why-not-pixel-Layer-1). Updated [backlog.md](../docs/backlog.md): Phase 5 → done + a "Recently resolved" entry; **corrected the "describe is THE bottleneck" headline** (n=1 → both describe 5–16s AND decide 3–12s, timing instrument is sound) + a new `decide`-stall tech-debt (partially fixed). Added an **ADR-003 entry** to [orientation-map.md](../docs/orientation-map.md).
+  - **Implementation Log**: Created **[ADR-003](../docs/adr/2026-07-16-change-feedback-verify-and-recover.md)** (`2026-07-16-change-feedback-verify-and-recover.md`) — the design + a dedicated "Why NOT a screen-wide pixel no-op detector" section (the calibration + UI-TARS-can't-box evidence) + alternatives rejected + relationship to ADR-001/002. Updated [agent-loop-flow.md](../docs/flows/agent-loop-flow.md): §4 Seam B marked **✅ closed (2026-07-16)**, new **§8 Change-feedback** (modifier-family table + sequence diagram + why-not-pixel-Layer-1). Updated [backlog.md](../docs/tech-debts/backlog.md): Phase 5 → done + a "Recently resolved" entry; **corrected the "describe is THE bottleneck" headline** (n=1 → both describe 5–16s AND decide 3–12s, timing instrument is sound) + a new `decide`-stall tech-debt (partially fixed). Added an **ADR-003 entry** to [orientation-map.md](../docs/orientation-map.md).
   - **Testing Log**: links resolve; docs match shipped behavior (no false "Seam B open" / "3-layer pixel ladder" claims left).
   - **Success Criteria**: PASS — ADR-003 exists + linked; agent-loop-flow says Seam B closed via Layer 2; backlog + orientation-map updated; timing headline corrected.
   - **Result**: architecture recorded; living docs reflect the shipped (post-pivot) design.

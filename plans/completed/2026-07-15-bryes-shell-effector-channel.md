@@ -15,8 +15,8 @@
 Give BRYES a **shell/command effector channel** so the Brain can run **non-interactive** commands inside the sandboxed Screen container and get `stdout`/`stderr`/exit-code back — reaching for **direct commands (Tier 2)** instead of vision for OS / file / CLI / network tasks. Frame it within an **effector-hierarchy architecture** (Tier 1 API/MCP [future], Tier 2 shell, Tier 3 vision-fallback) and capture that architecture as an **ADR**, since future channels (http, mcp, email, phone) will inherit the pattern. This matures BRYES from "a vision agent" into "a tool-using agent whose tools *include* vision."
 
 ### **Related Documents**
-- [architecture-overview.md](../docs/architecture-overview.md) - BRYES 4-piece architecture + load-bearing facts (to be updated with the new channel)
-- [agent-loop-flow.md](../docs/agent-loop-flow.md) - data-flow view of the loop (to be updated with the shell action path)
+- [architecture-overview.md](../docs/architecture/architecture-overview.md) - BRYES 4-piece architecture + load-bearing facts (to be updated with the new channel)
+- [agent-loop-flow.md](../docs/flows/agent-loop-flow.md) - data-flow view of the loop (to be updated with the shell action path)
 - ADR (effector-hierarchy) — created by this plan (Section G)
 
 ### **SUCCESS CRITERIA**
@@ -221,7 +221,7 @@ sequenceDiagram
 ### Phase 5: Docs update
 - [ ] **Step 5.1**: Refresh the localized docs
   - **Action**: reflect the new channel + tier model in the docs.
-  - **Implementation**: [docs/architecture-overview.md](../docs/architecture-overview.md) — add the effector-tier model, the `/exec` endpoint, the `shell` action, and a link to the ADR. [docs/agent-loop-flow.md](../docs/agent-loop-flow.md) — add the `shell` action path and the "feedback via HISTORY, not the screenshot" note. [screen/README.md](../screen/README.md) — add `POST /exec` to the API list (alongside `/screenshot`, `/action`, `/pointer`).
+  - **Implementation**: [docs/architecture/architecture-overview.md](../docs/architecture/architecture-overview.md) — add the effector-tier model, the `/exec` endpoint, the `shell` action, and a link to the ADR. [docs/flows/agent-loop-flow.md](../docs/flows/agent-loop-flow.md) — add the `shell` action path and the "feedback via HISTORY, not the screenshot" note. [screen/README.md](../screen/README.md) — add `POST /exec` to the API list (alongside `/screenshot`, `/action`, `/pointer`).
   - **Testing**: re-read for accuracy; links resolve.
   - **Success Criteria**: all three docs describe the shell channel; the ADR is linked. *(Orientation-map indexing of the new ADR is handled by `/map-orientation` at wrap-up.)*
 
@@ -283,7 +283,7 @@ I have to use this document as my **ONLY** source of truth to execute and track 
 
 ### Phase 5:
 - [x] **Step 5.1**: Refresh the localized docs
-  - **Implementation Log**: (1) `docs/architecture-overview.md` — rewrote the now-false "Vision-first — no shell channel" fact into an **Effector tiers** bullet (Tier 1 API/MCP future · Tier 2 shell `/exec` · Tier 3 vision), added `shell` to the Brain action set, `/exec`+`test_shell.py` to the repo layout, "shell" to the Screen row + intro, ADR-001 link, tags/date. (2) `docs/agent-loop-flow.md` — added `command?`/`timeout?` to the decide schema, a new feed-table row 6 (`exec_cmd` → `/exec`), `shell` to the one-step narration, and a "**Shell is the exception to Seam B**" note (its history carries real exit+stdout, not an unverified attempt); tags/date. (3) `screen/README.md` — added `/exec` to the API table + a curl example, `test_shell.py` to the test list, intro + Flask-API + heading tweaks.
+  - **Implementation Log**: (1) `docs/architecture/architecture-overview.md` — rewrote the now-false "Vision-first — no shell channel" fact into an **Effector tiers** bullet (Tier 1 API/MCP future · Tier 2 shell `/exec` · Tier 3 vision), added `shell` to the Brain action set, `/exec`+`test_shell.py` to the repo layout, "shell" to the Screen row + intro, ADR-001 link, tags/date. (2) `docs/flows/agent-loop-flow.md` — added `command?`/`timeout?` to the decide schema, a new feed-table row 6 (`exec_cmd` → `/exec`), `shell` to the one-step narration, and a "**Shell is the exception to Seam B**" note (its history carries real exit+stdout, not an unverified attempt); tags/date. (3) `screen/README.md` — added `/exec` to the API table + a curl example, `test_shell.py` to the test list, intro + Flask-API + heading tweaks.
   - **Testing Log**: re-read all three; the false "no shell channel" claim is gone; links (`adr/2026-07-15-effector-hierarchy.md`) resolve; content matches the shipped code.
   - **Success Criteria**: PASS — all three docs describe the shell channel; the ADR is linked. (Orientation-map ADR indexing deferred to `/map-orientation` at wrap-up.)
   - **Tech Debts**: None.

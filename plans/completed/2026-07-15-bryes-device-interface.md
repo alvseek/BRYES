@@ -15,10 +15,10 @@
 Extract BRYES's Screen + Hands + shell (today a single HTTP-backed Docker desktop) into a swappable **`Device`** abstraction — a *vision-controllable body* (screenshot + pointer/keyboard + optional shell) — so the perceive→decide→act loop, the Brain, and the Eyes stay **device-agnostic** and the agent can inhabit multiple bodies. Prove the abstraction by adding a second, differently-shaped device — an **Android phone over ADB/USB** — and validate it **live on the physical device**. Capture the architecture as **ADR-002** (orthogonal to ADR-001: ADR-001 = which effector *tier*; ADR-002 = which *body*).
 
 ### **Related Documents**
-- [architecture-overview.md](../docs/architecture-overview.md) - The 4-piece HTTP architecture being refactored
-- [agent-loop-flow.md](../docs/agent-loop-flow.md) - The loop data-flow (Screen/Hands/Eyes/Brain wiring)
+- [architecture-overview.md](../docs/architecture/architecture-overview.md) - The 4-piece HTTP architecture being refactored
+- [agent-loop-flow.md](../docs/flows/agent-loop-flow.md) - The loop data-flow (Screen/Hands/Eyes/Brain wiring)
 - [ADR-001 effector-hierarchy](../docs/adr/2026-07-15-effector-hierarchy.md) - The orthogonal tier axis (API/shell/vision)
-- [backlog.md](../docs/backlog.md) - Open work; the phone/WhatsApp north star
+- [backlog.md](../docs/tech-debts/backlog.md) - Open work; the phone/WhatsApp north star
 
 ### **SUCCESS CRITERIA**
 - [ ] `Device` Protocol + `Capabilities` manifest defined; the loop depends on the abstraction, never on a transport
@@ -231,7 +231,7 @@ The mind (loop + Brain + Eyes) is written once; bodies are swappable. `WindowsDe
   - **Action**: the ADR file (created at planning, Step 11 tail) — verify it matches what was built; adjust if implementation revealed anything.
   - **Success Criteria**: ADR-002 accurate + linked to this plan.
 - [ ] **Step 4.2**: Update docs
-  - **Action**: `docs/architecture-overview.md` (Device abstraction + bodies table), `docs/agent-loop-flow.md` (device boundary), `docs/orientation-map.md` (ADR-002 + `devices/` entries), `docs/context-index.md` + `docs/backlog.md` (device interface done; phone body ready; WhatsApp task next).
+  - **Action**: `docs/architecture/architecture-overview.md` (Device abstraction + bodies table), `docs/flows/agent-loop-flow.md` (device boundary), `docs/orientation-map.md` (ADR-002 + `devices/` entries), `docs/context-index.md` + `docs/tech-debts/backlog.md` (device interface done; phone body ready; WhatsApp task next).
   - **Success Criteria**: docs reflect the new architecture; orientation map indexes ADR-002. (`/map-orientation` + `/update-project-context` refresh at wrap-up.)
 
 ---

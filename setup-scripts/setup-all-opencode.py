@@ -1,8 +1,8 @@
 """Install BRYES's procedures (drive-desktop, make-lesson) as OpenCode Agent Skills.
 
 OpenCode reads global skills as folders holding a ``SKILL.md`` in ``~/.config/opencode/skills/``
-(``$XDG_CONFIG_HOME/opencode/skills/`` when that is set). Each carries the full procedure so it
-works from any project, not just from inside the BRYES clone.
+(``$XDG_CONFIG_HOME/opencode/skills/`` when that is set). Each is a pointer with an absolute path,
+so it works from any project while the procedure itself stays one canonical file.
 
 Cross-platform: run directly, or via ``setup-all-opencode.bat`` on Windows.
 

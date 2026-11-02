@@ -1,46 +1,53 @@
-# Procedures, generated copies, and the test that pins them
+# Procedures and the pointers that reach them
 
-What it costs to change a procedure in `docs/procedures/`, written after simplifying
-`drive-the-desktop.md` on 2026-10-31 and being stopped by the installer's own checks.
+One hand-written procedure, three files that point at it, and the checks that keep the
+pointers honest. Written after the installed copies were changed from generated duplicates
+to absolute-path redirects on 2026-11-02.
 
-## One canonical text, two generated copies
+## One canonical text, three pointers
 
-`docs/procedures/<name>.md` is the only hand-written version. The in-repo
-`.opencode/skills/<name>/SKILL.md` is a pointer that reads the procedure by relative path,
-so it works inside this clone and nowhere else. From another project the procedure has to
-carry its own text, so `setup-scripts/` installs a **generated copy**:
+`docs/procedures/<name>.md` is the only hand-written version. Everything else points at it:
+
+- **`.opencode/skills/<name>/SKILL.md`** (in this repo) reads it by relative path, so it works
+  inside this clone and nowhere else.
+- **`~/.claude/commands/<name>.md`** (installed) names it by absolute path, so it resolves from
+  any project.
+- **`~/.config/opencode/skills/<name>/SKILL.md`** (installed) names it the same way.
+
+The installed forms used to carry the whole procedure, with relative links rewritten to absolute
+ones. That made two copies of every procedure, so an edit left a stale duplicate that looked
+current and nothing compared it to the source. A pointer cannot go stale: it is either resolving or
+broken, and a broken one says so.
 
 ```powershell
 python setup-scripts/setup-all-opencode.py     # ~/.config/opencode/skills/<name>/SKILL.md
 python setup-scripts/setup-all-claude-code.py  # ~/.claude/commands/<name>.md
 ```
 
-Editing a procedure therefore changes nothing for other agents until both installers run
-again. That is the step that is easy to forget, and the copy it leaves behind looks current
-because it is a plain markdown file with a plausible date.
+An edit to `docs/procedures/` needs no reinstall. Re-run the installer only when a procedure is
+added, renamed or dropped (the manifest removes the old entry), or when the clone moves to a
+different path.
 
-## What the installer does to the copy
+## What the installer writes
 
-`install_skills.py` rewrites two things:
+`install_skills.py` renders the frontmatter plus one paragraph, and nothing else:
 
-- **Relative links** become absolute paths into this clone, because a link such as
-  `adr/2026-07-15-effector-hierarchy.md` only resolves next to the original file.
-- **A provenance note** after the frontmatter, naming the source and the clone path.
+- the canonical file as an absolute markdown link, with "read it and follow it exactly";
+- the clone root, because the procedure's commands (`python capture.py`, `python lesson.py`,
+  `pip install -r requirements.txt`) are relative to that folder;
+- a line saying that a missing file should be reported rather than worked around from memory.
 
-The `description:` in a copy's frontmatter comes from the pointer skill, not the procedure,
-so discovery text is authored once.
+The `description:` in a pointer's frontmatter comes from the in-repo pointer skill, not from the
+procedure, so discovery text is authored once and cannot differ between the two installed forms.
 
-## The pinned link
+## The pinned ADR link
 
-`setup-scripts/test_setup.py` asserts that the generated `drive-desktop` copy contains a
-link to **`docs/adr/2026-07-15-effector-hierarchy.md`** — the channel-ordering rule, which
-is the reason the procedure tells an agent to prefer an application's own API. Simplifying
-the procedure, I dropped that reference while keeping its meaning in prose, and the suite
-failed on `drive-desktop: ADR link points into the clone's docs/adr` while every other check
-passed. The link now sits in the opening paragraph.
-
-The same suite also rewrites-and-checks every relative link target exists, so a renamed or
-deleted ADR fails there rather than in a stranger's clone.
+`setup-scripts/test_setup.py` asserts that `docs/procedures/drive-the-desktop.md` contains a link
+to **`../adr/2026-07-15-effector-hierarchy.md`** — the channel-ordering rule, which is the reason
+the procedure tells an agent to prefer an application's own API. Simplifying the procedure on
+2026-10-31, I dropped that reference while keeping its meaning in prose, and the suite failed while
+every other check passed. The link sits in the opening paragraph, and the assertion now holds on
+the canonical file, which is where the link has to live once the copies are pointers.
 
 ## Simplifying a procedure without losing its content
 
@@ -58,9 +65,10 @@ per-verb flags after the client had moved to `act --json`.
 ## Checks worth running after any procedure edit
 
 ```powershell
-python setup-scripts/test_setup.py       # 33 checks: rendering, links, manifests, .bat bytes
+python setup-scripts/test_setup.py       # pointer targets, frontmatter, manifests, .bat bytes
 git diff --check                          # whitespace errors
 ```
 
-Then read one installed copy back and confirm it carries the change — the source being
-correct says nothing about the copy, and the copy is the one other agents load.
+There is nothing to reinstall and nothing to read back, because the installed file carries no
+procedure text. Read one installed pointer if you changed `render()` or the clone path, and confirm
+its absolute link resolves to the file you expect.

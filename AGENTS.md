@@ -7,7 +7,7 @@ computer-use agent: screenshot → decide → click).
 - **Never commit `.env`** — it holds `OPENROUTER_API_KEY`. Only `.env.example` is tracked.
 - **No emoji in Python that prints to the console** — Windows `cp1252` can't encode them and
   the script crashes on the `print`. Use ASCII markers (`PASS:` / `FAIL:` / `WARN:`).
-  See [docs/python-conventions.md](docs/python-conventions.md).
+  See [docs/standards/python-conventions.md](docs/standards/python-conventions.md).
 - **Prove each piece live before chaining** — this project is built empirically, phase by
   phase from `roadmap.md`.
 
@@ -27,7 +27,8 @@ Two project procedures live in `docs/procedures/`, each also served as a skill:
 
 To use both from another project, install them globally: `setup-scripts\setup-all-claude-code.bat`
 (Claude Code commands) or `setup-scripts\setup-all-opencode.bat` (OpenCode skills). The installed
-file is a copy of the procedure, so re-run the installer after editing `docs/procedures/`.
+file is a pointer to `docs/procedures/`, so an edit needs no reinstall; re-run the installer only
+when a procedure is added or renamed, or when this clone moves.
 
 ## Agent Memory
 Fleet-authored work-product for this project lives in `.agents/` — session history

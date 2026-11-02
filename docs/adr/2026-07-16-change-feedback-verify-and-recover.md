@@ -8,7 +8,7 @@
 
 ## Problem
 
-BRYES's loop authored history from what it *tried*, never checking the screen actually changed — **Seam B** ([agent-loop-flow.md §4](../agent-loop-flow.md)). A misclick, a dead control, or an AC that clears nothing was recorded identically to a success, so the Brain (each `describe` independent) could loop on a futile action forever — the "1024 clear-loop" post-mortem. Phase 5 is the roadmap's differentiator: *after each action, did the intended thing actually happen? If not, recover.*
+BRYES's loop authored history from what it *tried*, never checking the screen actually changed — **Seam B** ([agent-loop-flow.md §4](../flows/agent-loop-flow.md)). A misclick, a dead control, or an AC that clears nothing was recorded identically to a success, so the Brain (each `describe` independent) could loop on a futile action forever — the "1024 clear-loop" post-mortem. Phase 5 is the roadmap's differentiator: *after each action, did the intended thing actually happen? If not, recover.*
 
 The load-bearing question is **"did my action work?"** — and the first design got its *shape* wrong.
 

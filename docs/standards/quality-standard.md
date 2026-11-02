@@ -12,7 +12,7 @@
 ## 1. Error Handling
 
 - [ ] Model/perception calls DEGRADE, never crash: `box()` returns `None` (NOT_FOUND / unparseable), `describe()` falls back (box-miss → `VISUAL_FOCUS FAILED` + overview), `decide()` retries rather than raising.
-- [ ] Structured LLM failures raise `StructuredError` ([structured.py](structured.py)) carrying the raw provider body (`.body`) — captured to the transcript as a `decide-error` record for root-causing, never silently swallowed.
+- [ ] Structured LLM failures raise `StructuredError` ([structured.py](../../structured.py)) carrying the raw provider body (`.body`) — captured to the transcript as a `decide-error` record for root-causing, never silently swallowed.
 - [ ] Transient network faults (`URLError` / timeout / reset) on model and device calls are caught and retried, not fatal.
 - [ ] Console output is encoding-safe (`loop.run()` reconfigures stdout to utf-8/replace) so uncontrolled VLM text (UI glyphs, em-dashes) can't crash a run.
 
@@ -32,9 +32,9 @@
 
 ## 4. Efficiency
 
-- [ ] Model tiering: the cheap model is the default (`describe` = `deepseek-v4.1-flash`, swapped from `qwen3-vl-30b-a3b` 2026-10-21 on a measured comparison of three production frames: 3x faster, ~35% cheaper, no misreads, [ADR-004](adr/2026-07-16-foveal-describe-trim.md) Amendment 1); the expensive 72B is used ONLY for boxing and the `recheck` / `request_diff` escalation rungs.
+- [ ] Model tiering: the cheap model is the default (`describe` = `deepseek-v4.1-flash`, swapped from `qwen3-vl-30b-a3b` 2026-10-21 on a measured comparison of three production frames: 3x faster, ~35% cheaper, no misreads, [ADR-004](../adr/2026-07-16-foveal-describe-trim.md) Amendment 1); the expensive 72B is used ONLY for boxing and the `recheck` / `request_diff` escalation rungs.
 - [ ] Foveal describe (ADR-004): describe latency ∝ OUTPUT LENGTH → say less about less. OVERVIEW downscales the frame (×0.5); TRIM crops to a boxed region before describing.
-- [ ] History carries actions + a COMPACT per-action note; durable FACTS live in a separate append-only **CONFIRMED FINDINGS** ledger, and CURRENT CONDITION is channel-aware ([ADR-007](adr/2026-07-18-brain-prompt-restructure.md)). Verbose describe text is still kept OUT of both — the rule guards against context *blur*, not against distilled facts.
+- [ ] History carries actions + a COMPACT per-action note; durable FACTS live in a separate append-only **CONFIRMED FINDINGS** ledger, and CURRENT CONDITION is channel-aware ([ADR-007](../adr/2026-07-18-brain-prompt-restructure.md)). Verbose describe text is still kept OUT of both — the rule guards against context *blur*, not against distilled facts.
 - [ ] The Eyes are SKIPPED when the last action left the screen unchanged (shell / screenshot / a failed action) — no redundant `describe()` model call (ADR-007).
 
 ---
@@ -64,17 +64,17 @@
 
 ## 8. Tooling & Linter Configuration
 
-- [ ] `[NEW]` Lint + format via **ruff** (`ruff check` / `ruff format`), config in [ruff.toml](ruff.toml), line length 99. Dev-only dependency in [requirements-dev.txt](requirements-dev.txt). (Added 2026-07-16 — the project previously had no linter.)
+- [ ] `[NEW]` Lint + format via **ruff** (`ruff check` / `ruff format`), config in [ruff.toml](../../ruff.toml), line length 99. Dev-only dependency in [requirements-dev.txt](../../requirements-dev.txt). (Added 2026-07-16 — the project previously had no linter.)
 - [ ] Tests run as plain `python <module>/test_*.py` scripts (`if __name__ == "__main__"`), model-free where possible; no pytest harness required.
-- [ ] Structured LLM output is guarded by **Pydantic validation** in [structured.py](structured.py) — the runtime enforcement of the format standard (Dimension 9).
-- [ ] Dependencies split: agent-side in root [requirements.txt](requirements.txt); the Screen container in [screen/requirements.txt](screen/requirements.txt).
+- [ ] Structured LLM output is guarded by **Pydantic validation** in [structured.py](../../structured.py) — the runtime enforcement of the format standard (Dimension 9).
+- [ ] Dependencies split: agent-side in root [requirements.txt](../../requirements.txt); the Screen container in [screen/requirements.txt](../../screen/requirements.txt).
 - [ ] `[NOT FOUND: no CI]` — tests + ruff are run locally. (CI deferred by choice, 2026-07-16.)
 
 ---
 
 ## 9. Project-Specific Conventions
 
-- [ ] **★ FORMATS ARE ENFORCED BY OUR SCHEMA + VALIDATION, NOT THE AI.** Any output that must conform to a format is validated by us — never hand-formatted by the model, nor assembled as a hand-built string the model must get right. For LLM structured output: define a **Pydantic model → forced tool-call → validate through Pydantic** ([structured.py](structured.py), ADR-005). NEVER `response_format: {"type": "json_object"}` free-text for structured data. (json_schema strict:false was tried 2026-07-17 but let reasoning models drop optional fields → reverted to tool-calling; ADR-005 Amendment 2.) Validity must NOT depend on the provider enforcing the schema — OUR Pydantic validation is the guard (a hard grammar / forced tool-call also degenerates reasoning models, so we keep `strict:false`). *Enforced at runtime by `structured.py`; checked in review by `/analyze-code-quality` (Dimension 8).*
+- [ ] **★ FORMATS ARE ENFORCED BY OUR SCHEMA + VALIDATION, NOT THE AI.** Any output that must conform to a format is validated by us — never hand-formatted by the model, nor assembled as a hand-built string the model must get right. For LLM structured output: define a **Pydantic model → forced tool-call → validate through Pydantic** ([structured.py](../../structured.py), ADR-005). NEVER `response_format: {"type": "json_object"}` free-text for structured data. (json_schema strict:false was tried 2026-07-17 but let reasoning models drop optional fields → reverted to tool-calling; ADR-005 Amendment 2.) Validity must NOT depend on the provider enforcing the schema — OUR Pydantic validation is the guard (a hard grammar / forced tool-call also degenerates reasoning models, so we keep `strict:false`). *Enforced at runtime by `structured.py`; checked in review by `/analyze-code-quality` (Dimension 8).*
 - [ ] ADRs live in `docs/adr/YYYY-MM-DD-slug.md`, numbered `ADR-00N`, and are referenced from the commit that introduces them.
 - [ ] Commits follow **Conventional Commits with a scope**: `feat(eyes):`, `feat(agent):`, `chore(agent):`, etc., citing the ADR when one applies.
 - [ ] Docs are localized in-repo (`docs/` + `.agents/`); the orientation map (`docs/orientation-map.md`) indexes them.

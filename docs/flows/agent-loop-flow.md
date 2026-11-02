@@ -10,7 +10,7 @@ tags: [loop, data-flow, wiring, describe, decide, locate, shell, effector, verif
 
 **What this doc is:** the *flow* view of BRYES — who is connected to whom, over what
 transport, and exactly what each piece is fed and emits each step. It complements
-[architecture-overview.md](architecture-overview.md), which is the *structural* view
+[architecture-overview.md](../architecture/architecture-overview.md), which is the *structural* view
 (what the pieces are, model slugs, coordinate convention). For those static facts,
 read that; for "how does one step actually move through the system, and where does it
 break," read this.
@@ -22,7 +22,7 @@ motivates Phase 5 — traced through the two seams this flow exposes.
 
 ## 1. How the four pieces connect
 
-Everything fans through **one orchestrator**: [`agent/loop.py`](../agent/loop.py)
+Everything fans through **one orchestrator**: [`agent/loop.py`](../../agent/loop.py)
 `run(goal)`. The four pieces **never call each other** — the loop calls each in turn
 and carries the data between them. There is no peer-to-peer wiring to reason about;
 there is only the loop.
@@ -73,12 +73,12 @@ This is the "what prompt / what feed flows to each other" answer. Per step:
 
 | # | Call | Fed (input / prompt) | Emits | Source |
 |---|---|---|---|---|
-| 1 | `screenshot()` | — | PNG bytes | [screen/server/app.py](../screen/server/app.py) |
-| 2 | `describe(png, focus?)` | `DESCRIBE_PROMPT` + optional **focus** + PNG → **Qwen2.5-VL-72B** | **text** report that separates the *live entry* from *history* (<=512 tok) | [eyes/client.py](../eyes/client.py) |
-| 3 | `decide(goal, obs, history)` | `SYSTEM_PROMPT` + `{goal, observation, history}` — **text only**, Think High (`reasoning.effort=high`) | JSON `{thought, action, target?, destination?, direction?, seconds?, text?, key?, command?, timeout?, focus?}` | [brain/client.py](../brain/client.py) |
-| 4 | `locate(png, target)` | `GROUND_PROMPT(target)` + PNG → **UI-TARS-1.5-7B** | pixel `(x,y)` (+ diagnostics) | [eyes/client.py](../eyes/client.py) |
-| 5 | `hands(payload)` | point actions `{type: click\|double_click\|right_click\|hover, x, y}`, `{type: scroll, x, y, direction}`, `{type: drag, x, y, x2, y2}`, `{type: type, text}`, `{type: key, key}`, `{type: key_hold, key, seconds}` | xdotool executes; `{ok}` | [screen/server/app.py](../screen/server/app.py) |
-| 6 | `exec_cmd(payload)` (shell action only — no describe/locate) | `{command, timeout?, stdin?}` → `POST /exec` (subprocess `shell=True`, sandboxed) | `{ok, exit_code, stdout, stderr}` — threaded into HISTORY | [screen/server/app.py](../screen/server/app.py) |
+| 1 | `screenshot()` | — | PNG bytes | [screen/server/app.py](../../screen/server/app.py) |
+| 2 | `describe(png, focus?)` | `DESCRIBE_PROMPT` + optional **focus** + PNG → **Qwen2.5-VL-72B** | **text** report that separates the *live entry* from *history* (<=512 tok) | [eyes/client.py](../../eyes/client.py) |
+| 3 | `decide(goal, obs, history)` | `SYSTEM_PROMPT` + `{goal, observation, history}` — **text only**, Think High (`reasoning.effort=high`) | JSON `{thought, action, target?, destination?, direction?, seconds?, text?, key?, command?, timeout?, focus?}` | [brain/client.py](../../brain/client.py) |
+| 4 | `locate(png, target)` | `GROUND_PROMPT(target)` + PNG → **UI-TARS-1.5-7B** | pixel `(x,y)` (+ diagnostics) | [eyes/client.py](../../eyes/client.py) |
+| 5 | `hands(payload)` | point actions `{type: click\|double_click\|right_click\|hover, x, y}`, `{type: scroll, x, y, direction}`, `{type: drag, x, y, x2, y2}`, `{type: type, text}`, `{type: key, key}`, `{type: key_hold, key, seconds}` | xdotool executes; `{ok}` | [screen/server/app.py](../../screen/server/app.py) |
+| 6 | `exec_cmd(payload)` (shell action only — no describe/locate) | `{command, timeout?, stdin?}` → `POST /exec` (subprocess `shell=True`, sandboxed) | `{ok, exit_code, stdout, stderr}` — threaded into HISTORY | [screen/server/app.py](../../screen/server/app.py) |
 
 Notes that matter for Phase 5:
 
@@ -94,7 +94,7 @@ Notes that matter for Phase 5:
   an optional `focus` that the loop carries into the *next* `describe`; `history` now
   pairs each step's observation with the action taken; the Brain runs Think High. See
   *First Phase-5 cut* (§6).
-- **(2026-07-18, [ADR-007](adr/2026-07-18-brain-prompt-restructure.md)) The `decide` prompt is now priority-ordered, labelled blocks, and the Brain has a durable memory.** `decide()` composes GOAL / **CURRENT CONDITION** (last action + its channel-aware result + current screen — a `shell` result is its `/exec` output and the screen is marked UNCHANGED) / **CONFIRMED FINDINGS** (an append-only, loop-owned ledger the Brain banks facts into via a `findings` field, and TRUSTS — this closes the "no progress model" half of Seam B: facts it read/computed persist instead of vanishing) / HISTORY (action + a compact `note`) / PROFILES MANUAL / TODO. The loop **skips `describe()`** when the last action left the screen unchanged (shell/screenshot/failed). *(Note: some per-step wiring above — e.g. `decide(goal, obs, history)` signatures and the describe model slug — predates this and is carried doc-sync debt.)*
+- **(2026-07-18, [ADR-007](../adr/2026-07-18-brain-prompt-restructure.md)) The `decide` prompt is now priority-ordered, labelled blocks, and the Brain has a durable memory.** `decide()` composes GOAL / **CURRENT CONDITION** (last action + its channel-aware result + current screen — a `shell` result is its `/exec` output and the screen is marked UNCHANGED) / **CONFIRMED FINDINGS** (an append-only, loop-owned ledger the Brain banks facts into via a `findings` field, and TRUSTS — this closes the "no progress model" half of Seam B: facts it read/computed persist instead of vanishing) / HISTORY (action + a compact `note`) / PROFILES MANUAL / TODO. The loop **skips `describe()`** when the last action left the screen unchanged (shell/screenshot/failed). *(Note: some per-step wiring above — e.g. `decide(goal, obs, history)` signatures and the describe model slug — predates this and is carried doc-sync debt.)*
 
 ---
 
@@ -122,7 +122,7 @@ sequenceDiagram
     Note over L: sleep(settle), next step
 ```
 
-Narration, keyed to [`agent/loop.py`](../agent/loop.py):
+Narration, keyed to [`agent/loop.py`](../../agent/loop.py):
 
 1. **Screenshot** the current desktop (top of every step — one fresh frame per step).
 2. **`describe`** it → a text observation for the Brain.
@@ -168,13 +168,13 @@ The Brain never receives the PNG. Its entire model of the world is `describe`'s
 ### Seam B — history is authored, not observed (no verification)
 
 After acting, the loop appends a string describing what it *tried*
-([loop.py:79](../agent/loop.py#L79)) — it never compares the next screenshot to confirm
+([loop.py:79](../../agent/loop.py#L79)) — it never compares the next screenshot to confirm
 the action changed anything. So:
 
 - **A misclick is invisible.** "clicked the AC button at (x,y)" is recorded identically
   whether AC did something, did nothing, or hit the wrong element.
 - **No progress model.** The Brain *does* receive the history every step
-  ([loop.py:58](../agent/loop.py#L58) -> `HISTORY` in the prompt), so it can see it has
+  ([loop.py:58](../../agent/loop.py#L58) -> `HISTORY` in the prompt), so it can see it has
   clicked AC five times. But the history records *attempts, not outcomes*, and the Brain
   is not instructed to treat "same action, no change" as futile — so repetition is
   **visible yet unflagged**. If the observation hasn't changed, it makes the same
@@ -185,12 +185,12 @@ the action changed anything. So:
 > new screenshot: did the thing I intended actually happen? If not, recover"* — is
 > precisely the verification this loop does not yet do.
 
-> **✅ Seam B closed (2026-07-16, Phase 5 — see §8 + [ADR-003](adr/2026-07-16-change-feedback-verify-and-recover.md)).** The Brain now emits a `expect` with each action; the loop rides it into the next `describe`, which **REPORTS the actual state** of that thing (`VERIFICATION: <what's shown>`) — grounded perception, not a verdict — and the Brain compares it to what it expected. History no longer just records an unverified attempt — the *next observation* carries a grounded reading of what the last action produced. (Two design choices, both measured: change-feedback is **semantic not pixel** — a whole-frame pixel diff was dropped; and the VLM **reports, doesn't judge** — binary verdicts were noisy. See §8.)
+> **✅ Seam B closed (2026-07-16, Phase 5 — see §8 + [ADR-003](../adr/2026-07-16-change-feedback-verify-and-recover.md)).** The Brain now emits a `expect` with each action; the loop rides it into the next `describe`, which **REPORTS the actual state** of that thing (`VERIFICATION: <what's shown>`) — grounded perception, not a verdict — and the Brain compares it to what it expected. History no longer just records an unverified attempt — the *next observation* carries a grounded reading of what the last action produced. (Two design choices, both measured: change-feedback is **semantic not pixel** — a whole-frame pixel diff was dropped; and the VLM **reports, doesn't judge** — binary verdicts were noisy. See §8.)
 
 > **Shell is the exception to Seam B.** A `shell` action's HISTORY entry carries the command's
 > *real* exit code + stdout (observed from `/exec`), not an unverified "I tried X." So the
 > shell channel already has the outcome-in-memory that GUI actions lack — verification is
-> built into its result, not deferred to a screenshot compare. (2026-07-15, [ADR-001](adr/2026-07-15-effector-hierarchy.md).)
+> built into its result, not deferred to a screenshot compare. (2026-07-15, [ADR-001](../adr/2026-07-15-effector-hierarchy.md).)
 
 ---
 
@@ -277,14 +277,14 @@ heuristic onto a mechanical decider.
   search "who am I". A 5-model bake-off picked **`qwen/qwen3.6-flash`** as the default Brain
   (beat v4-pro and minimax-m3 on cost AND capability once the harness was fixed). *(Later
   replaced by `deepseek-v4-flash` — qwen degenerates under our json_schema standard in thinking
-  mode; [ADR-005](adr/2026-07-16-structured-output-standard.md), 2026-07-17.)*
+  mode; [ADR-005](../adr/2026-07-16-structured-output-standard.md), 2026-07-17.)*
 - **Hands primitive audit → full natural set.** Audited all primitives: `type`/`key` clean-
   atomic, `click` naturally-composite-and-safe (move-then-click clobbers nothing), `move`
   renamed to `hover` and wired to the Brain. No second `type`-class bug. Added the missing
   natural actions — `double_click`, `right_click`, `hover`, `scroll` (`direction`), `drag`
   (`target`→`destination`) — each ONE atomic xdotool call. Static-checked; not yet run live.
 
-**Still open** (see [backlog.md](backlog.md)): the *explicit* post-action re-check/recover
+**Still open** (see [backlog.md](../tech-debts/backlog.md)): the *explicit* post-action re-check/recover
 step (Phase 5 — deferred until base capability ≥80%); a combo/macro action (compose the now-
 atomic primitives); validating qwen3.6-flash on the calculator suite; live-verifying the new
 `scroll`/`drag`/`double_click`/`right_click`/`hover` primitives on a real screen, and
@@ -294,7 +294,7 @@ atomic primitives); validating qwen3.6-flash on the calculator suite; live-verif
 
 ## 7. Update (2026-07-15) — Device abstraction + first phone run
 
-- **Screen+Hands+shell now sit behind the `Device` abstraction** ([ADR-002](adr/2026-07-15-device-interface.md)):
+- **Screen+Hands+shell now sit behind the `Device` abstraction** ([ADR-002](../adr/2026-07-15-device-interface.md)):
   the loop calls `device.screenshot()` / `device.act()` / `device.shell()`, not hardcoded HTTP.
   `ContainerDevice` is the default body (this whole flow, transport-unchanged); **`PhoneDevice`
   (adb/USB)** is body #2 — the wiring above is the *container* body's transport, and the phone
@@ -303,8 +303,8 @@ atomic primitives); validating qwen3.6-flash on the calculator suite; live-verif
 - **Per-phase timing** added to `run()` (`screen / describe / decide / locate / act` seconds per
   step + totals). First measurement: `describe` ≈ 19.5s vs `decide` ≈ 3.2s/step — **the Eyes VLM,
   not the Brain, is the loop's latency** (corrected a wrong assumption). **Superseded 2026-07-16
-  (§9, [ADR-004](adr/2026-07-16-foveal-describe-trim.md)):** the two-mode foveal describe cut it to
-  ~2s and moved the bottleneck back onto the Brain. See [backlog.md](backlog.md).
+  (§9, [ADR-004](../adr/2026-07-16-foveal-describe-trim.md)):** the two-mode foveal describe cut it to
+  ~2s and moved the bottleneck back onto the Brain. See [backlog.md](../tech-debts/backlog.md).
 - **Seam B reconfirmed on the phone.** The "open Settings" run wandered to step_limit: with
   actions-only history and **no state-delta**, the Brain *inferred* ("scrolled twice, suggesting
   I'm at the bottom") instead of seeing what changed — a fresh, concrete instance of Seam B (§4) and
@@ -356,11 +356,11 @@ digit scores ~0.02–0.09 mean-diff, *below* the ~0.25 idle noise floor (higher 
 help — inherent to mean-over-whole-frame), and it can't be regionally cropped because UI-TARS-1.5
 only returns points, never boxes. "No change" is only meaningful *in a region, semantically* —
 which is exactly `expect`+`focus`. `framediff.py` is kept & parked for the describe-speed thread
-(where "did a *lot* change → re-describe?" IS a screen-wide question). Full rationale: [ADR-003](adr/2026-07-16-change-feedback-verify-and-recover.md).
+(where "did a *lot* change → re-describe?" IS a screen-wide question). Full rationale: [ADR-003](../adr/2026-07-16-change-feedback-verify-and-recover.md).
 
 ---
 
-## 9. Foveal describe + trim — describe-speed ([ADR-004](adr/2026-07-16-foveal-describe-trim.md), 2026-07-16)
+## 9. Foveal describe + trim — describe-speed ([ADR-004](../adr/2026-07-16-foveal-describe-trim.md), 2026-07-16)
 
 `describe` was the loop's bottleneck (5–16s). The load-bearing find: latency is **output-length-bound** — the 72B *boxes* a frame in ~1.5s but *describes* it in 5–16s (same model, same image). So `describe` became **two-mode foveal** — say less, about less:
 

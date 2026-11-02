@@ -14,7 +14,7 @@ flowchart TB
 %% the two decision edges cross an MCP boundary. That's why this is a minimal wrap.
 %% OPEN (break down later): exact start_task / next schemas; session lifecycle
 %% (open/act/close); stateless-vs-conversational brain; where the answer() path sits.
-%% Render:  mmdc -i docs/modularity-target.mmd -o docs/modularity-target.svg
+%% Render:  mmdc -i docs/architecture/modularity-target.mmd -o docs/architecture/modularity-target.svg
 %% ---------------------------------------------------------------------------
     subgraph CLIENT["External brain — MCP client (makes ONLY the 2 decisions)"]
         EXT["opus 4.8 / me / a Telegram-fronted LLM<br/>gets {system prompt + context}, returns a BrainAction"]

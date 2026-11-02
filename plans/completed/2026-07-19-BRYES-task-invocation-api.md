@@ -15,9 +15,9 @@
 Expose BRYES's existing `run(goal)` as an **async HTTP task service** so a task can be given programmatically (curl, another process, or a future MCP adapter) instead of editing and running a Python script. This is **step 0** toward the MCP / loop-as-a-service direction: the coarse "hand off a whole goal" path where BRYES's **native brain** drives. API-first — HTTP is the universal substrate and an MCP adapter wraps it cheaply later.
 
 ### **Related Documents**
-- [modularity.mmd](../docs/modularity.mmd) - current module map (the loop is the sole coupler)
-- [loop-dispatch.mmd](../docs/loop-dispatch.mmd) - action -> module relation
-- [modularity-target.mmd](../docs/modularity-target.mmd) - the loop-as-a-service target this API is the foundation for
+- [modularity.mmd](../docs/architecture/modularity.mmd) - current module map (the loop is the sole coupler)
+- [loop-dispatch.mmd](../docs/architecture/loop-dispatch.mmd) - action -> module relation
+- [modularity-target.mmd](../docs/architecture/modularity-target.mmd) - the loop-as-a-service target this API is the foundation for
 - [agent/loop.py](../agent/loop.py) - `run(goal)`, the entry point being wrapped
 
 ### **SUCCESS CRITERIA**
@@ -242,7 +242,7 @@ sequenceDiagram
   - **Success Criteria**: ADR-008 exists, numbered, cross-linked.
 
 - [ ] **Step 3.2**: Docs touch
-  - **Action**: Update [context-index.md](../docs/context-index.md) (api/ + a task-API quick fact), [orientation-map.md](../docs/orientation-map.md) (api/ module entries + an ADR-008 entry), [architecture-overview.md](../docs/architecture-overview.md) (a Task API note + repo layout + phase status).
+  - **Action**: Update [context-index.md](../docs/context-index.md) (api/ + a task-API quick fact), [orientation-map.md](../docs/orientation-map.md) (api/ module entries + an ADR-008 entry), [architecture-overview.md](../docs/architecture/architecture-overview.md) (a Task API note + repo layout + phase status).
   - **Success Criteria**: Docs reference the new API; orientation map indexes it.
 
 - [ ] **Step 3.3**: Final lint pass
@@ -318,7 +318,7 @@ I have to use this document as my **ONLY** source of truth to execute and track 
   - **Result**: The task-invocation decision is recorded.
 
 - [x] **Step 3.2**: Docs touch
-  - **Implementation Log**: Created [api/README.md](../api/README.md) (module convention — every other module has one). Updated [orientation-map.md](../docs/orientation-map.md) (new `api/README.md` entry + `ADR-008` entry), [context-index.md](../docs/context-index.md) (a "Run the Task API" quick fact), [architecture-overview.md](../docs/architecture-overview.md) (an `api/` repo-layout bullet).
+  - **Implementation Log**: Created [api/README.md](../api/README.md) (module convention — every other module has one). Updated [orientation-map.md](../docs/orientation-map.md) (new `api/README.md` entry + `ADR-008` entry), [context-index.md](../docs/context-index.md) (a "Run the Task API" quick fact), [architecture-overview.md](../docs/architecture/architecture-overview.md) (an `api/` repo-layout bullet).
   - **Testing Log**: N/A (docs).
   - **Success Criteria**: PASS — the new API is referenced from the module map, context index, and architecture overview.
   - **Tech Debts**: `last_full_scan` in the orientation map left at 2026-07-12 (entries added incrementally, not a full rescan) — acceptable.
@@ -336,8 +336,8 @@ I have to use this document as my **ONLY** source of truth to execute and track 
 ## **QUALITY REVIEW**
 *Filled by procedure Step 16 (delegated to `/analyze-code-quality` in embedded mode) after all execution phases are complete. **Static** review — answers "is the code clean?".*
 
-- **Scope**: code — `api/__init__.py`, `api/jobs.py`, `api/server.py`, `api/test_jobs.py`, `api/test_server.py`, `agent/loop.py`; supporting — `requirements.txt`, `api/README.md`, ADR-008, orientation-map / context-index / architecture-overview (docs, reviewed for accuracy). **Reconciliation**: `git diff` also shows 4 earlier-session artifacts (`docs/modularity.mmd`, `modularity-target.mmd`, `loop-dispatch.mmd`, `docs/README.md`) — excluded from *code* quality (design docs/diagrams, not this task's code).
-- **Quality Standard**: [docs/quality-standard.md](../docs/quality-standard.md), 9 dimensions. Dims 2 (State) + 3 (UX) N/A (no UI). Dims 1/4/5/6/7/8/9 pass: degrade-not-crash (`_run_job` -> `failed`, never crashes the server), no model calls added, `.env` untouched + localhost-only, ASCII-clean console, snake_case + module-per-role + co-located model-free tests, ruff clean, JSON via `jsonify` (framework-enforced, not hand-built). **LF-clean**, **ruff clean**, **27/27 model-free tests green**.
+- **Scope**: code — `api/__init__.py`, `api/jobs.py`, `api/server.py`, `api/test_jobs.py`, `api/test_server.py`, `agent/loop.py`; supporting — `requirements.txt`, `api/README.md`, ADR-008, orientation-map / context-index / architecture-overview (docs, reviewed for accuracy). **Reconciliation**: `git diff` also shows 4 earlier-session artifacts (`docs/architecture/modularity.mmd`, `modularity-target.mmd`, `loop-dispatch.mmd`, `docs/README.md`) — excluded from *code* quality (design docs/diagrams, not this task's code).
+- **Quality Standard**: [docs/standards/quality-standard.md](../docs/standards/quality-standard.md), 9 dimensions. Dims 2 (State) + 3 (UX) N/A (no UI). Dims 1/4/5/6/7/8/9 pass: degrade-not-crash (`_run_job` -> `failed`, never crashes the server), no model calls added, `.env` untouched + localhost-only, ASCII-clean console, snake_case + module-per-role + co-located model-free tests, ruff clean, JSON via `jsonify` (framework-enforced, not hand-built). **LF-clean**, **ruff clean**, **27/27 model-free tests green**.
 - **Findings**: 3 Low (no Critical/Medium).
 
 | # | Severity | File | Issue | Fix Options |

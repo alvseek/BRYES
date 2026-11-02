@@ -1,7 +1,7 @@
 """Install BRYES's procedures (/drive-desktop, /make-lesson) as Claude Code slash commands.
 
-Writes ``~/.claude/commands/drive-desktop.md`` and ``make-lesson.md``, each carrying the full
-procedure so they work from any project, not just from inside the BRYES clone.
+Writes ``~/.claude/commands/drive-desktop.md`` and ``make-lesson.md``, each a pointer with an
+absolute path, so it works from any project while the procedure stays one canonical file.
 
 Cross-platform: run directly, or via ``setup-all-claude-code.bat`` on Windows.
 

@@ -3,7 +3,7 @@
 Give BRYES a task over HTTP instead of editing and running a Python script. A thin
 **host-side** wrapper over the native `run()` loop ([agent/loop.py](../agent/loop.py)) —
 the coarse "hand off a whole goal" path where BRYES's own brain drives. Step 0 toward
-the MCP / loop-as-a-service direction ([docs/modularity-target.mmd](../docs/modularity-target.mmd));
+the MCP / loop-as-a-service direction ([docs/architecture/modularity-target.mmd](../docs/architecture/modularity-target.mmd));
 an MCP adapter wraps this API later.
 
 Distinct from [screen/server/](../screen/server/) — that's the *container's body API*

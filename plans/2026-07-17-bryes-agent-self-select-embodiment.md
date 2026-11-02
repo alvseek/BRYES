@@ -18,7 +18,7 @@ Give BRYES agency over its own **embodiment**. At task start — *before* the pe
 - [docs/adr/2026-07-15-device-interface.md](../docs/adr/2026-07-15-device-interface.md) — ADR-002, the `Device` abstraction this builds on (bodies + Capabilities)
 - [profiles.py](../profiles.py) + [profiles/android/profile.md](../profiles/android/profile.md), [profiles/android/whatsapp/profile.md](../profiles/android/whatsapp/profile.md) — the profile (knowledge) system
 - [docs/adr/2026-07-16-structured-output-standard.md](../docs/adr/2026-07-16-structured-output-standard.md) — ADR-005, structured-output mechanism the picker reuses
-- [docs/quality-standard.md](../docs/quality-standard.md) — quality dimensions applied at review
+- [docs/standards/quality-standard.md](../docs/standards/quality-standard.md) — quality dimensions applied at review
 - New ADR (this feature) — created in Phase 2 (section G)
 
 ### **SUCCESS CRITERIA**
@@ -30,7 +30,7 @@ Give BRYES agency over its own **embodiment**. At task start — *before* the pe
 - [ ] Constraints enforced: every chosen profile sits **under the chosen device** (one body/run); unknown device or unreachable body → **fail clearly** (no substitution).
 - [ ] Tests: catalog validate, `load_profiles` multi+dedup, device mapping, picker (mockable), answer-only, override rules — all model-free/offline.
 - [ ] Live validation: the WhatsApp task **self-selects** `android` + `android/whatsapp` on the phone and the loop runs (end-to-end *send* still gated on an unlocked phone — existing tech debt, not this plan).
-- [ ] `docs/quality-standard.md` dimensions met; ruff clean on new/changed files.
+- [ ] `docs/standards/quality-standard.md` dimensions met; ruff clean on new/changed files.
 - [ ] ADR recorded; `docs/context-index.md` updated (full prose doc-sync of architecture-overview/loop-flow tracked as existing tech debt).
 
 ---
@@ -390,7 +390,7 @@ I have to use this document as my **ONLY** source of truth to execute and track 
 *Filled by procedure Step 16 (delegated to `/analyze-code-quality` in embedded mode) after all execution phases are complete. **Static** review — answers "is the code clean?".*
 
 - **Scope**: `profiles.py`, `brain/client.py`, `agent/loop.py`, `test_profiles.py`, `brain/test_embodiment.py`, `agent/test_run_selection.py`, `profiles/index.md`, `profiles/linux/profile.md`, `docs/context-index.md`, `docs/adr/2026-07-17-embodiment-selection.md`. Reconciled vs `git status --short`: exact match; the only diff-not-in-scope file is this plan (the audit doc) — correctly excluded.
-- **Quality Standard**: [docs/quality-standard.md](../docs/quality-standard.md) found — 9 dimensions applied. **Strong passes**: Dim 1 (error handling — `_structured_with_fallback` retries + escapes to backup + records error bodies; `_make_device` wraps failures as clear `RuntimeError`, no substitution; stdout reconfigured utf-8-safe FIRST); Dim 6 (no stray prints/TODOs/commented code; ruff clean); Dim 7 (snake_case, module-per-role, co-located model-free `test_*.py`); **Dim 9 ★** (picker + answerer use `response_format json_schema` + Pydantic validation via `structured.py`, strict:false, NO tool-calling — fully compliant). Dims 2/3 N/A (no UI). ruff clean on all Python in scope.
+- **Quality Standard**: [docs/standards/quality-standard.md](../docs/standards/quality-standard.md) found — 9 dimensions applied. **Strong passes**: Dim 1 (error handling — `_structured_with_fallback` retries + escapes to backup + records error bodies; `_make_device` wraps failures as clear `RuntimeError`, no substitution; stdout reconfigured utf-8-safe FIRST); Dim 6 (no stray prints/TODOs/commented code; ruff clean); Dim 7 (snake_case, module-per-role, co-located model-free `test_*.py`); **Dim 9 ★** (picker + answerer use `response_format json_schema` + Pydantic validation via `structured.py`, strict:false, NO tool-calling — fully compliant). Dims 2/3 N/A (no UI). ruff clean on all Python in scope.
 - **Findings**:
 
 | # | Severity | File | Issue | Fix Options |

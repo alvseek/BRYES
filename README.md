@@ -34,8 +34,8 @@ last resort), and **prove one real task end-to-end before generalizing**.
 
 The whole system is coupled by **one orchestrator**: `run(goal)` in [agent/loop.py](agent/loop.py).
 The modules never call each other — only the loop calls each of them, one at a time. This is the
-**current** module-coupling picture (source of truth: [docs/modularity.mmd](docs/modularity.mmd); the
-action→module detail is in [docs/loop-dispatch.mmd](docs/loop-dispatch.mmd)):
+**current** module-coupling picture (source of truth: [docs/architecture/modularity.mmd](docs/architecture/modularity.mmd); the
+action→module detail is in [docs/architecture/loop-dispatch.mmd](docs/architecture/loop-dispatch.mmd)):
 
 ```
                  goal (task)
@@ -84,7 +84,7 @@ README with internals:
 The **body** is an abstraction, not a hard-wire: Screen + Hands + shell sit behind a swappable
 `Device` interface ([ADR-002](docs/adr/2026-07-15-device-interface.md)) — `ContainerDevice` (the
 desktop) and `PhoneDevice` (a real Android over adb) are two bodies; the loop, Eyes, and Brain are
-body-agnostic. Full structural detail: [docs/architecture-overview.md](docs/architecture-overview.md).
+body-agnostic. Full structural detail: [docs/architecture/architecture-overview.md](docs/architecture/architecture-overview.md).
 
 A **third body is the real Windows desktop.** `WindowsDevice` ([devices/windows.py](devices/windows.py))
 captures the virtual desktop or one window, and drives it when allowed: pointer and keyboard through
@@ -237,8 +237,8 @@ saved to a transcript under `artifacts/runs/` (via [runlog.py](runlog.py)).
 ### Core flow: one autonomous step
 
 Each step of the loop dispatches exactly **one** Brain action; the modules it touches depend on
-which action (full map: [docs/loop-dispatch.mmd](docs/loop-dispatch.mmd); temporal per-step data flow:
-[docs/agent-loop-flow.md](docs/agent-loop-flow.md)).
+which action (full map: [docs/architecture/loop-dispatch.mmd](docs/architecture/loop-dispatch.mmd); temporal per-step data flow:
+[docs/flows/agent-loop-flow.md](docs/flows/agent-loop-flow.md)).
 
 1. **Pre-loop, once** ([agent/loop.py](agent/loop.py))
    - The Brain reads the profile catalog and **self-selects** a body + profiles, or answers a
@@ -313,7 +313,7 @@ Full ADRs live in [docs/adr/](docs/adr/). In order:
 
 ## What's Broken / Known Debts?
 
-The living, finer-grained list is [docs/backlog.md](docs/backlog.md). Highlights:
+The living, finer-grained list is [docs/tech-debts/backlog.md](docs/tech-debts/backlog.md). Highlights:
 
 ### High Priority
 
@@ -329,7 +329,7 @@ The living, finer-grained list is [docs/backlog.md](docs/backlog.md). Highlights
 - **WhatsApp on the real phone is unproven end-to-end**: the app-profile system + send-button flow
   exist but a locked phone / lock-screen blocks the run; `PhoneDevice.clear_field` is `NotImplementedError`.
   *Why*: the agent can't pass a lock screen, and the Android clear idiom is deferred.
-- **Prose doc-sync lag**: `docs/architecture-overview.md` + `docs/agent-loop-flow.md` still use the old
+- **Prose doc-sync lag**: `docs/architecture/architecture-overview.md` + `docs/flows/agent-loop-flow.md` still use the old
   `focus`/`expect` names (renamed to `visual_focus`/`visual_expectation`), and some describe the 8B
   describer (now the 30B MoE).
   *Why*: index/backlog were synced first; the prose docs were deferred.
